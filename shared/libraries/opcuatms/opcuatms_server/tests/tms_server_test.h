@@ -15,22 +15,16 @@
  */
 
 #pragma once
-#include "opcuatms_server/objects/tms_server_object.h"
+#include "tms_object_test.h"
+#include <opendaq/context_factory.h>
+#include "opcuatms_server/tms_server_context.h"
 
-BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
-
-template <class CoreType>
-class TmsServerVariable : public TmsServerObjectBaseImpl<CoreType>
+class TmsServerObjectTest : public TmsObjectTest
 {
 public:
-    using Super = TmsServerObjectBaseImpl<CoreType>;
+    void SetUp() override;
+    void TearDown() override;
 
-    TmsServerVariable(const CoreType& object, const opcua::OpcUaServerPtr& server, const ContextPtr& context, const TmsServerContextPtr& tmsContext);
-
-    opcua::OpcUaNodeId createNode(const opcua::OpcUaNodeId& parentNodeId) override;
-
-protected:
-    virtual void configureVariableNodeAttributes(opcua::OpcUaObject<UA_VariableAttributes>& attr);
+    daq::ContextPtr ctx;
+    daq::opcua::tms::TmsServerContextPtr tmsCtx;
 };
-
-END_NAMESPACE_OPENDAQ_OPCUA_TMS

@@ -15,22 +15,26 @@
  */
 
 #pragma once
-#include "opcuatms_server/objects/tms_server_object.h"
+#include <opcuatms/opcuatms.h>
+#include <opendaq/context_ptr.h>
+#include <opcuatms_server/objects/tms_server_object.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
-template <class CoreType>
-class TmsServerVariable : public TmsServerObjectBaseImpl<CoreType>
+class TmsServerContext : public std::enable_shared_from_this<TmsServerContext>
 {
 public:
-    using Super = TmsServerObjectBaseImpl<CoreType>;
+    TmsServerContext(const ContextPtr& context);
+    ~TmsServerContext();
+    void registerComponent(const ComponentPtr& component, TmsServerObject& obj);
 
-    TmsServerVariable(const CoreType& object, const opcua::OpcUaServerPtr& server, const ContextPtr& context, const TmsServerContextPtr& tmsContext);
+private:
+    ContextPtr context;
 
-    opcua::OpcUaNodeId createNode(const opcua::OpcUaNodeId& parentNodeId) override;
-
-protected:
-    virtual void configureVariableNodeAttributes(opcua::OpcUaObject<UA_VariableAttributes>& attr);
+    std::unordered_map<std::string, std::weak_ptr<tms::TmsServerObject>> idToObjMap;
+    void coreEventCallback(ComponentPtr& component, CoreEventArgsPtr& eventArgs);
 };
+
+using TmsServerContextPtr = std::shared_ptr<TmsServerContext>;
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS
