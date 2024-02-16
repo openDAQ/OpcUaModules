@@ -13,20 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 #include <opcuatms/opcuatms.h>
-#include <opcuashared/opcuavariant.h>
-#include <property_object_ptr.h>
+#include <opcuatms_client/objects/tms_client_function_block_type_impl.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
-class PropertyObjectConversionUtils
+inline FunctionBlockTypePtr TmsClientFunctionBlockType(const ContextPtr& context,
+                                                       const TmsClientContextPtr& tmsContext,
+                                                       const OpcUaNodeId& nodeId)
 {
-public:
-    static OpcUaVariant ToDictVariant(const PropertyObjectPtr& obj);
-    static void ToPropertyObject(const OpcUaVariant& variant, PropertyObjectPtr& objOut);
-    static PropertyObjectPtr ClonePropertyObject(const PropertyObjectPtr& obj);
-};
+    FunctionBlockTypePtr obj(createWithImplementation<IFunctionBlockType, TmsClientFunctionBlockTypeImpl>(context, tmsContext, nodeId));
+    return obj;
+}
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS
