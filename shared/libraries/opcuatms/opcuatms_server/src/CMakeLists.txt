@@ -82,7 +82,7 @@ add_library(${LIB_NAME} STATIC ${SRC_Cpp}
                                ${SRC_PrivateHeaders}
 )
 
-add_library(${SDK_TARGET_NAMESPACE}::${LIB_NAME} ALIAS ${LIB_NAME})
+add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${LIB_NAME} ALIAS ${LIB_NAME})
 
 if(BUILD_64Bit OR BUILD_ARM)
     set_target_properties(${LIB_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -96,8 +96,8 @@ target_include_directories(${LIB_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_
                                               $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(${LIB_NAME} PUBLIC daq::opcuatms
-                                         daq::opcuaserver
+target_link_libraries(${LIB_NAME} PUBLIC ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms
+                                         ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuaserver
 )
 
 set_target_properties(${LIB_NAME} PROPERTIES PUBLIC_HEADER "${SRC_PublicHeaders}")

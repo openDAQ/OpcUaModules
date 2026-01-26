@@ -23,9 +23,9 @@ add_executable(${TEST_APP} ${SRC_Cpp}
                            ${SRC_Include}
 )
 
-target_link_libraries(${TEST_APP} PRIVATE ${SDK_TARGET_NAMESPACE}::${MODULE_NAME}
-                                          daq::test_utils
-                                          daq::opcuaserver #remove after moving test_opcuaclientbasedsacqcontrol to opcua server/client integration tests
+target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME}
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_test_utils gtest
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuaserver #remove after moving test_opcuaclientbasedsacqcontrol to opcua server/client integration tests
 )
 
 target_include_directories(${TEST_APP} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")

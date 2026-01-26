@@ -16,8 +16,8 @@ add_executable(${TEST_APP} testapp.cpp
 
 set_target_properties(${TEST_APP} PROPERTIES DEBUG_POSTFIX _debug)
 
-target_link_libraries(${TEST_APP} PRIVATE ${SDK_TARGET_NAMESPACE}::${MODULE_NAME}
-                                          daq::test_utils
+target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME}
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_test_utils gtest
 )
 
 add_test(NAME ${TEST_APP}

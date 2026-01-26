@@ -4,6 +4,6 @@ project(OpcUaShared CXX C)
 
 add_subdirectory(src)
 
-if (OPENDAQ_ENABLE_TESTS)
+if (${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE AND OPENDAQ_ENABLE_TESTS OR ${REPO_OPTION_PREFIX}_ENABLE_TESTS)
     add_subdirectory(tests)
 endif()

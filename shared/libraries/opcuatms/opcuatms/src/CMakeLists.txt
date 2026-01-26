@@ -62,16 +62,16 @@ add_library(${MODULE_NAME} STATIC ${SRC_PublicHeaders}
                                   ${SRC_Cpp}
 )
 
-add_library(${SDK_TARGET_NAMESPACE}::${MODULE_NAME} ALIAS ${MODULE_NAME})
+add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME} ALIAS ${MODULE_NAME})
 
 target_include_directories(${MODULE_NAME} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/>
                                                  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include/>
                                                  $<INSTALL_INTERFACE:include/${MODULE_NAME}>
 )
 
-target_link_libraries(${MODULE_NAME} PUBLIC daq::opendaq
-                                            daq::opcuashared
-                                            daq::opcua_daq_types
+target_link_libraries(${MODULE_NAME} PUBLIC ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq
+                                            ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuashared
+                                            ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua_daq_types
 )
 
 set_target_properties(${MODULE_NAME} PROPERTIES PUBLIC_HEADER "${SRC_PublicHeaders}")

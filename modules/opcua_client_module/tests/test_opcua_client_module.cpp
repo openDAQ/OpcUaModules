@@ -1,7 +1,6 @@
 #include <testutils/testutils.h>
 #include <opcua_client_module/module_dll.h>
 #include <opcua_client_module/version.h>
-#include <gmock/gmock.h>
 
 #include <opendaq/module_ptr.h>
 #include <coretypes/common.h>

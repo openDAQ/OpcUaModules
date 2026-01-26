@@ -12,11 +12,11 @@ set(SRC_Cpp main.cpp
 
 add_executable(${TEST_APP} ${SRC_Cpp})
 
-target_link_libraries(${TEST_APP} PRIVATE ${SDK_TARGET_NAMESPACE}::${MODULE_NAME}
-                                          daq::opendaq_utils
-                                          daq::test_utils
-                                          daq::opcuaclient
-                                          daq::opcua_daq_types
+target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME}
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_utils
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_test_utils gtest
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuaclient
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua_daq_types
 )
 
 add_test(NAME ${TEST_APP}

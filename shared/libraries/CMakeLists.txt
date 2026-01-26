@@ -1,0 +1,4 @@
+set_cmake_folder_context(TARGET_FOLDER_NAME)
+
+add_subdirectory(opcua)
+add_subdirectory(opcuatms)

@@ -87,7 +87,7 @@ endif()
 set(SOURCE_FILES ${ALL_SOURCES})
 
 add_library(${MODULE_NAME} STATIC ${ALL_SOURCES})
-add_library(${SDK_TARGET_NAMESPACE}::${MODULE_NAME} ALIAS ${MODULE_NAME})
+add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME} ALIAS ${MODULE_NAME})
 
 if(BUILD_64Bit OR BUILD_ARM)
     set_target_properties(${MODULE_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -103,7 +103,7 @@ target_include_directories(${MODULE_NAME} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOU
 
 target_link_libraries(${MODULE_NAME} PUBLIC  open62541
                                              rapidjson
-                                     PRIVATE daq::opendaq_utils
+                                     PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_utils
 )
 
 if (MSVC)

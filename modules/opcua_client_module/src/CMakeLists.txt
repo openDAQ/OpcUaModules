@@ -22,15 +22,15 @@ source_group("module" FILES ${MODULE_HEADERS_DIR}/opcua_client_module_impl.h
 add_library(${LIB_NAME} SHARED ${SRC_Include}
                                ${SRC_Srcs}
 )
-add_library(${SDK_TARGET_NAMESPACE}::${LIB_NAME} ALIAS ${LIB_NAME})
+add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${LIB_NAME} ALIAS ${LIB_NAME})
 
 if (MSVC)
     target_compile_options(${LIB_NAME} PRIVATE /bigobj)
 endif()
 
-target_link_libraries(${LIB_NAME} PUBLIC  daq::opendaq
-                                  PRIVATE daq::discovery
-                                          daq::opcuatms_client
+target_link_libraries(${LIB_NAME} PUBLIC  ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq
+                                  PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::discovery
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_client
 )
 
 target_include_directories(${LIB_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>

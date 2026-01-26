@@ -12,7 +12,7 @@ add_executable(${TEST_APP} ${TEST_SOURCES})
 target_link_libraries(${TEST_APP} PRIVATE opcuashared
                                           opcuaserver
                                           opcuaclient
-                                          daq::test_utils
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_test_utils gtest
 )
 
 if (MSVC)

@@ -36,10 +36,10 @@ if (WIN32)
     set(BCRYPT_LIB bcrypt.dll)
 endif()
 
-target_link_libraries(${TEST_APP} PRIVATE daq::opcuatms_test_utils
-                                          daq::opcuatms_server
-                                          daq::opcuatms_client
-                                          daq::opendaq_mocks
+target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_test_utils
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_server
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_client
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_mocks
                                           ${BCRYPT_LIB}
                                           Taskflow::Taskflow
 )

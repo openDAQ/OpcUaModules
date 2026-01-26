@@ -13,7 +13,7 @@ set(OPCUA_NODESET_URIS)
 # Fetch the openDAQ OPC-UA Companion Specification NodeSet
 #
 set(daq_spec_REQUIREDVERSION "3.0.2")
-get_custom_fetch_content_params(daqspec FC_PARAMS)
+opendaq_get_custom_fetch_content_params(daqspec FC_PARAMS)
 
 FetchContent_Declare(daqspec
   GIT_REPOSITORY https://github.com/openDAQ/opc-ua-companion-spec.git
@@ -201,7 +201,7 @@ add_library(${PROJECT_NAME}
             ${OPC_UA_NODESET_HEADERS}
 )
 
-add_library(${SDK_TARGET_NAMESPACE}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
 target_link_libraries(${PROJECT_NAME} PUBLIC $<BUILD_INTERFACE:open62541>)
 
@@ -210,7 +210,7 @@ add_dependencies(${PROJECT_NAME} ${OPC_UA_NODESET_DEPENDENCIES})
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC ${OPC_UA_NODESET_COMPILE_FLAGS})
 
-# Ignore warnings defined in "external/bbopen62541"
+# Ignore warnings defined in "external/open62541"
 target_compile_options(${PROJECT_NAME} PRIVATE ${OPEN62541_DISABLED_WARNINGS})
 
 # Let libraries linking to us know where to find the generated headers
