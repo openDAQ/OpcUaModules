@@ -68,8 +68,8 @@ set(SOURCE_NODE_HEADERS node/opcuanode.h
 
 set(INCLUDE_DIR ../include/${MODULE_NAME})
 
-prepend_include(${INCLUDE_DIR} SOURCE_HEADERS)
-prepend_include(${INCLUDE_DIR} SOURCE_NODE_HEADERS)
+opendaq_prepend_include(${INCLUDE_DIR} SOURCE_HEADERS)
+opendaq_prepend_include(${INCLUDE_DIR} SOURCE_NODE_HEADERS)
 
 set(ALL_SOURCES ${SOURCE_CPPS}
                 ${SOURCE_NODE_CPPS}

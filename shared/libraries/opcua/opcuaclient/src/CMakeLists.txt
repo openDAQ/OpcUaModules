@@ -46,9 +46,9 @@ set(SOURCE_TASKPROCESSOR_HEADERS taskprocessor/opcuataskprocessor.h)
 
 set(INCLUDE_DIR ../include/${MODULE_NAME})
 
-prepend_include(${INCLUDE_DIR} SOURCE_HEADERS)
-prepend_include(${INCLUDE_DIR} SOURCE_BROWSER_HEADERS)
-prepend_include(${INCLUDE_DIR} SOURCE_TASKPROCESSOR_HEADERS)
+opendaq_prepend_include(${INCLUDE_DIR} SOURCE_HEADERS)
+opendaq_prepend_include(${INCLUDE_DIR} SOURCE_BROWSER_HEADERS)
+opendaq_prepend_include(${INCLUDE_DIR} SOURCE_TASKPROCESSOR_HEADERS)
 
 set(ALL_SOURCES ${SOURCE_CPPS}
                 ${SOURCE_BROWSER_CPPS}

@@ -54,8 +54,8 @@ source_group("converters" "${CONVERTERS_SRC_DIR}/*")
 
 # /structs
 
-prepend_include(${MODULE_NAME} SRC_PublicHeaders)
-prepend_include(${MODULE_NAME} SRC_PrivateHeaders)
+opendaq_prepend_include(${MODULE_NAME} SRC_PublicHeaders)
+opendaq_prepend_include(${MODULE_NAME} SRC_PrivateHeaders)
 
 add_library(${MODULE_NAME} STATIC ${SRC_PublicHeaders}
                                   ${SRC_PrivateHeaders}

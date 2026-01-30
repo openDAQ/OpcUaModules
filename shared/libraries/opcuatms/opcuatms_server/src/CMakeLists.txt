@@ -73,8 +73,8 @@ source_group("objects\\sync_component" "${OBJECT_SRC_DIR}/tms_server_sync_compon
 
 # /objects
 
-prepend_include(${LIB_NAME} SRC_PrivateHeaders)
-prepend_include(${LIB_NAME} SRC_PublicHeaders)
+opendaq_prepend_include(${LIB_NAME} SRC_PrivateHeaders)
+opendaq_prepend_include(${LIB_NAME} SRC_PublicHeaders)
 
 
 add_library(${LIB_NAME} STATIC ${SRC_Cpp}

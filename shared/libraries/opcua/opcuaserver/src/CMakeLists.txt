@@ -29,7 +29,7 @@ set(SOURCE_HEADERS common.h
 
 set(INCLUDE_DIR ../include/${MODULE_NAME})
 
-prepend_include(${INCLUDE_DIR} SOURCE_HEADERS)
+opendaq_prepend_include(${INCLUDE_DIR} SOURCE_HEADERS)
 
 set(ALL_SOURCES ${SOURCE_CPPS}
                 ${SOURCE_HEADERS})
