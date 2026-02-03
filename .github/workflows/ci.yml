@@ -64,6 +64,7 @@ jobs:
           path: module
 
       - name: Read openDAQ version
+        shell: bash
         working-directory: module
         run: |
           opendaq_ref=$(cat external/opendaq_ref)
