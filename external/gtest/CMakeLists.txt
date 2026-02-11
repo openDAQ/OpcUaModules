@@ -1,0 +1,3 @@
+if (NOT ${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE AND ${REPO_OPTION_PREFIX}_ENABLE_TESTS AND NOT TARGET gtest)
+    opendaq_module_setup_gtest("1.12.1")
+endif()
