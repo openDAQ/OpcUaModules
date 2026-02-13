@@ -4,5 +4,10 @@ if (MSVC)
     add_compile_options(/wd4100)
 endif()
 
-add_subdirectory(opcua_client_module)
-add_subdirectory(opcua_server_module)
+if (${REPO_OPTION_PREFIX}_ENABLE_CLIENT)
+    add_subdirectory(opcua_client_module)
+endif()
+
+if (${REPO_OPTION_PREFIX}_ENABLE_SERVER)
+    add_subdirectory(opcua_server_module)
+endif()
