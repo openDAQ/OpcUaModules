@@ -24,6 +24,6 @@ add_test(NAME ${TEST_APP}
          WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>
 )
 
-if (OPENDAQ_ENABLE_COVERAGE)
+if (COMMAND setup_target_for_coverage AND OPENDAQ_ENABLE_COVERAGE)
     setup_target_for_coverage(${MODULE_NAME}coverage ${TEST_APP} ${MODULE_NAME}coverage)
 endif()

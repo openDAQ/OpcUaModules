@@ -39,6 +39,6 @@ if (MSVC)
     target_compile_options(${TEST_APP} PRIVATE /bigobj)
 endif()
 
-if(OPENDAQ_ENABLE_COVERAGE)
+if(COMMAND setup_target_for_coverage AND OPENDAQ_ENABLE_COVERAGE)
     setup_target_for_coverage(${MODULE_NAME}coverage ${TEST_APP} ${MODULE_NAME}coverage)
 endif()

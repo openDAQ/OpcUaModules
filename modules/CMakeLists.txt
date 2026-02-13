@@ -4,9 +4,5 @@ if (MSVC)
     add_compile_options(/wd4100)
 endif()
 
-if (POLICY CMP0077)
-    cmake_policy(SET CMP0077 NEW)
-endif()
-
 add_subdirectory(opcua_client_module)
 add_subdirectory(opcua_server_module)

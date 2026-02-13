@@ -4,7 +4,7 @@ add_subdirectory(opcuashared)
 add_subdirectory(opcuaserver)
 add_subdirectory(opcuaclient)
 
-if (${REPO_OPTION_PREFIX}_BUILDING_AS_SUBMODULE AND OPENDAQ_ENABLE_TESTS OR ${REPO_OPTION_PREFIX}_ENABLE_TESTS)
+if (${REPO_OPTION_PREFIX}_ENABLE_TESTS)
     add_subdirectory(tests)
 endif()
 

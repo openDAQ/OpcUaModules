@@ -12,7 +12,6 @@ target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opend
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuaclient
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_mocks
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME}
-#                                          Taskflow::Taskflow
 )
 
 add_test(NAME ${TEST_APP}
@@ -20,10 +19,6 @@ add_test(NAME ${TEST_APP}
          WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>
 )
 
-if (MSVC) # Ignoring warning for the Taskflow
-#    target_compile_options(${TEST_APP} PRIVATE /wd4324)
-endif()
-
-if (OPENDAQ_ENABLE_COVERAGE)
+if (COMMAND setup_target_for_coverage AND OPENDAQ_ENABLE_COVERAGE)
     setup_target_for_coverage(${TEST_APP}coverage ${TEST_APP} ${TEST_APP}coverage)
 endif()
