@@ -41,7 +41,6 @@ target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_client
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_mocks
                                           ${BCRYPT_LIB}
-                                          Taskflow::Taskflow
 )
 
 if(SUPPORTS_ASAN)

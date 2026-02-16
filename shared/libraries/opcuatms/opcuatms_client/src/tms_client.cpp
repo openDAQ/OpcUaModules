@@ -68,10 +68,10 @@ daq::DevicePtr TmsClient::connect()
     deviceInfo.asPtr<IPropertyObjectProtected>().setProtectedPropertyValue("connectionString", endpoint.getUrl());
 
     const std::string packageVersion = deviceInfo.getSdkVersion();
-    if (!packageVersion.empty() && packageVersion != OPENDAQ_PACKAGE_VERSION)
+    if (!packageVersion.empty() && packageVersion != OPENDAQ_OPCUA_PACKAGE_VERSION)
     {
         LOG_D("Connected to openDAQ OPC UA server with different version. Client version: {}, server version: {}",
-                OPENDAQ_PACKAGE_VERSION,
+                OPENDAQ_OPCUA_PACKAGE_VERSION,
                 packageVersion);
     }
 

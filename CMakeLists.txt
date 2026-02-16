@@ -44,6 +44,7 @@ else()
     message(STATUS "Unit tests in ${REPO_NAME} are DISABLED")
 endif()
 
+include("${PROJECT_SOURCE_DIR}/external/boost/Boost.cmake")
 if (NOT TARGET "${OPENDAQ_SDK_TARGET_NAMESPACE}::${OPENDAQ_SDK_TARGET_NAME}")
     if (PROJECT_IS_TOP_LEVEL)
         find_package(${OPENDAQ_SDK_NAME} GLOBAL)
@@ -68,9 +69,7 @@ if (NOT TARGET "${OPENDAQ_SDK_TARGET_NAMESPACE}::${OPENDAQ_SDK_TARGET_NAME}")
         set(OPENDAQ_PACKAGE_VERSION "${${OPENDAQ_SDK_NAME}_VERSION}" CACHE INTERNAL "${OPENDAQ_SDK_NAME} SDK version")
     endif()
 endif()
-
-message(STATUS "${OPENDAQ_SDK_NAME} version: ${OPENDAQ_PACKAGE_VERSION}")
-add_compile_definitions(OPENDAQ_PACKAGE_VERSION="${OPENDAQ_PACKAGE_VERSION}")
+add_subdirectory(external/boost)
 
 add_subdirectory(external)
 add_subdirectory(shared)

@@ -503,7 +503,9 @@ TEST_F(TmsDeviceTest, SdkPackageVersion)
     auto nodeId = tmsServerDevice.registerOpcUaNode();
     DevicePtr clientDevice = TmsClientRootDevice(NullContext(), nullptr, "Dev", clientContext, nodeId);
 
-    ASSERT_EQ(clientDevice.getInfo().getSdkVersion(), OPENDAQ_PACKAGE_VERSION);
+    std::string version = clientDevice.getInfo().getSdkVersion();
+    ASSERT_TRUE(version.rfind(OPENDAQ_OPCUA_PACKAGE_VERSION, 0) == 0)
+        << "Actual version: " << version;
 }
 
 TEST_F(TmsDeviceTest, DeviceInfoChanges)

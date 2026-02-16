@@ -102,7 +102,6 @@ target_include_directories(${MODULE_NAME} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOU
 )
 
 target_link_libraries(${MODULE_NAME} PUBLIC  open62541
-                                             rapidjson
                                      PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_utils
 )
 

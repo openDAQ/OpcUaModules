@@ -46,7 +46,7 @@ target_include_directories(${MODULE_NAME} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOU
 target_link_libraries(${MODULE_NAME} PUBLIC  ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuashared
                                              ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_utils
                                      PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua_daq_types
-                                             ${OPENDAQ_SDK_TARGET_NAMESPACE}::coreobjects
+                                             ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq
 )
 
 set_target_properties(${MODULE_NAME} PROPERTIES PUBLIC_HEADER "${SOURCE_HEADERS}")

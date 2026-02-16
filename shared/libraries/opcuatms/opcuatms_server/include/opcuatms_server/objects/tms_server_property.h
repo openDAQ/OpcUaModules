@@ -15,7 +15,7 @@
  */
 
 #pragma once
-#include <property_internal_ptr.h>
+#include <coreobjects/property_internal_ptr.h>
 #include <coreobjects/property_ptr.h>
 #include <coretypes/listobject.h>
 #include <opcuatms_server/objects/tms_server_eval_value.h>

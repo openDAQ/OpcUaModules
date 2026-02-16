@@ -1,6 +1,4 @@
 #include "opcuashared/opcuavariant.h"
-#include <rapidjson/writer.h>
-#include <rapidjson/stringbuffer.h>
 #include <cctype>
 #include <open62541/types_generated_handling.h>
 
