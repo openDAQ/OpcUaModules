@@ -53,21 +53,24 @@ if (NOT TARGET "${OPENDAQ_SDK_TARGET_NAMESPACE}::${OPENDAQ_SDK_TARGET_NAME}")
         set(OPENDAQ_ENABLE_TESTS OFF CACHE BOOL "")
 
         opendaq_read_file_contents("${CMAKE_CURRENT_LIST_DIR}/opendaq_ref" OPENDAQ_REF)
+        opendaq_get_custom_fetch_content_params(${OPENDAQ_SDK_NAME} FC_PARAMS)
 
         FetchContent_Declare(
             ${OPENDAQ_SDK_NAME}
             GIT_REPOSITORY https://github.com/openDAQ/openDAQ.git
             GIT_TAG ${OPENDAQ_REF}
             GIT_PROGRESS   ON
-            SOURCE_DIR ${FETCHCONTENT_EXTERNALS_DIR}/src/${OPENDAQ_SDK_NAME}
+            ${FC_PARAMS}
         )
         FetchContent_MakeAvailable(${OPENDAQ_SDK_NAME})
     else()
         message(STATUS "Found installed ${OPENDAQ_SDK_NAME} version: ${${OPENDAQ_SDK_NAME}_VERSION}")
         set(OPENDAQ_PACKAGE_VERSION "${${OPENDAQ_SDK_NAME}_VERSION}" CACHE INTERNAL "${OPENDAQ_SDK_NAME} SDK version")
-        add_compile_definitions(OPENDAQ_PACKAGE_VERSION="${OPENDAQ_PACKAGE_VERSION}")
     endif()
 endif()
+
+message(STATUS "${OPENDAQ_SDK_NAME} version: ${OPENDAQ_PACKAGE_VERSION}")
+add_compile_definitions(OPENDAQ_PACKAGE_VERSION="${OPENDAQ_PACKAGE_VERSION}")
 
 add_subdirectory(external)
 add_subdirectory(shared)
