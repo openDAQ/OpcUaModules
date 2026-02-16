@@ -67,7 +67,7 @@ jobs:
         shell: bash
         working-directory: module
         run: |
-          opendaq_ref=$(cat external/opendaq_ref)
+          opendaq_ref=$(cat opendaq_ref)
           echo "OPENDAQ_REF=$opendaq_ref" >> $GITHUB_ENV
 
       - name: Checkout openDAQ
