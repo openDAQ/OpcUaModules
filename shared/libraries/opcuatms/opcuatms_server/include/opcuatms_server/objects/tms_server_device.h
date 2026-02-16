@@ -44,6 +44,9 @@ public:
     void addChildNodes() override;
 
     void createNonhierarchicalReferences() override;
+    bool checkPermission(const Permission permission,
+                         const UA_NodeId* const nodeId,
+                         const OpcUaSession* const sessionContext) override;
 
 protected:
     opcua::OpcUaNodeId getTmsTypeId() override;

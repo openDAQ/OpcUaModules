@@ -117,7 +117,7 @@ TEST_F_OPTIONAL(OpcUaServerTest, ClientConnectTestStopBeforeClientDisconnect)
 TEST_F_OPTIONAL(OpcUaServerTest, ClientConnectTestSessionContext)
 {
     OpcUaServer server = createServer();
-    server.createSessionContextCallback = [](const OpcUaNodeId& sessionId) { return new int; };
+    server.createSessionContextCallback = [](const OpcUaNodeId& sessionId, const UserPtr& authorizedUser) { return new int; };
     server.deleteSessionContextCallback = [](void* pointer) { delete (int*) pointer; };
     server.start();
 
@@ -131,7 +131,7 @@ TEST_F_OPTIONAL(OpcUaServerTest, ClientConnectTestSessionContext)
 TEST_F_OPTIONAL(OpcUaServerTest, ClientConnectTestSessionContextStopBeforeClientDisconnect)
 {
     OpcUaServer server = createServer();
-    server.createSessionContextCallback = [](const OpcUaNodeId& sessionId) { return new int; };
+    server.createSessionContextCallback = [](const OpcUaNodeId& sessionId, const UserPtr& authorizedUser) { return new int; };
     server.deleteSessionContextCallback = [](void* pointer) { delete (int*) pointer; };
     server.start();
 

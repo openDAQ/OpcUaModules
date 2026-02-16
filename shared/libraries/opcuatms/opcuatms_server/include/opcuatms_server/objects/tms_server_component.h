@@ -51,6 +51,11 @@ public:
     void addChildNodes() override;
     void onCoreEvent(const CoreEventArgsPtr& args) override;
 
+    bool checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext) override
+    {
+        return tmsPropertyObject->checkPermission(permission, nodeId, sessionContext);
+    }
+
 protected:
     opcua::OpcUaNodeId getTmsTypeId() override;
     void configureNodeAttributes(opcua::OpcUaObject<UA_ObjectAttributes>& attr) override;

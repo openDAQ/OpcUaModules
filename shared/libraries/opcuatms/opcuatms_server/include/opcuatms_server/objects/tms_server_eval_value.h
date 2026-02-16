@@ -38,6 +38,10 @@ public:
     void setReadCallback(ReadCallback readCallback);
     void setWriteCallback(WriteCallback writeCallback);
     void setIsSelectionType(bool isSelection);
+    bool checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext) override
+    {
+        return true;
+    }
 
 protected:
     opcua::OpcUaNodeId getTmsTypeId() override;

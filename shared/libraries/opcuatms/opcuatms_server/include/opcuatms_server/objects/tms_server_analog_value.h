@@ -32,6 +32,7 @@ public:
     
     TmsServerAnalogValue(const SignalPtr& signal, const opcua::OpcUaServerPtr& server, const ContextPtr& context, const TmsServerContextPtr& tmsContext);
     std::string getBrowseName() override;
+    bool checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext) override;
 
 protected:
     opcua::OpcUaNodeId getTmsTypeId() override;

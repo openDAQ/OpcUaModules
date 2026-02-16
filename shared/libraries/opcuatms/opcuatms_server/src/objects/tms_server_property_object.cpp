@@ -427,4 +427,14 @@ void TmsServerPropertyObject::triggerEvent(PropertyObjectPtr& sender, PropertyVa
     this->server->triggerEvent(OpcUaNodeId(UA_NS0ID_BASEEVENTTYPE), nodeId, attributes);
 }
 
+bool TmsServerPropertyObject::checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext)
+{
+    bool allow = true;
+    if (permission == Permission::Execute)
+    {
+        if (const auto browseName = readBrowseName(*nodeId); browseName == "BeginUpdate" || browseName == "EndUpdate")
+            allow = TmsServerObject::checkPermission(Permission::Write, nodeId, sessionContext);
+    }
+    return (allow && TmsServerObject::checkPermission(permission, nodeId, sessionContext));
+}
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

@@ -1,22 +1,23 @@
-#include <string>
-#include <opendaq/device_ptr.h>
-#include <opendaq/device_info_internal_ptr.h>
-#include <opcuatms_server/objects/tms_server_device.h>
+#include <coreobjects/property_factory.h>
+#include <coreobjects/property_object_factory.h>
+#include <opcuatms/converters/list_conversion_utils.h>
+#include <opcuatms/converters/property_object_conversion_utils.h>
+#include <opcuatms/converters/struct_converter.h>
+#include <opcuatms/converters/variant_converter.h>
 #include <opcuatms/core_types_utils.h>
 #include <opcuatms/type_mappings.h>
-#include <open62541/daqdevice_nodeids.h>
-#include <opcuatms/converters/struct_converter.h>
-#include <opendaq/component_ptr.h>
-#include <opendaq/device_private.h>
-#include <opendaq/search_filter_factory.h>
-#include <open62541/types_daqesp_generated.h>
-#include <opcuatms/converters/variant_converter.h>
-#include <coreobjects/property_object_factory.h>
-#include <opcuatms/converters/property_object_conversion_utils.h>
-#include <opcuatms/converters/list_conversion_utils.h>
+#include <opcuatms_server/objects/tms_server_device.h>
 #include <opcuatms_server/objects/tms_server_function_block_type.h>
-#include <coreobjects/property_factory.h>
+#include <open62541/daqdevice_nodeids.h>
+#include <open62541/types_daqesp_generated.h>
 #include <opendaq/component_factory.h>
+#include <opendaq/component_ptr.h>
+#include <opendaq/device_info_internal_ptr.h>
+#include <opendaq/device_private.h>
+#include <opendaq/device_ptr.h>
+#include <opendaq/search_filter_factory.h>
+#include <map>
+#include <string>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
@@ -137,6 +138,7 @@ void TmsServerDevice::populateDeviceInfo()
         OpcUaNodeId newNodeId(0);
         AddVariableNodeParams params(newNodeId, nodeId);
         params.setBrowseName(name);
+        params.nodeContext = this;
         switch (type)
         {
             case ctBool:
@@ -594,6 +596,17 @@ void TmsServerDevice::createNonhierarchicalReferences()
     createChildNonhierarchicalReferences(functionBlocks);
     createChildNonhierarchicalReferences(folders);
     createChildNonhierarchicalReferences(components);
+}
+
+bool TmsServerDevice::checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext)
+{
+    bool allow = true;
+    if (permission == Permission::Execute)
+    {
+        if (const auto browseName = TmsServerObject::readBrowseName(*nodeId); browseName == "Add" || browseName == "Remove")
+            allow = TmsServerComponent<DevicePtr>::checkPermission(Permission::Write, nodeId, sessionContext);
+    }
+    return (allow && TmsServerComponent<DevicePtr>::checkPermission(permission, nodeId, sessionContext));
 }
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

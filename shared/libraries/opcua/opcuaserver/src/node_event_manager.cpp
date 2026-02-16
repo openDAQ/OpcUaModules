@@ -1,12 +1,13 @@
 #include "opcuaserver/node_event_manager.h"
+#include <opcuatms_server/objects/tms_server_object.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
-NodeEventManager::NodeEventManager(const OpcUaNodeId& nodeId, OpcUaServerPtr& server)
+NodeEventManager::NodeEventManager(const OpcUaNodeId& nodeId, OpcUaServerPtr& server, void* nodeContext)
     : nodeId(nodeId)
     , server(server)
 {
-    UA_Server_setNodeContext(server->getUaServer(), *nodeId, this);
+    UA_Server_setNodeContext(server->getUaServer(), *nodeId, nodeContext);
 }
 
 void NodeEventManager::onRead(ReadCallback callback)
@@ -78,8 +79,12 @@ void NodeEventManager::OnWrite(UA_Server* server,
                                     const UA_NumericRange* range,
                                     const UA_DataValue* value)
 {
-    auto manager = (NodeEventManager*) nodeContext;
-
+    auto tmsNode = static_cast<tms::TmsServerObject*>(nodeContext);
+    if (!tmsNode)
+        return;
+    auto manager = tmsNode->getEventManager(nodeId);
+    if (!manager)
+        return;
     WriteArgs args;
     args.server = server;
     args.sessionId = sessionId;
@@ -100,7 +105,12 @@ void NodeEventManager::OnRead(UA_Server* server,
                                    const UA_NumericRange* range,
                                    const UA_DataValue* value)
 {
-    auto manager = (NodeEventManager*) nodeContext;
+    auto tmsNode = static_cast<tms::TmsServerObject*>(nodeContext);
+    if (!tmsNode)
+        return;
+    auto manager = tmsNode->getEventManager(nodeId);
+    if (!manager)
+        return;
 
     ReadArgs args;
     args.server = server;
@@ -123,7 +133,12 @@ UA_StatusCode NodeEventManager::OnDataSourceRead(UA_Server* server,
                                                       const UA_NumericRange* range,
                                                       UA_DataValue* value)
 {
-    auto manager = (NodeEventManager*) nodeContext;
+    auto tmsNode = static_cast<tms::TmsServerObject*>(nodeContext);
+    if (!tmsNode)
+        return UA_STATUSCODE_BADINTERNALERROR;
+    auto manager = tmsNode->getEventManager(nodeId);
+    if (!manager)
+        return UA_STATUSCODE_BADINTERNALERROR;
 
     DataSourceReadArgs args;
     args.server = server;
@@ -146,7 +161,13 @@ UA_StatusCode NodeEventManager::OnDataSourceWrite(UA_Server* server,
                                                        const UA_NumericRange* range,
                                                        const UA_DataValue* value)
 {
-    auto manager = (NodeEventManager*) nodeContext;
+    auto tmsNode = static_cast<tms::TmsServerObject*>(nodeContext);
+    if (!tmsNode)
+        return UA_STATUSCODE_BADINTERNALERROR;
+    auto manager = tmsNode->getEventManager(nodeId);
+    if (!manager)
+        return UA_STATUSCODE_BADINTERNALERROR;
+
 
     DataSourceWriteArgs args;
     args.server = server;
@@ -172,7 +193,16 @@ UA_StatusCode NodeEventManager::OnMethod(UA_Server* server,
                                               size_t outputSize,
                                               UA_Variant* output)
 {
-    auto manager = (NodeEventManager*) methodContext;
+    auto tmsNode = static_cast<tms::TmsServerObject*>(methodContext);
+    if (!tmsNode)
+        return UA_STATUSCODE_BADINTERNALERROR;
+    auto manager = tmsNode->getEventManager(methodId);
+    if (!manager)
+        return UA_STATUSCODE_BADINTERNALERROR;
+
+
+    if (!tmsNode->checkPermission(Permission::Execute, methodId, static_cast<OpcUaSession*>(sessionContext)))
+        return UA_STATUSCODE_BADUSERACCESSDENIED;
 
     MethodArgs args;
     args.server = server;

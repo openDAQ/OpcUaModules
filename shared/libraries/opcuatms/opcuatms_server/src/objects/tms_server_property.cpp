@@ -1,13 +1,14 @@
-#include <opcuatms_server/objects/tms_server_property.h>
 #include <coreobjects/eval_value_factory.h>
+#include <coreobjects/unit_factory.h>
 #include <opcuatms/converters/list_conversion_utils.h>
+#include <opcuatms/converters/variant_converter.h>
+#include <opcuatms/core_types_utils.h>
 #include <opcuatms_server/objects/tms_server_eval_value.h>
+#include <opcuatms_server/objects/tms_server_property.h>
+#include <open62541/daqbsp_nodeids.h>
 #include <open62541/daqbt_nodeids.h>
 #include <open62541/types_daqbt_generated.h>
-#include <opcuatms/core_types_utils.h>
-#include <opcuatms/converters/variant_converter.h>
-#include <open62541/daqbsp_nodeids.h>
-#include <coreobjects/unit_factory.h>
+#include "coreobjects/property_impl.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
@@ -215,6 +216,18 @@ opcua::OpcUaNodeId TmsServerProperty::getDataTypeId()
     }
 
     return {};
+}
+
+bool TmsServerProperty::checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext)
+{
+    bool allow = true;
+    if (auto tmsNodeAsProp = getObject().asPtrOrNull<daq::IProperty>(); tmsNodeAsProp.assigned() && sessionContext)
+    {
+        const auto propObj = static_cast<PropertyImpl*>(tmsNodeAsProp.getObject())->getOwner();
+        if (propObj.assigned())
+            allow = propObj.getPermissionManager().isAuthorized(sessionContext->getUser(), permission);
+    }
+    return allow;
 }
 
 void TmsServerProperty::validate()

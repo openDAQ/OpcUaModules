@@ -151,4 +151,17 @@ void TmsServerInputPort::createNonhierarchicalReferences()
     }
 }
 
+bool TmsServerInputPort::checkPermission(const Permission permission,
+                                         const UA_NodeId* const nodeId,
+                                         const OpcUaSession* const sessionContext)
+{
+    bool allow = true;
+    if (permission == Permission::Execute)
+    {
+        if (const auto browseName = TmsServerObject::readBrowseName(*nodeId); browseName == "Connect")
+            allow = TmsServerComponent<InputPortPtr>::checkPermission(Permission::Write, nodeId, sessionContext);
+    }
+    return (allow && TmsServerComponent<InputPortPtr>::checkPermission(permission, nodeId, sessionContext));
+}
+
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

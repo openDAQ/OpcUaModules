@@ -53,6 +53,7 @@ public:
     bool createOptionalNode(const opcua::OpcUaNodeId& nodeId) override;
     void setMethodParentNodeId(const opcua::OpcUaNodeId& methodParentNodeId);
     void addProperty(const TmsServerPropertyPtr& childProperty);
+    bool checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext) override;
     std::unordered_set<std::string> ignoredProps;
     std::unordered_map<std::string, std::string> propBrowseName; // property name -> browse name (if not use browse name as property name)
 

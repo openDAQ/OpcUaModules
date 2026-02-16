@@ -44,7 +44,7 @@ public:
     using DataSourceWriteCallback = std::function<UA_StatusCode(DataSourceWriteArgs args)>;
     using MethodCallback = std::function<UA_StatusCode(MethodArgs args)>;
 
-    NodeEventManager(const OpcUaNodeId& nodeId, OpcUaServerPtr& server);
+    NodeEventManager(const OpcUaNodeId& nodeId, OpcUaServerPtr& server, void* nodeContext = nullptr);
 
     void onRead(ReadCallback callback);
     void onWrite(WriteCallback callback);

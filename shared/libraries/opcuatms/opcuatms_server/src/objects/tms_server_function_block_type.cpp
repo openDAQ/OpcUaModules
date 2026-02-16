@@ -53,6 +53,11 @@ void TmsServerFunctionBlockType::configureVariableNodeAttributes(OpcUaObject<UA_
     attr->value = defaultValue.copyAndGetDetachedValue();
 }
 
+bool TmsServerFunctionBlockType::checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext)
+{
+    return true;
+}
+
 void TmsServerFunctionBlockType::addDefaultConfigNode()
 {
     auto defaultConfig = object.createDefaultConfig();

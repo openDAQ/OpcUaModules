@@ -14,14 +14,14 @@ OpcUaServer::OpcUaServer()
     : eventManager(std::make_shared<ServerEventManager>(this))
 {
     setPort(OPCUA_DEFAULT_PORT);
-    createSessionContextCallback = [this](const OpcUaNodeId& sessionId) { return createSessionContextCallbackImp(sessionId); };
+    createSessionContextCallback = [this](const OpcUaNodeId& sessionId, const UserPtr& authorizedUser) { return createSessionContextCallbackImp(sessionId, authorizedUser); };
     deleteSessionContextCallback = [this](void* context) { deleteSessionContextCallbackImp(context); };
     authenticationProvider = AuthenticationProvider();
 }
 
-void* OpcUaServer::createSessionContextCallbackImp(const OpcUaNodeId& sessionId)
+void* OpcUaServer::createSessionContextCallbackImp(const OpcUaNodeId& sessionId, const UserPtr& authorizedUser)
 {
-    return new OpcUaSession(sessionId, &serverLock);
+    return new OpcUaSession(sessionId, &serverLock, authorizedUser);
 }
 
 void OpcUaServer::deleteSessionContextCallbackImp(void* context)
@@ -62,6 +62,26 @@ void OpcUaServer::setClientConnectedHandler(const OnClientConnectedCallback& cal
 void OpcUaServer::setClientDisconnectedHandler(const OnClientDisconnectedCallback& callback)
 {
     this->clientDisconnectedHandler = callback;
+}
+
+void OpcUaServer::setAllowBrowsingNodeCallback(const OnAllowBrowsingNodeCallback& callback)
+{
+    this->allowBrowseNode = callback;
+}
+
+void OpcUaServer::setGetUserRightsMaskCallback(const OnGetUserRightsMaskCallback& callback)
+{
+    this->getUserRightsMask = callback;
+}
+
+void OpcUaServer::setGetUserAccessLevelCallback(const OnGetUserAccessLevelCallback& callback)
+{
+    this->getUserAccessLevel = callback;
+}
+
+void OpcUaServer::setGetUserExecutableCallback(const OnGetUserExecutableCallback& callback)
+{
+    this->getUserExecutable = callback;
 }
 
 void OpcUaServer::setSecurityConfig(OpcUaServerSecurityConfig* config)
@@ -160,6 +180,14 @@ void OpcUaServer::prepareAccessControl(UA_ServerConfig* config)
     activateSession_default = config->accessControl.activateSession;
     config->accessControl.activateSession = activateSession;
     config->accessControl.closeSession = closeSession;
+    if (allowBrowseNode)
+        config->accessControl.allowBrowseNode = allowBrowseNode;
+    if (getUserRightsMask)
+        config->accessControl.getUserRightsMask = getUserRightsMask;
+    if (getUserAccessLevel)
+        config->accessControl.getUserAccessLevel = getUserAccessLevel;
+    if (getUserExecutable)
+        config->accessControl.getUserExecutable = getUserExecutable;
 }
 
 void OpcUaServer::shutdownServer()
@@ -179,16 +207,16 @@ void OpcUaServer::shutdownServer()
     assert(sessionContext.size() == 0);
 }
 
-UA_StatusCode OpcUaServer::validateIdentityToken(const UA_ExtensionObject* token)
+UA_StatusCode OpcUaServer::validateIdentityToken(const UA_ExtensionObject* token, UserPtr& authorizedUser)
 {
     if (token->content.decoded.type == &UA_TYPES[UA_TYPES_USERNAMEIDENTITYTOKEN])
     {
-        if (isUsernameIdentityTokenValid((UA_UserNameIdentityToken*) token->content.decoded.data))
+        if (isUsernameIdentityTokenValid((UA_UserNameIdentityToken*) token->content.decoded.data, authorizedUser))
             return UA_STATUSCODE_GOOD;
     }
     else if (token->content.decoded.type == &UA_TYPES[UA_TYPES_ANONYMOUSIDENTITYTOKEN])
     {
-        if (isAnonymousIdentityTokenValid((UA_AnonymousIdentityToken*) token->content.decoded.data))
+        if (isAnonymousIdentityTokenValid((UA_AnonymousIdentityToken*) token->content.decoded.data, authorizedUser))
             return UA_STATUSCODE_GOOD;
     }
     else
@@ -199,7 +227,7 @@ UA_StatusCode OpcUaServer::validateIdentityToken(const UA_ExtensionObject* token
     return UA_STATUSCODE_BADUSERACCESSDENIED;
 }
 
-bool OpcUaServer::isUsernameIdentityTokenValid(const UA_UserNameIdentityToken* token)
+bool OpcUaServer::isUsernameIdentityTokenValid(const UA_UserNameIdentityToken* token, UserPtr& authorizedUser)
 {
     const auto username = utils::ToStdString(token->userName);
     const auto password = utils::ToStdString(token->password);
@@ -207,7 +235,7 @@ bool OpcUaServer::isUsernameIdentityTokenValid(const UA_UserNameIdentityToken* t
     try
     {
         auto errorGuard = DAQ_ERROR_GUARD();
-        authenticationProvider.authenticate(username, password);
+        authorizedUser = authenticationProvider.authenticate(username, password);
     }
     catch (const DaqException&)
     {
@@ -217,18 +245,30 @@ bool OpcUaServer::isUsernameIdentityTokenValid(const UA_UserNameIdentityToken* t
     return true;
 }
 
-bool OpcUaServer::isAnonymousIdentityTokenValid(const UA_AnonymousIdentityToken* /*token*/)
+bool OpcUaServer::isAnonymousIdentityTokenValid(const UA_AnonymousIdentityToken* /*token*/, UserPtr& authorizedUser)
 {
-    return authenticationProvider.isAnonymousAllowed();
+    if (authenticationProvider.isAnonymousAllowed())
+    {
+        try
+        {
+            auto errorGuard = DAQ_ERROR_GUARD();
+            authorizedUser = authenticationProvider.authenticateAnonymous();
+            return true;
+        }
+        catch (const DaqException&)
+        {
+        }
+    }
+    return false;
 }
 
-void OpcUaServer::createSession(const OpcUaNodeId& sessionId, void** sessionContext)
+void OpcUaServer::createSession(const OpcUaNodeId& sessionId, const UserPtr authorizedUser, void** sessionContext)
 {
     bool sessionContextAlreadyCreated = *sessionContext != nullptr;
 
     if (createSessionContextCallback && !sessionContextAlreadyCreated)
     {
-        *sessionContext = createSessionContextCallback(sessionId);
+        *sessionContext = createSessionContextCallback(sessionId, authorizedUser);
         if (*sessionContext != nullptr)
             this->sessionContext.insert(*sessionContext);
     }
@@ -564,21 +604,21 @@ UA_StatusCode OpcUaServer::activateSession(UA_Server* server,
     UA_StatusCode status = serverInstance->activateSession_default(
         server, ac, endpointDescription, secureChannelRemoteCertificate, sessionId, userIdentityToken, &unusedSessionContext);
     assert(unusedSessionContext == nullptr);
-
+    UserPtr authorizedUser;
     switch (status)
     {
         case UA_STATUSCODE_GOOD:
         case UA_STATUSCODE_BADUSERACCESSDENIED:
         case UA_STATUSCODE_BADIDENTITYTOKENINVALID:
         {
-            status = serverInstance->validateIdentityToken(userIdentityToken);
+            status = serverInstance->validateIdentityToken(userIdentityToken, authorizedUser);
             break;
         }
     }
 
     if (status == UA_STATUSCODE_GOOD)
     {
-        serverInstance->createSession(*sessionId, sessionContext);
+        serverInstance->createSession(*sessionId, authorizedUser, sessionContext);
         if (serverInstance->clientConnectedHandler)
             serverInstance->clientConnectedHandler(OpcUaNodeId::getIdentifier(*sessionId));
     }
@@ -602,7 +642,6 @@ void OpcUaServer::closeSession(UA_Server* server, UA_AccessControl* ac, const UA
     if (serverInstance->clientDisconnectedHandler)
         serverInstance->clientDisconnectedHandler(OpcUaNodeId::getIdentifier(*sessionId));
 }
-
 
 UA_StatusCode OpcUaServer::generateChildId(UA_Server* server,
                                            const UA_NodeId* /*sessionId*/,

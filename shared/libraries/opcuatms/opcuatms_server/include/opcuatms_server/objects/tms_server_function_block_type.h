@@ -38,6 +38,7 @@ public:
     std::string getBrowseName() override;
     std::string getDisplayName() override;
     std::string getDescription() override;
+    bool checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext) override;
 
 protected:
     OpcUaNodeId getTmsTypeId() override;

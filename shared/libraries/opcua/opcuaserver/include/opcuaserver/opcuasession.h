@@ -15,10 +15,9 @@
  */
 
 #pragma once
-#include <map>
-#include <atomic>
-#include "opcuashared/opcuanodeid.h"
 #include "opcuaserver/opcuaserverlock.h"
+#include "opcuashared/opcuanodeid.h"
+#include "user_ptr.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
@@ -28,7 +27,7 @@ using OpcUaSessionPtr = std::shared_ptr<OpcUaSession>;
 class OpcUaSession
 {
 public:
-    explicit OpcUaSession(const OpcUaNodeId& sessionId, OpcUaServerLock* serverLock);
+    explicit OpcUaSession(const OpcUaNodeId& sessionId, OpcUaServerLock* serverLock, const UserPtr& authorizedUser);
     ~OpcUaSession();
 
     bool canControlAcq();
@@ -42,11 +41,13 @@ public:
 
     void setConfigurationLockTokenId(const OpcUaNodeId& configurationLockTokenId);
     const OpcUaNodeId& getConfigurationLockTokenId() const;
+    const UserPtr& getUser() const;
 
 private:
     OpcUaNodeId sessionId;
     OpcUaServerLock* serverLock;
     OpcUaNodeId configurationLockTokenId;
+    UserPtr user;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA

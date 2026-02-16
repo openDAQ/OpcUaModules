@@ -38,6 +38,31 @@ class OpcUaServer final : public daq::utils::ThreadEx
 public:
     using OnClientConnectedCallback = std::function<void(const std::string& clientId)>;
     using OnClientDisconnectedCallback = std::function<void(const std::string& clientId)>;
+    using OnAllowBrowsingNodeCallback = UA_Boolean (*)(UA_Server* server,
+                                                       UA_AccessControl* ac,
+                                                       const UA_NodeId* sessionId,
+                                                       void* sessionContext,
+                                                       const UA_NodeId* nodeId,
+                                                       void* nodeContext);
+    using OnGetUserRightsMaskCallback = UA_UInt32 (*)(UA_Server* server,
+                                                      UA_AccessControl* ac,
+                                                      const UA_NodeId* sessionId,
+                                                      void* sessionContext,
+                                                      const UA_NodeId* nodeId,
+                                                      void* nodeContext);
+    using OnGetUserAccessLevelCallback = UA_Byte (*)(UA_Server* server,
+                                                     UA_AccessControl* ac,
+                                                     const UA_NodeId* sessionId,
+                                                     void* sessionContext,
+                                                     const UA_NodeId* nodeId,
+                                                     void* nodeContext);
+
+    using OnGetUserExecutableCallback = UA_Boolean (*)(UA_Server* server,
+                                                       UA_AccessControl* ac,
+                                                       const UA_NodeId* sessionId,
+                                                       void* sessionContext,
+                                                       const UA_NodeId* methodId,
+                                                       void* methodContext);
 
     OpcUaServer();
     ~OpcUaServer();
@@ -49,6 +74,10 @@ public:
     void setAuthenticationProvider(const AuthenticationProviderPtr& authenticationProvider);
     void setClientConnectedHandler(const OnClientConnectedCallback& callback);
     void setClientDisconnectedHandler(const OnClientDisconnectedCallback& callback);
+    void setAllowBrowsingNodeCallback(const OnAllowBrowsingNodeCallback& callback);
+    void setGetUserRightsMaskCallback(const OnGetUserRightsMaskCallback& callback);
+    void setGetUserAccessLevelCallback(const OnGetUserAccessLevelCallback& callback);
+    void setGetUserExecutableCallback(const OnGetUserExecutableCallback& callback);
 
     void setSecurityConfig(OpcUaServerSecurityConfig* config);
     const OpcUaServerSecurityConfig* getSecurityConfig() const;
@@ -107,14 +136,14 @@ public:
     bool referenceExists(const OpcUaNodeId& sourceId, const OpcUaNodeId& refTypeId, const OpcUaNodeId& targetId, bool isForward = true);
 
     // session context
-    typedef std::function<void*(const OpcUaNodeId& sessionId)> CreateSessionContextCallbackType;
+    typedef std::function<void*(const OpcUaNodeId& sessionId, const UserPtr& authorizedUser)> CreateSessionContextCallbackType;
     CreateSessionContextCallbackType createSessionContextCallback;
     typedef std::function<void(void*)> DeleteSessionContextCallbackType;
     DeleteSessionContextCallbackType deleteSessionContextCallback;
 
     std::unordered_set<void*>& getSessions();  // use only in server thread
 
-    void* createSessionContextCallbackImp(const OpcUaNodeId& sessionId);
+    void* createSessionContextCallbackImp(const OpcUaNodeId& sessionId, const UserPtr& authorizedUser);
     void deleteSessionContextCallbackImp(void* context);
 
     // TODO move locking to model
@@ -133,10 +162,10 @@ private:
     void prepareServerMinimal(UA_ServerConfig* config);
     void prepareAccessControl(UA_ServerConfig* config);
     void shutdownServer();
-    UA_StatusCode validateIdentityToken(const UA_ExtensionObject* token);
-    bool isUsernameIdentityTokenValid(const UA_UserNameIdentityToken* token);
-    bool isAnonymousIdentityTokenValid(const UA_AnonymousIdentityToken* token);
-    void createSession(const OpcUaNodeId& sessionId, void** sessionContext);
+    UA_StatusCode validateIdentityToken(const UA_ExtensionObject* token, UserPtr& authorizedUser);
+    bool isUsernameIdentityTokenValid(const UA_UserNameIdentityToken* token, UserPtr& authorizedUser);
+    bool isAnonymousIdentityTokenValid(const UA_AnonymousIdentityToken* token, UserPtr& authorizedUser);
+    void createSession(const OpcUaNodeId& sessionId, const UserPtr authorizedUser, void** sessionContext);
 
     static UA_StatusCode activateSession(UA_Server* server,
                                          UA_AccessControl* ac,
@@ -158,6 +187,11 @@ private:
                                              const UA_NodeId* sessionId,
                                              const UA_ExtensionObject* userIdentityToken,
                                              void** sessionContext){};
+
+    OnAllowBrowsingNodeCallback allowBrowseNode{};
+    OnGetUserAccessLevelCallback getUserAccessLevel{};
+    OnGetUserRightsMaskCallback getUserRightsMask{};
+    OnGetUserExecutableCallback getUserExecutable{};
 
     OpcUaServerLock serverLock;
     uint16_t port{OPCUA_DEFAULT_PORT};
