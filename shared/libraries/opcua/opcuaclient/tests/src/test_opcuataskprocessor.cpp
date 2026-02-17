@@ -1,8 +1,8 @@
-#include <testutils/testutils.h>
-
 #include <opcuashared/opcuanodeid.h>
 #include "opcuaclient/taskprocessor/opcuataskprocessor.h"
 #include "opcuaservertesthelper.h"
+
+#include <testutils/testutils.h>
 
 using namespace std::chrono_literals;
 

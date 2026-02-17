@@ -6,12 +6,12 @@
 #include <opendaq/module_manager_factory.h>
 #include <opendaq/module_ptr.h>
 #include <coretypes/common.h>
-#include <testutils/testutils.h>
 #include <opendaq/mock/mock_device_module.h>
 #include <opendaq/mock/mock_fb_module.h>
 #include <opcuaclient/opcuaclient.h>
 #include <coreobjects/authentication_provider_factory.h>
 
+#include <testutils/testutils.h>
 
 class OpcUaServerModuleTest : public testing::Test
 {

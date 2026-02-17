@@ -1,9 +1,9 @@
-#include <testutils/testutils.h>
-#include <testutils/daq_memcheck_listener.h>
-
 #include <coreobjects/util.h>
 #include <coretypes/stringobject_factory.h>
 #include <opendaq/module_manager_factory.h>
+
+#include <testutils/testutils.h>
+#include <testutils/daq_memcheck_listener.h>
 
 int main(int argc, char** args)
 {

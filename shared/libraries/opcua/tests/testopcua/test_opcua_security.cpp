@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <testutils/testutils.h>
 #include <opcuashared/opcuaendpoint.h>
 #include <opcuaserver/opcuaserver.h>
 #include <opcuashared/generated/cmake_globals.h>
@@ -8,6 +7,7 @@
 #include <opcuashared/bcrypt.h>
 #include "opcuashared/opcuasecuritycommon.h"
 #include <opcuaclient/opcuaclient.h>
+#include <testutils/testutils.h>
 
 using namespace daq::utils;
 

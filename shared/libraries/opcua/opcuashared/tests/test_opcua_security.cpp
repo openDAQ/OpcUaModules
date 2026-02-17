@@ -1,5 +1,4 @@
 #include "gtest/gtest.h"
-#include "testutils/testutils.h"
 #include <opcuashared/opcuaendpoint.h>
 #include <opcuaclient/opcuaclient.h>
 #include <opcuaserver/opcuaserver.h>
@@ -9,6 +8,7 @@
 #include <opcuashared/opcuaobject.h>
 #include <thread>
 #include <commonlib/crypto/bcrypt/bcrypt.h>
+#include "testutils/testutils.h"
 
 using Dewesoft::Utils::Crypto::BCrypt;
 
