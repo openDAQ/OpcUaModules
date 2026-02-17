@@ -1,5 +1,3 @@
-#include <coreobjects/util.h>
-#include <coretypes/stringobject_factory.h>
 #include <opendaq/module_manager_factory.h>
 
 #include <testutils/testutils.h>
