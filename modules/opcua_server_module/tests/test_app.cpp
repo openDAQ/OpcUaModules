@@ -5,6 +5,9 @@
 
 int main(int argc, char** args)
 {
+    {
+        ModuleManager(".");
+    }
     testing::InitGoogleTest(&argc, args);
 
     testing::TestEventListeners& listeners = testing::UnitTest::GetInstance()->listeners();
