@@ -1,11 +1,10 @@
-#include <testutils/testutils.h>
-
 #include "opcuashared/opcua.h"
 #include "opcuashared/opcuacommon.h"
 #include "opcuaservertesthelper.h"
 #include <opcuaclient/opcuanodefactory.h>
 #include <opcuaclient/browser/opcuanodefactorybrowser.h>
 #include <opcuashared/node/opcuanodevariable.h>
+#include <testutils/testutils.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 

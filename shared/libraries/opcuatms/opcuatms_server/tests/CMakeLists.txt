@@ -23,10 +23,10 @@ endif()
 
 set_target_properties(${TEST_APP} PROPERTIES DEBUG_POSTFIX _debug)
 
-target_link_libraries(${TEST_APP} PRIVATE ${SDK_TARGET_NAMESPACE}::${MODULE_NAME}
-                                          daq::opcuatms_test_utils
-                                          daq::opcuaclient
-                                          daq::opendaq_mocks
+target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME}
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_test_utils
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuaclient
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_mocks
 )
 
 add_test(NAME ${TEST_APP}
@@ -34,6 +34,6 @@ add_test(NAME ${TEST_APP}
          WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>
 )
 
-if (OPENDAQ_ENABLE_COVERAGE)
+if (COMMAND setup_target_for_coverage AND OPENDAQ_ENABLE_COVERAGE)
     setup_target_for_coverage(opcuatmsservercoverage ${TEST_APP} opcuatmsservercoverage)
 endif()

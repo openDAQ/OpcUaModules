@@ -68,8 +68,8 @@ set(SOURCE_NODE_HEADERS node/opcuanode.h
 
 set(INCLUDE_DIR ../include/${MODULE_NAME})
 
-prepend_include(${INCLUDE_DIR} SOURCE_HEADERS)
-prepend_include(${INCLUDE_DIR} SOURCE_NODE_HEADERS)
+opendaq_prepend_include(${INCLUDE_DIR} SOURCE_HEADERS)
+opendaq_prepend_include(${INCLUDE_DIR} SOURCE_NODE_HEADERS)
 
 set(ALL_SOURCES ${SOURCE_CPPS}
                 ${SOURCE_NODE_CPPS}
@@ -87,7 +87,7 @@ endif()
 set(SOURCE_FILES ${ALL_SOURCES})
 
 add_library(${MODULE_NAME} STATIC ${ALL_SOURCES})
-add_library(${SDK_TARGET_NAMESPACE}::${MODULE_NAME} ALIAS ${MODULE_NAME})
+add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME} ALIAS ${MODULE_NAME})
 
 if(BUILD_64Bit OR BUILD_ARM)
     set_target_properties(${MODULE_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -102,8 +102,7 @@ target_include_directories(${MODULE_NAME} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOU
 )
 
 target_link_libraries(${MODULE_NAME} PUBLIC  open62541
-                                             rapidjson
-                                     PRIVATE daq::opendaq_utils
+                                     PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_utils
 )
 
 if (MSVC)

@@ -1,15 +1,13 @@
-#include <testutils/testutils.h>
 #include <opcua_client_module/module_dll.h>
 #include <opcua_client_module/version.h>
-#include <gmock/gmock.h>
-
 #include <opendaq/module_ptr.h>
 #include <coretypes/common.h>
 #include <coreobjects/property_factory.h>
 #include <coreobjects/property_object_factory.h>
 #include <opendaq/device_info_factory.h>
-
 #include <opendaq/context_factory.h>
+
+#include <testutils/testutils.h>
 
 using OpcUaClientModuleTest = testing::Test;
 using namespace daq;

@@ -8,11 +8,10 @@ set(TEST_SOURCES test_opcua_server_module.cpp
 add_executable(${TEST_APP} ${TEST_SOURCES}
 )
 
-target_link_libraries(${TEST_APP} PRIVATE daq::test_utils
-                                          daq::opcuaclient
-                                          daq::opendaq_mocks
-                                          ${SDK_TARGET_NAMESPACE}::${MODULE_NAME}
-                                          Taskflow::Taskflow
+target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_test_utils gtest
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuaclient
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_mocks
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME}
 )
 
 add_test(NAME ${TEST_APP}
@@ -20,10 +19,6 @@ add_test(NAME ${TEST_APP}
          WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>
 )
 
-if (MSVC) # Ignoring warning for the Taskflow
-    target_compile_options(${TEST_APP} PRIVATE /wd4324)
-endif()
-
-if (OPENDAQ_ENABLE_COVERAGE)
+if (COMMAND setup_target_for_coverage AND OPENDAQ_ENABLE_COVERAGE)
     setup_target_for_coverage(${TEST_APP}coverage ${TEST_APP} ${TEST_APP}coverage)
 endif()

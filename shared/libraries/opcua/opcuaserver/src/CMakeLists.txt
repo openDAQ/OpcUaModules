@@ -29,7 +29,7 @@ set(SOURCE_HEADERS common.h
 
 set(INCLUDE_DIR ../include/${MODULE_NAME})
 
-prepend_include(${INCLUDE_DIR} SOURCE_HEADERS)
+opendaq_prepend_include(${INCLUDE_DIR} SOURCE_HEADERS)
 
 set(ALL_SOURCES ${SOURCE_CPPS}
                 ${SOURCE_HEADERS})
@@ -37,16 +37,16 @@ set(ALL_SOURCES ${SOURCE_CPPS}
 set(SOURCE_FILES ${ALL_SOURCES})
 
 add_library(${MODULE_NAME} STATIC ${ALL_SOURCES})
-add_library(${SDK_TARGET_NAMESPACE}::${MODULE_NAME} ALIAS ${MODULE_NAME})
+add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME} ALIAS ${MODULE_NAME})
 
 target_include_directories(${MODULE_NAME} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/>
                                                  $<INSTALL_INTERFACE:include/${MODULE_NAME}>
 )
 
-target_link_libraries(${MODULE_NAME} PUBLIC  daq::opcuashared
-                                             daq::opendaq_utils
-                                     PRIVATE daq::opcua_daq_types
-                                             daq::coreobjects
+target_link_libraries(${MODULE_NAME} PUBLIC  ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuashared
+                                             ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_utils
+                                     PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua_daq_types
+                                             ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq
 )
 
 set_target_properties(${MODULE_NAME} PROPERTIES PUBLIC_HEADER "${SOURCE_HEADERS}")

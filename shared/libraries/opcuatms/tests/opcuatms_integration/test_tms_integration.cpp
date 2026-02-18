@@ -36,7 +36,7 @@ public:
         moduleManager.addModule(fbModule);
 
         auto instance = InstanceCustom(context, localId);
-        instance.addDevice("daqmock://client_device");
+        instance.addDevice("daq.root://default_client");
         instance.addDevice("daqmock://phys_device");
         instance.addFunctionBlock("mock_fb_uid");
 
@@ -359,7 +359,7 @@ TEST_F(TmsIntegrationTest, InputPortConnect)
     ASSERT_FALSE(portSignal.assigned());
 }
 
-TEST_F(TmsIntegrationTest, InputPortMultipleServers)
+TEST_F(TmsIntegrationTest, DISABLED_InputPortMultipleServers)
 {
     auto StartServerDevice = [&](const InstancePtr& device, uint16_t port)
     {

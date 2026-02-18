@@ -1,10 +1,9 @@
-#include <testutils/testutils.h>
-
 #include <opendaq/utils/finally.h>
 #include "opcuaclient/opcuatimertaskhelper.h"
 
 #include "opcuaclient/taskprocessor/opcuataskprocessor.h"
 #include "opcuaservertesthelper.h"
+#include <testutils/testutils.h>
 
 using namespace daq::utils;
 using namespace std::chrono_literals;

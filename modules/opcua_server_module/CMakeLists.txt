@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
-set_cmake_folder_context(TARGET_FOLDER_NAME)
-project(ServerModule VERSION ${OPENDAQ_PACKAGE_VERSION} LANGUAGES CXX)
+opendaq_set_cmake_folder_context(TARGET_FOLDER_NAME)
+project(ServerModule VERSION ${${REPO_OPTION_PREFIX}_VERSION} LANGUAGES C CXX)
 
 add_subdirectory(src)
 
-if (OPENDAQ_ENABLE_TESTS)
+if (${REPO_OPTION_PREFIX}_ENABLE_TESTS)
     add_subdirectory(tests)
 endif()

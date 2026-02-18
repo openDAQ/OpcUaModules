@@ -17,7 +17,7 @@
 #pragma once
 #include <opcuatms/opcuatms.h>
 #include <opcuashared/opcuavariant.h>
-#include <property_object_ptr.h>
+#include <coreobjects/property_object_ptr.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 

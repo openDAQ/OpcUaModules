@@ -12,7 +12,7 @@ add_executable(${TEST_APP} ${TEST_SOURCES})
 target_link_libraries(${TEST_APP} PRIVATE opcuashared
                                           opcuaserver
                                           opcuaclient
-                                          daq::test_utils
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_test_utils gtest
 )
 
 if (MSVC)
@@ -24,6 +24,6 @@ add_test(NAME ${TEST_APP}
          WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>
 )
 
-if (OPENDAQ_ENABLE_COVERAGE)
+if (COMMAND setup_target_for_coverage AND OPENDAQ_ENABLE_COVERAGE)
     setup_target_for_coverage(${MODULE_NAME}testcoverage ${TEST_APP} ${MODULE_NAME}testcoverage)
 endif()

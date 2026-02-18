@@ -8,7 +8,6 @@
 #include <fstream>
 #include <future>
 #include "common_test_functions.h"
-#include <testutils/testutils.h>
 #include <opcuaclient/monitored_item_create_request.h>
 #include <opcuaclient/event_filter.h>
 
@@ -22,6 +21,7 @@
 #ifdef NAMESPACE_TMSDEVICE
     #include <open62541/tmsdevice_nodeids.h>
 #endif
+#include <testutils/testutils.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 

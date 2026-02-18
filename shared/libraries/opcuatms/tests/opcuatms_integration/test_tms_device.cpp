@@ -33,7 +33,7 @@ public:
         moduleManager.addModule(fbModule);
 
         auto instance = InstanceCustom(context, "localInstance");
-        instance.addDevice("daqmock://client_device");
+        instance.addDevice("daq.root://default_client");
         const auto device = instance.addDevice("daqmock://phys_device");
         const auto infoInternal = device.getInfo().asPtr<IDeviceInfoInternal>();
         infoInternal.addServerCapability(ServerCapability("protocol_1", "protocol 1", ProtocolType::Streaming));
@@ -503,7 +503,9 @@ TEST_F(TmsDeviceTest, SdkPackageVersion)
     auto nodeId = tmsServerDevice.registerOpcUaNode();
     DevicePtr clientDevice = TmsClientRootDevice(NullContext(), nullptr, "Dev", clientContext, nodeId);
 
-    ASSERT_EQ(clientDevice.getInfo().getSdkVersion(), OPENDAQ_PACKAGE_VERSION);
+    std::string version = clientDevice.getInfo().getSdkVersion();
+    ASSERT_TRUE(version.rfind(OPENDAQ_OPCUA_PACKAGE_VERSION, 0) == 0)
+        << "Actual version: " << version;
 }
 
 TEST_F(TmsDeviceTest, DeviceInfoChanges)

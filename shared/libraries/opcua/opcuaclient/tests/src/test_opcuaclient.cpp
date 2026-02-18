@@ -1,9 +1,9 @@
-#include <testutils/testutils.h>
 #include <future>
 #include "opcuaclient/opcuaclient.h"
 #include "opcuaservertesthelper.h"
 #include "opcuashared/opcua.h"
 #include "opcuashared/opcuacommon.h"
+#include <testutils/testutils.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
