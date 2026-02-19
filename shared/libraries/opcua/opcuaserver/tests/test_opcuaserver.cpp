@@ -8,8 +8,11 @@
 #include <fstream>
 #include <future>
 #include "common_test_functions.h"
+#include <testutils/testutils.h>
 #include <opcuaclient/monitored_item_create_request.h>
 #include <opcuaclient/event_filter.h>
+#include <coreobjects/user_factory.h>
+#include "coreobjects/authentication_provider_factory.h"
 
 #include <open62541/di_nodeids.h>
 #ifdef NAMESPACE_TMSBT
@@ -21,7 +24,6 @@
 #ifdef NAMESPACE_TMSDEVICE
     #include <open62541/tmsdevice_nodeids.h>
 #endif
-#include <testutils/testutils.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
@@ -123,6 +125,82 @@ TEST_F_OPTIONAL(OpcUaServerTest, ClientConnectTestSessionContext)
 
     UA_Client* client = CreateClient();
     ASSERT_EQ_STATUS(UA_Client_connect(client, SERVER_URL), UA_STATUSCODE_GOOD);
+    UA_Client_delete(client);
+
+    server.stop();
+}
+
+TEST_F(OpcUaServerTest, ClientConnectTestSessionContextUser)
+{
+    OpcUaServer server = createServer();
+    auto users = List<IUser>();
+    auto userJure = User("jure", "jure123");
+    users.pushBack(userJure);
+
+    auto authenticationProvider = StaticAuthenticationProvider(true, users);
+    server.setAuthenticationProvider(authenticationProvider);
+
+    void* createdSession = nullptr;
+    server.createSessionContextCallback = [&server, &createdSession](const OpcUaNodeId& sessionId, const UserPtr& authorizedUser)
+    {
+        createdSession = server.createSessionContextCallbackImp(sessionId, authorizedUser);
+        return createdSession;
+    };
+
+    server.start();
+
+    UA_Client* client = CreateClient();
+    ASSERT_EQ_STATUS(UA_Client_connectUsername(client, SERVER_URL, "jure", "jure123"), UA_STATUSCODE_GOOD);
+    ASSERT_TRUE(createdSession != nullptr);
+    ASSERT_TRUE(static_cast<OpcUaSession*>(createdSession)->getUser().assigned());
+    ASSERT_TRUE(static_cast<OpcUaSession*>(createdSession)->getUser() == userJure);
+    UA_Client_delete(client);
+
+    server.stop();
+}
+
+TEST_F(OpcUaServerTest, ClientConnectTestSessionContextUserAnonimous)
+{
+    OpcUaServer server = createServer();
+    auto authenticationProvider = StaticAuthenticationProvider(true, List<IUser>());
+    server.setAuthenticationProvider(authenticationProvider);
+
+    void* createdSession = nullptr;
+    server.createSessionContextCallback = [&server, &createdSession](const OpcUaNodeId& sessionId, const UserPtr& authorizedUser)
+    {
+        createdSession = server.createSessionContextCallbackImp(sessionId, authorizedUser);
+        return createdSession;
+    };
+
+    server.start();
+
+    UA_Client* client = CreateClient();
+    ASSERT_EQ_STATUS(UA_Client_connect(client, SERVER_URL), UA_STATUSCODE_GOOD);
+    ASSERT_TRUE(createdSession != nullptr);
+    ASSERT_TRUE(static_cast<OpcUaSession*>(createdSession)->getUser().assigned());
+    UA_Client_delete(client);
+
+    server.stop();
+}
+
+TEST_F(OpcUaServerTest, ClientConnectTestSessionContextUserAnonimousNotAllowed)
+{
+    OpcUaServer server = createServer();
+    auto authenticationProvider = StaticAuthenticationProvider(false, List<IUser>());
+    server.setAuthenticationProvider(authenticationProvider);
+
+    void* createdSession = nullptr;
+    server.createSessionContextCallback = [&server, &createdSession](const OpcUaNodeId& sessionId, const UserPtr& authorizedUser)
+    {
+        createdSession = server.createSessionContextCallbackImp(sessionId, authorizedUser);
+        return createdSession;
+    };
+
+    server.start();
+
+    UA_Client* client = CreateClient();
+    ASSERT_EQ_STATUS(UA_Client_connect(client, SERVER_URL), UA_STATUSCODE_BADUSERACCESSDENIED);
+    ASSERT_TRUE(createdSession == nullptr);
     UA_Client_delete(client);
 
     server.stop();

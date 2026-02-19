@@ -1,15 +1,16 @@
+#include <coreobjects/property_factory.h>
+#include <coreobjects/property_object_class_ptr.h>
 #include <coreobjects/property_object_factory.h>
 #include <gtest/gtest.h>
-#include <opcuaclient/opcuaclient.h>
-#include <opcuaclient/monitored_item_create_request.h>
-#include <opcuaclient/subscriptions.h>
-#include <future>
-#include <coreobjects/property_object_class_ptr.h>
-#include <opcuatms_server/objects/tms_server_property_object.h>
-#include "tms_server_test.h"
 #include <opcuaclient/event_filter.h>
-#include <coreobjects/property_factory.h>
+#include <opcuaclient/monitored_item_create_request.h>
+#include <opcuaclient/opcuaclient.h>
+#include <opcuaclient/subscriptions.h>
+#include <opcuatms_server/objects/tms_server_property_object.h>
 #include <opendaq/context_factory.h>
+#include <future>
+#include "test_helpers.h"
+#include "tms_server_test.h"
 
 using namespace daq;
 using namespace opcua::tms;
@@ -68,6 +69,50 @@ TEST_F(TmsPropertyObjectTest, Register)
     auto nodeId = tmsPropertyObject.registerOpcUaNode();
 
     ASSERT_TRUE(this->getClient()->nodeExists(nodeId));
+}
+
+TEST_F(TmsPropertyObjectTest, Permissions)
+{
+    PropertyObjectPtr propertyObject = createPropertyObject();
+
+    propertyObject.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+
+    auto tmsObj = TmsServerPropertyObject(propertyObject, this->getServer(), ctx, tmsCtx);
+    const auto nodeId = tmsObj.registerOpcUaNode();
+    const auto bunID = tmsObj.getBeginUpdateNodeId();
+    const auto eunID = tmsObj.getEndUpdateNodeId();
+
+    ASSERT_TRUE(this->getClient()->nodeExists(nodeId));
+
+    auto lambdaMain = [&](const OpcUaSession& session, bool read, bool write, bool execute)
+    {
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, nodeId.getPtr(), &session), read);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, nodeId.getPtr(), &session), write);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, nodeId.getPtr(), &session), execute);
+    };
+
+    auto lambdaSpecial = [&](const OpcUaSession& session, bool read, bool write, bool execute)
+    {
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, bunID.getPtr(), &session), read);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, bunID.getPtr(), &session), write);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, bunID.getPtr(), &session), execute);
+
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, eunID.getPtr(), &session), read);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, eunID.getPtr(), &session), write);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, eunID.getPtr(), &session), execute);
+    };
+
+    lambdaMain(test_helpers::createSessionCommon("common"), false, false, false);
+    lambdaMain(test_helpers::createSessionReader("reader"), true, false, false);
+    lambdaMain(test_helpers::createSessionWriter("writer"), true, true, false);
+    lambdaMain(test_helpers::createSessionExecutor("executor"), true, false, true);
+    lambdaMain(test_helpers::createSessionAdmin("admin"), true, true, true);
+
+    lambdaSpecial(test_helpers::createSessionCommon("common"), false, false, false);
+    lambdaSpecial(test_helpers::createSessionReader("reader"), true, false, false);
+    lambdaSpecial(test_helpers::createSessionWriter("writer"), true, true, false);
+    lambdaSpecial(test_helpers::createSessionExecutor("executor"), true, false, false);
+    lambdaSpecial(test_helpers::createSessionAdmin("admin"), true, true, true);
 }
 
 TEST_F(TmsPropertyObjectTest, DISABLED_OnPropertyValueChangeEvent)

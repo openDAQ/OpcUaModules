@@ -136,9 +136,9 @@ public:
     bool referenceExists(const OpcUaNodeId& sourceId, const OpcUaNodeId& refTypeId, const OpcUaNodeId& targetId, bool isForward = true);
 
     // session context
-    typedef std::function<void*(const OpcUaNodeId& sessionId, const UserPtr& authorizedUser)> CreateSessionContextCallbackType;
+    using CreateSessionContextCallbackType = std::function<void*(const OpcUaNodeId& sessionId, const UserPtr& authorizedUser)>;
+    using DeleteSessionContextCallbackType = std::function<void(void*)>;
     CreateSessionContextCallbackType createSessionContextCallback;
-    typedef std::function<void(void*)> DeleteSessionContextCallbackType;
     DeleteSessionContextCallbackType deleteSessionContextCallback;
 
     std::unordered_set<void*>& getSessions();  // use only in server thread

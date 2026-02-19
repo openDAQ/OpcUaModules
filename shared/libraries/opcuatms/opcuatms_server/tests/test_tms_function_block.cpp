@@ -1,14 +1,15 @@
+#include <coreobjects/property_object_factory.h>
+#include <coreobjects/unit_factory.h>
+#include <gtest/gtest.h>
+#include <opcuaclient/opcuaclient.h>
 #include <opcuashared/opcuacommon.h>
 #include <opcuatms/type_mappings.h>
-#include <opendaq/instance_factory.h>
-#include <coreobjects/property_object_factory.h>
-#include <gtest/gtest.h>
-#include <opendaq/mock/mock_fb_factory.h>
-#include <opcuaclient/opcuaclient.h>
 #include <opcuatms_server/objects/tms_server_function_block.h>
-#include "tms_server_test.h"
 #include <open62541/daqbsp_nodeids.h>
-#include <coreobjects/unit_factory.h>
+#include <opendaq/instance_factory.h>
+#include <opendaq/mock/mock_fb_factory.h>
+#include "test_helpers.h"
+#include "tms_server_test.h"
 
 using namespace daq;
 using namespace opcua::tms;
@@ -122,4 +123,28 @@ TEST_F(TmsFunctionBlockTest, NestedFunctionBlocks)
     auto firstFB = functionBlock.getFunctionBlocks()[0];
     auto firstFBNodeId = OpcUaNodeId(nodeId.getNamespaceIndex(), firstFB.getGlobalId().toStdString());
     ASSERT_TRUE(getServer()->nodeExists(firstFBNodeId));
+}
+
+TEST_F(TmsFunctionBlockTest, Permissions)
+{
+    FunctionBlockPtr functionBlock = createFunctionBlock();
+    functionBlock.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    auto tmsObj = TmsServerFunctionBlock(functionBlock, this->getServer(), ctx, tmsCtx);
+
+    const auto nodeId = tmsObj.registerOpcUaNode();
+
+    ASSERT_TRUE(this->getClient()->nodeExists(nodeId));
+
+    auto lambdaMain = [&](const OpcUaSession& session, bool read, bool write, bool execute)
+    {
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, nodeId.getPtr(), &session), read);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, nodeId.getPtr(), &session), write);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, nodeId.getPtr(), &session), execute);
+    };
+
+    lambdaMain(test_helpers::createSessionCommon("common"), false, false, false);
+    lambdaMain(test_helpers::createSessionReader("reader"), true, false, false);
+    lambdaMain(test_helpers::createSessionWriter("writer"), true, true, false);
+    lambdaMain(test_helpers::createSessionExecutor("executor"), true, false, true);
+    lambdaMain(test_helpers::createSessionAdmin("admin"), true, true, true);
 }

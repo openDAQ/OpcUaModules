@@ -34,10 +34,11 @@ public:
                         const daq::opcua::OpcUaVariant& variant);
     daq::opcua::OpcUaVariant readChildNode(const daq::opcua::OpcUaNodeId& parent, const std::string& browseName);
     daq::opcua::OpcUaNodeId getChildNodeId(const daq::opcua::OpcUaNodeId& parent, const std::string& browseName);
+    daq::opcua::OpcUaObject<UA_BrowseResponse> browseNode(const daq::opcua::OpcUaNodeId& nodeId);
     void waitForInput();
 
     static daq::opcua::OpcUaServerPtr CreateAndStartTestServer();
-    static daq::opcua::OpcUaClientPtr CreateAndConnectTestClient();
+    static daq::opcua::OpcUaClientPtr CreateAndConnectTestClient(const std::string& username = "", const std::string& password = "");
 
 protected:
     daq::opcua::OpcUaServerPtr server;

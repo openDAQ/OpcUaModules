@@ -47,6 +47,8 @@ public:
     bool checkPermission(const Permission permission,
                          const UA_NodeId* const nodeId,
                          const OpcUaSession* const sessionContext) override;
+    opcua::OpcUaNodeId getAddFunctionBlockNodeId() const { return addFbNodeId; }
+    opcua::OpcUaNodeId getRemoveFunctionBlockNodeId() const { return removeFbNodeId; }
 
 protected:
     opcua::OpcUaNodeId getTmsTypeId() override;
@@ -74,6 +76,9 @@ protected:
     std::list<TmsServerFunctionBlockTypePtr> functionBlockTypes;
     std::list<TmsServerSyncComponentPtr> syncComponents;
     std::list<TmsServerPropertyPtr> deviceInfoProperties;
+
+    opcua::OpcUaNodeId addFbNodeId;
+    opcua::OpcUaNodeId removeFbNodeId;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

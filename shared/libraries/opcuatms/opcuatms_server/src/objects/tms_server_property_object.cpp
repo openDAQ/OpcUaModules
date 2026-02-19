@@ -372,7 +372,7 @@ void TmsServerPropertyObject::addBeginUpdateNode()
     AddMethodNodeParams params(nodeIdOut, nodeId);
     params.referenceTypeId = OpcUaNodeId(UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT));
     params.setBrowseName("BeginUpdate");
-    auto methodNodeId = server->addMethodNode(params);
+    beginUpdateNodeId = server->addMethodNode(params);
 
     auto callback = [this](NodeEventManager::MethodArgs args)
     {
@@ -380,7 +380,7 @@ void TmsServerPropertyObject::addBeginUpdateNode()
         return status == OPENDAQ_SUCCESS ? UA_STATUSCODE_GOOD : UA_STATUSCODE_BADINTERNALERROR;
     };
 
-    addEvent(methodNodeId)->onMethodCall(callback);
+    addEvent(beginUpdateNodeId)->onMethodCall(callback);
 }
 
 void TmsServerPropertyObject::addEndUpdateNode()
@@ -389,7 +389,7 @@ void TmsServerPropertyObject::addEndUpdateNode()
     AddMethodNodeParams params(nodeIdOut, nodeId);
     params.referenceTypeId = OpcUaNodeId(UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT));
     params.setBrowseName("EndUpdate");
-    auto methodNodeId = server->addMethodNode(params);
+    endUpdateNodeId = server->addMethodNode(params);
 
     auto callback = [this](NodeEventManager::MethodArgs args)
     {
@@ -397,7 +397,7 @@ void TmsServerPropertyObject::addEndUpdateNode()
         return status == OPENDAQ_SUCCESS ? UA_STATUSCODE_GOOD : UA_STATUSCODE_BADINTERNALERROR;
     };
 
-    addEvent(methodNodeId)->onMethodCall(callback);
+    addEvent(endUpdateNodeId)->onMethodCall(callback);
 }
 
 void TmsServerPropertyObject::addPropertyNode(const std::string& name, const opcua::OpcUaNodeId& parentId)

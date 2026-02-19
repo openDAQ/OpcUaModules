@@ -37,6 +37,8 @@ public:
     bool checkPermission(const Permission permission,
                          const UA_NodeId* const nodeId,
                          const OpcUaSession* const sessionContext) override;
+    OpcUaNodeId getConnectNodeId() const { return connectNodeId; }
+    OpcUaNodeId getDisconnectNodeId() const { return disconnectNodeId; }
 
 protected:
     opcua::OpcUaNodeId getTmsTypeId() override;
@@ -44,6 +46,9 @@ protected:
     void createDisconnectMethodNode();
     void onConnectSignal(NodeEventManager::MethodArgs args);
     void onDisconenctSignal(NodeEventManager::MethodArgs args);
+
+    OpcUaNodeId connectNodeId;
+    OpcUaNodeId disconnectNodeId;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

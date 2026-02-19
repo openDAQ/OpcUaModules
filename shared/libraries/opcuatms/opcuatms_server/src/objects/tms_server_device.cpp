@@ -375,7 +375,7 @@ void TmsServerDevice::createAddFunctionBlockNode(const OpcUaNodeId& parentId)
     params.inputArguments[1].dataType = UA_TYPES_DAQBT[UA_TYPES_DAQBT_DAQKEYVALUEPAIR].typeId;
     params.inputArguments[1].valueRank = UA_VALUERANK_ONE_DIMENSION;
 
-    auto methodNodeId = server->addMethodNode(params);
+    addFbNodeId = server->addMethodNode(params);
 
     auto callback = [this](NodeEventManager::MethodArgs args) -> UA_StatusCode
     {
@@ -394,7 +394,7 @@ void TmsServerDevice::createAddFunctionBlockNode(const OpcUaNodeId& parentId)
         }
     };
 
-    addEvent(methodNodeId)->onMethodCall(callback);
+    addEvent(addFbNodeId)->onMethodCall(callback);
 }
 
 void TmsServerDevice::createRemoveFunctionBlockNode(const OpcUaNodeId& parentId)
@@ -410,7 +410,7 @@ void TmsServerDevice::createRemoveFunctionBlockNode(const OpcUaNodeId& parentId)
     params.inputArguments[0].dataType = UA_TYPES[UA_TYPES_STRING].typeId;
     params.inputArguments[0].valueRank = UA_VALUERANK_SCALAR;
 
-    auto methodNodeId = server->addMethodNode(params);
+    removeFbNodeId = server->addMethodNode(params);
 
     auto callback = [this](NodeEventManager::MethodArgs args) -> UA_StatusCode
     {
@@ -429,7 +429,7 @@ void TmsServerDevice::createRemoveFunctionBlockNode(const OpcUaNodeId& parentId)
         }
     };
 
-    addEvent(methodNodeId)->onMethodCall(callback);
+    addEvent(removeFbNodeId)->onMethodCall(callback);
 }
 
 void TmsServerDevice::onGetAvailableFunctionBlockTypes(const NodeEventManager::MethodArgs& args)

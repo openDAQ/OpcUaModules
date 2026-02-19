@@ -16,25 +16,57 @@
 
 #pragma once
 
-#include <opendaq/instance_factory.h>
+#include <coreobjects/authentication_provider_factory.h>
 #include <opcuaclient/browse_request.h>
 #include <opcuaclient/browser/opcuabrowser.h>
-#include <open62541/di_nodeids.h>
+#include <open62541/daqbsp_nodeids.h>
 #include <open62541/daqdevice_nodeids.h>
+#include <open62541/di_nodeids.h>
+#include <opendaq/instance_factory.h>
 #include <opendaq/mock/mock_device_module.h>
 #include <opendaq/mock/mock_fb_module.h>
 #include <opendaq/mock/mock_physical_device.h>
-#include <open62541/daqbsp_nodeids.h>
-#include <coreobjects/authentication_provider_factory.h>
+#include "coreobjects/user_factory.h"
+#include "opcuaserver/opcuasession.h"
 
 namespace test_helpers
 {
-    inline daq::InstancePtr SetupInstance()
+
+    inline daq::PermissionsBuilderPtr CreatePermissionsBuilder()
+    {
+        using namespace daq;
+        return PermissionsBuilder()
+            .inherit(false)
+            .assign("everyone", PermissionMaskBuilder())
+            .assign("reader", PermissionMaskBuilder().read())
+            .assign("writer", PermissionMaskBuilder().read().write())
+            .assign("executor", PermissionMaskBuilder().read().execute())
+            .assign("admin", PermissionMaskBuilder().read().write().execute());
+    }
+
+    inline auto CreateUsers()
+    {
+        using namespace daq;
+        auto users = List<IUser>();
+        const std::vector<std::pair<std::string, std::string>> templateForUser = {
+            {"common", ""}, {"reader", "reader"}, {"writer", "writer"}, {"executor", "executor"}, {"admin", "admin"}};
+        for (const auto& [user, group] : templateForUser)
+        {
+            if (group.empty())
+                users.pushBack(User(user + "User", user + "UserPass"));
+            else
+                users.pushBack(User(user + "User", user + "UserPass", {group}));
+        }
+        return users;
+    }
+
+    inline daq::InstancePtr SetupInstance(bool anonymousAllowed = true)
     {
         using namespace daq;
         const auto logger = Logger();
         const auto moduleManager = ModuleManager("[[none]]");
-        const auto authenticationProvider = AuthenticationProvider();
+
+        const auto authenticationProvider = StaticAuthenticationProvider(anonymousAllowed, CreateUsers());
         const auto context = Context(nullptr, logger, TypeManager(), moduleManager, authenticationProvider);
 
         const ModulePtr deviceModule(MockDeviceModule_Create(context));
@@ -130,5 +162,37 @@ namespace test_helpers
                 return dev;
         }
         throw std::runtime_error("Mock device not found");
+    }
+
+    inline daq::opcua::OpcUaSession createSession(uint32_t id, const std::string& username, std::string password = "", std::vector<std::string> roles = {})
+    {
+        if (password == "")
+            password = username + "Pass";
+        return daq::opcua::OpcUaSession(daq::opcua::OpcUaNodeId(id), nullptr, daq::User(username, password, roles));
+    }
+
+    inline daq::opcua::OpcUaSession createSessionCommon(const std::string& username, const std::string& password = "")
+    {
+        return createSession(0, username, password);
+    }
+
+    inline daq::opcua::OpcUaSession createSessionReader(const std::string& username, const std::string& password = "")
+    {
+        return createSession(1, username, password, {"reader"});
+    }
+
+    inline daq::opcua::OpcUaSession createSessionWriter(const std::string& username, const std::string& password = "")
+    {
+        return createSession(2, username, password, {"writer"});
+    }
+
+    inline daq::opcua::OpcUaSession createSessionExecutor(const std::string& username, const std::string& password = "")
+    {
+        return createSession(3, username, password, {"executor"});
+    }
+
+    inline daq::opcua::OpcUaSession createSessionAdmin(const std::string& username, const std::string& password = "")
+    {
+        return createSession(4, username, password, {"admin"});
     }
 }

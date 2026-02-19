@@ -5,6 +5,7 @@ set(TEST_SOURCES
     main.cpp
     test_opcua_security.cpp
     test_opcua_authentication.cpp
+    test_opcua_permissions.cpp
 )
 
 add_executable(${TEST_APP} ${TEST_SOURCES})

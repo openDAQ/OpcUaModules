@@ -1,15 +1,16 @@
-#include <opendaq/input_port_factory.h>
-#include <open62541/daqbsp_nodeids.h>
-#include <open62541/daqbt_nodeids.h>
-#include <open62541/nodeids.h>
-#include <opendaq/data_descriptor_factory.h>
-#include <opendaq/range_factory.h>
-#include <opendaq/signal_factory.h>
-#include <opendaq/signal_ptr.h>
 #include <gtest/gtest.h>
 #include <opcuaclient/opcuaclient.h>
 #include <opcuatms_server/objects/tms_server_input_port.h>
 #include <opcuatms_server/objects/tms_server_signal.h>
+#include <open62541/daqbsp_nodeids.h>
+#include <open62541/daqbt_nodeids.h>
+#include <open62541/nodeids.h>
+#include <opendaq/data_descriptor_factory.h>
+#include <opendaq/input_port_factory.h>
+#include <opendaq/range_factory.h>
+#include <opendaq/signal_factory.h>
+#include <opendaq/signal_ptr.h>
+#include "test_helpers.h"
 #include "tms_server_test.h"
 
 using namespace daq;
@@ -116,4 +117,35 @@ TEST_F(TmsSignalTest, ValueAndAnalogValueDataTypeInt32)
     // Check that AnalogValue node has Int32 data type (not abstract NUMBER)
     auto analogValueDataType = this->getClient()->readDataType(analogValueNodeId);
     ASSERT_EQ(analogValueDataType, OpcUaNodeId(0, UA_NS0ID_INT32));
+}
+
+TEST_F(TmsSignalTest, Permissions)
+{
+    SignalConfigPtr signal = Signal(ctx, nullptr, "sig");
+    signal.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    auto tmsObj = TmsServerSignal(signal, this->getServer(), ctx, tmsCtx);
+    auto nodeId = tmsObj.registerOpcUaNode();
+
+    ASSERT_TRUE(this->getClient()->nodeExists(nodeId));
+
+    auto lambdaMain = [&](const OpcUaSession& session, bool read, bool write, bool execute)
+    {
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, nodeId.getPtr(), &session), read);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, nodeId.getPtr(), &session), write);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, nodeId.getPtr(), &session), execute);
+    };
+
+    auto lambdaValues = [&](const OpcUaSession& session, bool read, bool write, bool execute)
+    {
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, nodeId.getPtr(), &session), read);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, nodeId.getPtr(), &session), write);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, nodeId.getPtr(), &session), execute);
+    };
+
+    lambdaMain(test_helpers::createSessionCommon("common"), false, false, false);
+    lambdaMain(test_helpers::createSessionReader("reader"), true, false, false);
+    lambdaMain(test_helpers::createSessionWriter("writer"), true, true, false);
+    lambdaMain(test_helpers::createSessionExecutor("executor"), true, false, true);
+    lambdaMain(test_helpers::createSessionAdmin("admin"), true, true, true);
+
 }
