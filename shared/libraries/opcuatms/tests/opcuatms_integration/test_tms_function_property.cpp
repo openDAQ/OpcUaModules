@@ -19,9 +19,19 @@ struct RegisteredPropertyObject
     PropertyObjectPtr clientProp;
 };
 
-class TmsFunctionTest: public TmsObjectIntegrationTest
+class TmsFunctionTest: public TmsObjectIntegrationTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
+
     RegisteredPropertyObject registerPropertyObject(const PropertyObjectPtr& obj)
     {
         const auto serverProp = std::make_shared<TmsServerPropertyObject>(obj, server, ctx, serverContext);

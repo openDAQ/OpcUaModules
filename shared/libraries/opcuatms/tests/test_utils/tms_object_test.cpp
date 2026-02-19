@@ -13,19 +13,16 @@ TmsObjectTest::TmsObjectTest()
 {
 }
 
-void TmsObjectTest::SetUp()
+void TmsObjectTest::Init()
 {
-    testing::Test::SetUp();
-
     server = CreateAndStartTestServer();
     client = CreateAndConnectTestClient();
 }
 
-void TmsObjectTest::TearDown()
+void TmsObjectTest::Clear()
 {
     client.reset();
     server.reset();
-    testing::Test::TearDown();
 }
 
 OpcUaServerPtr TmsObjectTest::getServer()

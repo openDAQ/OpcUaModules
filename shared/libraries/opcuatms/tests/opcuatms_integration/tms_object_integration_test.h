@@ -24,8 +24,8 @@
 class TmsObjectIntegrationTest : public TmsObjectTest
 {
 public:
-    void SetUp() override;
-    void TearDown() override;
+    void Init() override;
+    void Clear() override;
     daq::LastMessageLoggerSinkPrivatePtr getPrivateSink();
 
 protected:

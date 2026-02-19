@@ -19,13 +19,12 @@
 #include <opcuaclient/opcuaclient.h>
 #include <opcuaserver/opcuaserver.h>
 
-class TmsObjectTest : public testing::Test
+class TmsObjectTest
 {
 public:
     TmsObjectTest();
-
-    virtual void SetUp() override;
-    virtual void TearDown() override;
+    virtual void Init();
+    virtual void Clear();
 
     daq::opcua::OpcUaServerPtr getServer();
     daq::opcua::OpcUaClientPtr getClient();

@@ -18,9 +18,19 @@ struct RegisteredProperty
     PropertyPtr clientProp;
 };
 
-class TmsPropertyTest : public TmsObjectIntegrationTest
+class TmsPropertyTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
+
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
 
     PropertyBuilderPtr createIntPropertyBuilder()
     {

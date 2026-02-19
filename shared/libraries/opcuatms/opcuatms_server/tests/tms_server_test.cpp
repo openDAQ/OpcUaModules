@@ -1,17 +1,17 @@
 #include "tms_server_test.h"
 
-void TmsServerObjectTest::SetUp()
+void TmsServerObjectTest::Init()
 {
-    TmsObjectTest::SetUp();
+    TmsObjectTest::Init();
 
     ctx = daq::NullContext();
     tmsCtx = std::make_shared<daq::opcua::tms::TmsServerContext>(ctx, nullptr);
 }
 
-void TmsServerObjectTest::TearDown()
+void TmsServerObjectTest::Clear()
 {
     ctx = nullptr;
     tmsCtx = nullptr;
 
-    TmsObjectTest::TearDown();
+    TmsObjectTest::Clear();
 }

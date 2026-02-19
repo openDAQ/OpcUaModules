@@ -20,9 +20,19 @@ using namespace daq;
 using namespace opcua::tms;
 using namespace opcua;
 
-class TmsInputPortTest : public TmsServerObjectTest
+class TmsInputPortTest : public TmsServerObjectTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsServerObjectTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsServerObjectTest::Clear();
+    }
+
     InputPortPtr createInputPort()
     {
         auto port = InputPort(ctx, nullptr, "Port");

@@ -32,14 +32,14 @@ struct RegisteredPropertyObject
 
 // TODO: Add complex number type property test cases once implemented
 
-class TmsPropertyObjectAdvancedTest : public TmsObjectIntegrationTest
+class TmsPropertyObjectAdvancedTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
     TypeManagerPtr manager;
 
     void SetUp() override
     {
-        TmsObjectIntegrationTest::SetUp();
+        TmsObjectIntegrationTest::Init();
 
         manager = TypeManager();
 
@@ -174,7 +174,7 @@ public:
 
     void TearDown() override
     {
-        TmsObjectIntegrationTest::TearDown();
+        TmsObjectIntegrationTest::Clear();
     }
 
     RegisteredPropertyObject registerPropertyObject(const PropertyObjectPtr& prop)

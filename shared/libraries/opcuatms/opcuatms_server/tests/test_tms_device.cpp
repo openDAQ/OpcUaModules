@@ -16,7 +16,19 @@ using namespace opcua::tms;
 using namespace opcua;
 using namespace std::chrono_literals;
 
-using TmsDeviceTest = TmsServerObjectTest;
+class TmsDeviceTest : public TmsServerObjectTest, public testing::Test
+{
+public:
+    void SetUp() override
+    {
+        TmsServerObjectTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsServerObjectTest::Clear();
+    }
+};
 
 TEST_F(TmsDeviceTest, Create)
 {

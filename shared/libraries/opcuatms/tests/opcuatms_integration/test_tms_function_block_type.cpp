@@ -11,9 +11,19 @@ using namespace daq;
 using namespace opcua::tms;
 using namespace opcua;
 
-class TmsFunctionBlockTypeTest : public TmsObjectIntegrationTest
+class TmsFunctionBlockTypeTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
+
     FunctionBlockTypePtr createFunctionBlockType()
     {
         auto defaultConfig = PropertyObject();

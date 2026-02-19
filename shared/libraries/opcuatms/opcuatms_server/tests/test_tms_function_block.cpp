@@ -16,9 +16,18 @@ using namespace opcua::tms;
 using namespace opcua;
 using namespace daq::opcua::utils;
 
-class TmsFunctionBlockTest : public TmsServerObjectTest
+class TmsFunctionBlockTest : public TmsServerObjectTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsServerObjectTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsServerObjectTest::Clear();
+    }
 
     FunctionBlockPtr createFunctionBlock(const FunctionBlockTypePtr& type = FunctionBlockType("UID", "Name", "Desc"))
     {

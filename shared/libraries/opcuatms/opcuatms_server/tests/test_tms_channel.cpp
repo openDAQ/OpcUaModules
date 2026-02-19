@@ -16,9 +16,19 @@ using namespace opcua::tms;
 using namespace opcua;
 using namespace daq::opcua::utils;
 
-class TmsChannelTest : public TmsServerObjectTest
+class TmsChannelTest : public TmsServerObjectTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsServerObjectTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsServerObjectTest::Clear();
+    }
+
     ChannelPtr createChannel()
     {
         return MockChannel(ctx, nullptr, "mockch");

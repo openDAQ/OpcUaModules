@@ -16,9 +16,18 @@
 using namespace daq;
 using namespace opcua::tms;
 using namespace opcua;
-class TmsChannelTest : public TmsObjectIntegrationTest
+class TmsChannelTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
 
     ChannelPtr createChannel(const ContextPtr& ctx)
     {

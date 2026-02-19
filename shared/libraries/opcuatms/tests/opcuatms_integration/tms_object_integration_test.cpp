@@ -13,9 +13,9 @@ static LoggerPtr CreateLoggerWithDebugSink(const LoggerSinkPtr& sink)
     return LoggerWithSinks(sinks);
 }
 
-void TmsObjectIntegrationTest::SetUp()
+void TmsObjectIntegrationTest::Init()
 {
-    TmsObjectTest::SetUp();
+    TmsObjectTest::Init();
     debugSink = LastMessageLoggerSink();
     logger = CreateLoggerWithDebugSink(debugSink);
 
@@ -37,12 +37,12 @@ LastMessageLoggerSinkPrivatePtr TmsObjectIntegrationTest::getPrivateSink()
     return sinkPtr;
 }
 
-void TmsObjectIntegrationTest::TearDown()
+void TmsObjectIntegrationTest::Clear()
 {
     clientContext.reset();
     serverContext = nullptr;
     ctx = nullptr;
     ctxClient = nullptr;
 
-    TmsObjectTest::TearDown();
+    TmsObjectTest::Clear();
 }

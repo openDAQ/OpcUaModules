@@ -17,9 +17,20 @@ using namespace opcua::tms;
 using namespace opcua;
 using namespace std::chrono_literals;
 
-class TmsPropertyObjectTest : public TmsServerObjectTest
+class TmsPropertyObjectTest : public TmsServerObjectTest, public testing::Test
 {
 public:
+
+    void SetUp() override
+    {
+        TmsServerObjectTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsServerObjectTest::Clear();
+    }
+
     PropertyObjectPtr createPropertyObject()
     {
         GenericPropertyObjectPtr object = PropertyObject();

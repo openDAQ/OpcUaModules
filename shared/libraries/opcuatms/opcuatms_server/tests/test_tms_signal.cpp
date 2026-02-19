@@ -17,9 +17,19 @@ using namespace daq;
 using namespace opcua::tms;
 using namespace opcua;
 
-class TmsSignalTest : public TmsServerObjectTest
+class TmsSignalTest : public TmsServerObjectTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsServerObjectTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsServerObjectTest::Clear();
+    }
+
     SignalConfigPtr createSignal(const ContextPtr& context, const StringPtr& localId = "sig")
     {
         SignalConfigPtr signal = Signal(context, nullptr, localId);
