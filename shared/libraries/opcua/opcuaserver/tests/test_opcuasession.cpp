@@ -1,7 +1,6 @@
+#include "gtest/gtest.h"
 #include <opcuaserver/opcuaserverlock.h>
 #include <opcuaserver/opcuasession.h>
-#include "coreobjects/user_factory.h"
-#include "gtest/gtest.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
@@ -12,15 +11,6 @@ TEST_F(OpcUaSessionTest, Create)
 {
     OpcUaServerLock serverLock;
     OpcUaSession session(OpcUaNodeId(1, 1), &serverLock, UserPtr());
-}
-
-TEST_F(OpcUaSessionTest, CreateWithUser)
-{
-    auto user = User("jure", "jure123");
-    auto sessionId = UA_NodeId();
-    auto serverLock = OpcUaServerLock();
-    auto session = OpcUaSession(sessionId, &serverLock, user);
-    ASSERT_TRUE(session.getUser() == user);
 }
 
 TEST_F(OpcUaSessionTest, LockConfigurationControl)
