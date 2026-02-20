@@ -27,6 +27,12 @@ namespace detail
                                                          "OperationMode",
                                                          "OperationModeOptions",
                                                          "ComponentConfig"};
+
+    bool isChildProperty(const StringPtr& name) 
+    {
+        auto chr = strchr(name.getCharPtr(), '.');
+        return chr != nullptr;
+    }
 }
 
 template <class Impl>
@@ -39,7 +45,7 @@ ErrCode TmsClientPropertyObjectBaseImpl<Impl>::setOPCUAPropertyValueInternal(ISt
     }    
     auto propertyNamePtr = StringPtr::Borrow(propertyName);
 
-    if (this->isChildProperty(propertyNamePtr))
+    if (detail::isChildProperty(propertyNamePtr))
     {
         PropertyPtr prop;
         const ErrCode errCode = getProperty(propertyNamePtr, &prop);
@@ -58,8 +64,8 @@ ErrCode TmsClientPropertyObjectBaseImpl<Impl>::setOPCUAPropertyValueInternal(ISt
         if (const auto& it = introspectionVariableIdMap.find(propertyNamePtr); it != introspectionVariableIdMap.cend())
         {
             PropertyPtr prop;
-            const ErrCode errCode = getProperty(propertyName, &prop);
-            OPENDAQ_RETURN_IF_FAILED(errCode);
+            const ErrCode err = getProperty(propertyName, &prop);
+            OPENDAQ_RETURN_IF_FAILED(err);
         
             if (!protectedWrite && prop.getReadOnly())
             {
@@ -83,9 +89,9 @@ ErrCode TmsClientPropertyObjectBaseImpl<Impl>::setOPCUAPropertyValueInternal(ISt
         {
             lastProcessDescription = "Setting property value";
             const auto refProp = this->objPtr.getProperty(propertyName).getReferencedProperty();
-            const ErrCode errCode = setPropertyValue(refProp.getName(), value);
-            OPENDAQ_RETURN_IF_FAILED(errCode, fmt::format("Failed to set value for referenced property \"{}\"", propertyNamePtr));
-            return errCode;
+            const ErrCode err = setPropertyValue(refProp.getName(), value);
+            OPENDAQ_RETURN_IF_FAILED(err, fmt::format("Failed to set value for referenced property \"{}\"", propertyNamePtr));
+            return err;
         }
 
         if (const auto& it = objectTypeIdMap.find((propertyNamePtr)); it != objectTypeIdMap.cend())
@@ -141,7 +147,7 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::getPropertyValue(I
     }
     auto propertyNamePtr = StringPtr::Borrow(propertyName);
 
-    if (this->isChildProperty(propertyNamePtr))
+    if (detail::isChildProperty(propertyNamePtr))
     {
         PropertyPtr prop;
         ErrCode err = getProperty(propertyNamePtr, &prop);
