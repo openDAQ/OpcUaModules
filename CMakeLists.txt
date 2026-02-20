@@ -38,6 +38,8 @@ cmake_dependent_option(OPENDAQ_ENABLE_OPCUA_INTEGRATION_TESTS "Enable ${REPO_NAM
 opendaq_common_compile_targets_settings()
 opendaq_setup_compiler_flags(${REPO_OPTION_PREFIX})
 
+add_definitions(-DFMT_HEADER_ONLY)
+
 if (${REPO_OPTION_PREFIX}_ENABLE_TESTS)
     message(STATUS "Unit tests in ${REPO_NAME} are ENABLED")
     enable_testing()
