@@ -82,9 +82,14 @@ void NodeEventManager::OnWrite(UA_Server* server,
     auto tmsNode = static_cast<tms::TmsServerObject*>(nodeContext);
     if (!tmsNode)
         return;
+
     auto manager = tmsNode->getEventManager(nodeId);
     if (!manager)
         return;
+
+    if (!tmsNode->checkPermission(Permission::Write, nodeId, static_cast<OpcUaSession*>(sessionContext)))
+        return;
+
     WriteArgs args;
     args.server = server;
     args.sessionId = sessionId;
@@ -110,6 +115,9 @@ void NodeEventManager::OnRead(UA_Server* server,
         return;
     auto manager = tmsNode->getEventManager(nodeId);
     if (!manager)
+        return;
+
+    if (!tmsNode->checkPermission(Permission::Read, nodeId, static_cast<OpcUaSession*>(sessionContext)))
         return;
 
     ReadArgs args;
@@ -140,6 +148,9 @@ UA_StatusCode NodeEventManager::OnDataSourceRead(UA_Server* server,
     if (!manager)
         return UA_STATUSCODE_BADINTERNALERROR;
 
+    if (!tmsNode->checkPermission(Permission::Read, nodeId, static_cast<OpcUaSession*>(sessionContext)))
+        return UA_STATUSCODE_BADUSERACCESSDENIED;
+
     DataSourceReadArgs args;
     args.server = server;
     args.sessionId = sessionId;
@@ -168,6 +179,8 @@ UA_StatusCode NodeEventManager::OnDataSourceWrite(UA_Server* server,
     if (!manager)
         return UA_STATUSCODE_BADINTERNALERROR;
 
+    if (!tmsNode->checkPermission(Permission::Write, nodeId, static_cast<OpcUaSession*>(sessionContext)))
+        return UA_STATUSCODE_BADUSERACCESSDENIED;
 
     DataSourceWriteArgs args;
     args.server = server;
