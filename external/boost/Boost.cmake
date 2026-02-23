@@ -1,6 +1,6 @@
 include_guard(GLOBAL)
 
-if (${REPO_OPTION_PREFIX}_ENABLE_CLIENT)
+if (DAQMODULES_OPCUA_ENABLE_CLIENT)
     opendaq_append_required_boost_components(
         uuid
     )
