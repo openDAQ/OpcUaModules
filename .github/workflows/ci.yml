@@ -29,7 +29,7 @@ jobs:
           ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || github.ref }}
 
       - name: Configure project with CMake
-        run: cmake -B build/output -S . -G "${{ matrix.generator }}" -DDAQMODULES_OPCUA_ENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -B build/output -S . -G "${{ matrix.generator }}" -DDAQMODULES_OPCUA_ENABLE_TESTS=ON -DDAQMODULES_OPCUA_DEBUG_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=Debug
 
       - name: Build project with CMake
         run: cmake --build build/output --config Debug
