@@ -4,6 +4,7 @@ set(MODULE_SOURCES tms_object_test.h
                    tms_object_test.cpp
                    test_input_port_notifications.h
                    test_input_port_notifications.cpp
+                   test_user_helper.h
     
 )
 

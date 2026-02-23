@@ -1,5 +1,6 @@
 #include "tms_object_integration_test.h"
 #include <opendaq/context_factory.h>
+#include "test_user_helper.h"
 
 using namespace daq;
 using namespace daq::opcua;
@@ -15,7 +16,15 @@ static LoggerPtr CreateLoggerWithDebugSink(const LoggerSinkPtr& sink)
 
 void TmsObjectIntegrationTest::Init()
 {
-    TmsObjectTest::Init();
+    server = std::make_shared<daq::opcua::OpcUaServer>();
+    server->setPort(4840);
+    server->setAllowBrowsingNodeCallback(TmsServerObject::allowBrowsingNodeCallback);
+    server->setGetUserAccessLevelCallback(TmsServerObject::getUserAccessLevelCallback);
+    server->setGetUserRightsMaskCallback(TmsServerObject::getUserRightsMaskCallback);
+    server->setGetUserExecutableCallback(TmsServerObject::getUserExecutableCallback);
+    server->setAuthenticationProvider(StaticAuthenticationProvider(true, test_helpers::CreateUsers()));
+    server->start();
+    client = CreateAndConnectTestClient();
     debugSink = LastMessageLoggerSink();
     logger = CreateLoggerWithDebugSink(debugSink);
 
