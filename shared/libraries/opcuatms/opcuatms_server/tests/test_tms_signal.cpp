@@ -145,13 +145,6 @@ TEST_F(TmsSignalTest, Permissions)
         EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, nodeId.getPtr(), &session), execute);
     };
 
-    auto lambdaValues = [&](const OpcUaSession& session, bool read, bool write, bool execute)
-    {
-        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, nodeId.getPtr(), &session), read);
-        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, nodeId.getPtr(), &session), write);
-        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, nodeId.getPtr(), &session), execute);
-    };
-
     lambdaMain(test_helpers::createSessionCommon("common"), false, false, false);
     lambdaMain(test_helpers::createSessionReader("reader"), true, false, false);
     lambdaMain(test_helpers::createSessionWriter("writer"), true, true, false);

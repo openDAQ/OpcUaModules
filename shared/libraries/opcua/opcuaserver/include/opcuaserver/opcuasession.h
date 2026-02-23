@@ -17,7 +17,7 @@
 #pragma once
 #include "opcuaserver/opcuaserverlock.h"
 #include "opcuashared/opcuanodeid.h"
-#include "user_ptr.h"
+#include <coreobjects/user_ptr.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
