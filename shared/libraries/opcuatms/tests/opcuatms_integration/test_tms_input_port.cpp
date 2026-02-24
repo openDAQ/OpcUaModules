@@ -21,9 +21,19 @@ using namespace daq;
 using namespace opcua::tms;
 using namespace opcua;
 
-class TmsInputPortTest : public TmsObjectIntegrationTest
+class TmsInputPortTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
+
     InputPortPtr createInputPort(std::string name, Bool requiresSignal)
     {
         auto ip = InputPort(NullContext(), nullptr, name);

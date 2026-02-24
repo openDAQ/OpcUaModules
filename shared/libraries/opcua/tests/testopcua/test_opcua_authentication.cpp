@@ -19,6 +19,15 @@ TEST_F(OpcUaAuthenticationTest, DefaultConnect)
     ASSERT_TRUE(client.isConnected());
 }
 
+TEST_F(OpcUaAuthenticationTest, CreateWithUser)
+{
+    auto user = User("jure", "jure123");
+    auto sessionId = UA_NodeId();
+    auto serverLock = OpcUaServerLock();
+    auto session = OpcUaSession(sessionId, &serverLock, user);
+    ASSERT_TRUE(session.getUser() == user);
+}
+
 TEST_F(OpcUaAuthenticationTest, NoAnonymous)
 {
     auto server = OpcUaServer();

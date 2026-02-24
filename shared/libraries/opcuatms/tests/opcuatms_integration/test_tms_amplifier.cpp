@@ -24,7 +24,7 @@ struct RegisteredPropertyObject
 
 using namespace daq;
 
-class TMSAmplifierTest : public TmsObjectIntegrationTest
+class TMSAmplifierTest : public TmsObjectIntegrationTest, public testing::Test
 {
 protected:
 
@@ -32,7 +32,7 @@ protected:
 
     void SetUp() override
     {
-        TmsObjectIntegrationTest::SetUp();
+        TmsObjectIntegrationTest::Init();
 
          // create class with name "STGAmplifier"
         auto stgAmplClass =
@@ -277,6 +277,7 @@ protected:
     {
         objManager.removeType("StgAmp");
         objManager.removeType("LvAmp");
+        TmsObjectIntegrationTest::Clear();
     }
 
     RegisteredPropertyObject registerPropertyObject(const PropertyObjectPtr& prop)

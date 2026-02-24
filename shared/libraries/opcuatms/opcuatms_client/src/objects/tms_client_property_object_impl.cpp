@@ -121,6 +121,12 @@ void TmsClientPropertyObjectBaseImpl<Impl>::init()
         DAQ_THROW_EXCEPTION(ArgumentNullException, "Logger must not be null");
 
     this->loggerComponent = this->daqContext.getLogger().getOrAddComponent("TmsClientPropertyObject");
+    if (!clientContext->checkBrowseAccess(nodeId))
+    {
+        // If the node is not accessible, an exception is thrown, which is the expected behavior,
+        // as the property object cannot be used without access to the node.
+        DAQ_THROW_EXCEPTION(AccessDeniedException, "Client does not have access to browse the node for this property object");
+    }
     clientContext->readObjectAttributes(nodeId);
     browseRawProperties();
 }

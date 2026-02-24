@@ -1,10 +1,12 @@
-#include <opcuatms_server/objects/tms_server_object.h>
-#include <opendaq/instance_ptr.h>
-#include <opendaq/signal_ptr.h>
 #include <coreobjects/eval_value_ptr.h>
 #include <opcuatms/converters/variant_converter.h>
-#include <open62541/server.h>
+#include <opcuatms_server/objects/tms_server_object.h>
 #include <open62541/daqbsp_nodeids.h>
+#include <open62541/server.h>
+#include <opendaq/instance_ptr.h>
+#include <opendaq/signal_ptr.h>
+#include <iostream>
+#include "coreobjects/property_impl.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
@@ -97,6 +99,45 @@ void TmsServerObject::onCoreEvent(const CoreEventArgsPtr& /*eventArgs*/)
 {
 }
 
+UA_Boolean TmsServerObject::allowBrowsingNodeCallback(UA_Server* server,
+                                            UA_AccessControl* ac,
+                                            const UA_NodeId* sessionId,
+                                            void* sessionContext,
+                                            const UA_NodeId* nodeId,
+                                            void* nodeContext)
+{
+    return checkPermission(Permission::Read, nodeId, sessionContext, nodeContext);
+}
+
+UA_UInt32 TmsServerObject::getUserRightsMaskCallback(UA_Server *server, UA_AccessControl *ac,
+                                             const UA_NodeId *sessionId, void *sessionContext,
+                                             const UA_NodeId *nodeId, void *nodeContext)
+{
+    return checkPermission(Permission::Write, nodeId, sessionContext, nodeContext) ? 0xFFFFFFFF : 0;
+}
+
+UA_Byte TmsServerObject::getUserAccessLevelCallback(
+    UA_Server* server, UA_AccessControl* ac, const UA_NodeId* sessionId, void* sessionContext, const UA_NodeId* nodeId, void* nodeContext)
+{
+    constexpr UA_Byte readMask = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_HISTORYREAD;
+    constexpr UA_Byte writeMask = UA_ACCESSLEVELMASK_WRITE | UA_ACCESSLEVELMASK_HISTORYWRITE | UA_ACCESSLEVELMASK_SEMANTICCHANGE |
+                                  UA_ACCESSLEVELMASK_STATUSWRITE | UA_ACCESSLEVELMASK_TIMESTAMPWRITE;
+    UA_Byte mask = 0xFF;
+    mask = checkPermission(Permission::Read, nodeId, sessionContext, nodeContext) ? (mask | readMask) : (mask & ~readMask);
+    mask = checkPermission(Permission::Write, nodeId, sessionContext, nodeContext) ? (mask | writeMask) : (mask & ~writeMask);
+    return mask;
+}
+
+UA_Boolean TmsServerObject::getUserExecutableCallback(UA_Server* server,
+                                                      UA_AccessControl* ac,
+                                                      const UA_NodeId* sessionId,
+                                                      void* sessionContext,
+                                                      const UA_NodeId* methodId,
+                                                      void* methodContext)
+{
+    return checkPermission(Permission::Execute, methodId, sessionContext, methodContext);
+}
+
 NodeEventManagerPtr TmsServerObject::addEvent(const StringPtr& nodeName)
 {
     auto nodeId = getChildNodeId(nodeName);
@@ -108,7 +149,7 @@ NodeEventManagerPtr TmsServerObject::addEvent(const OpcUaNodeId& nodeId)
     if (eventManagers.count(nodeId) > 0)
         return eventManagers[nodeId];
 
-    auto eventManager = std::make_shared<NodeEventManager>(nodeId, server);
+    auto eventManager = std::make_shared<NodeEventManager>(nodeId, server, this);
     eventManagers.insert({nodeId, eventManager});
     return eventManager;
 }
@@ -163,6 +204,33 @@ void TmsServerObject::addChildNodes()
 bool TmsServerObject::hasChildNode(const std::string& nodeName) const
 {
     return references.count(nodeName) != 0;
+}
+
+bool TmsServerObject::checkPermission(const Permission permission,
+                                      const UA_NodeId* const nodeId,
+                                      void* const sessionContext,
+                                      void* const nodeContext)
+{
+    if (nodeContext == nullptr || sessionContext == nullptr)
+        return true;
+    return static_cast<TmsServerObject*>(nodeContext)->checkPermission(permission, nodeId, static_cast<OpcUaSession*>(sessionContext));;
+}
+
+bool TmsServerObject::checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext)
+{
+    bool allow = true;
+    if (auto tmsNodeAsPropObj = getObject().asPtrOrNull<daq::IPropertyObject>(); tmsNodeAsPropObj.assigned() && sessionContext)
+    {
+        allow = tmsNodeAsPropObj.getPermissionManager().isAuthorized(sessionContext->getUser(), permission);
+    }
+    return allow;
+}
+
+std::string TmsServerObject::readBrowseName(const OpcUaNodeId& nodeId)
+{
+    OpcUaObject<UA_QualifiedName> browseName;
+    UA_Server_readBrowseName(server->getUaServer(), *nodeId, browseName.get());
+    return opcua_utils::ToStdString(browseName->name);
 }
 
 OpcUaNodeId TmsServerObject::getChildNodeId(const std::string& nodeName)

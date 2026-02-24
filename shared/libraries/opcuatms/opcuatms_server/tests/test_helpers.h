@@ -16,25 +16,28 @@
 
 #pragma once
 
-#include <opendaq/instance_factory.h>
+#include <coreobjects/authentication_provider_factory.h>
 #include <opcuaclient/browse_request.h>
 #include <opcuaclient/browser/opcuabrowser.h>
-#include <open62541/di_nodeids.h>
+#include <open62541/daqbsp_nodeids.h>
 #include <open62541/daqdevice_nodeids.h>
+#include <open62541/di_nodeids.h>
+#include <opendaq/instance_factory.h>
 #include <opendaq/mock/mock_device_module.h>
 #include <opendaq/mock/mock_fb_module.h>
 #include <opendaq/mock/mock_physical_device.h>
-#include <open62541/daqbsp_nodeids.h>
-#include <coreobjects/authentication_provider_factory.h>
+#include "test_user_helper.h"
 
 namespace test_helpers
 {
-    inline daq::InstancePtr SetupInstance()
+
+    inline daq::InstancePtr SetupInstance(bool anonymousAllowed = true)
     {
         using namespace daq;
         const auto logger = Logger();
         const auto moduleManager = ModuleManager("[[none]]");
-        const auto authenticationProvider = AuthenticationProvider();
+
+        const auto authenticationProvider = StaticAuthenticationProvider(anonymousAllowed, CreateUsers());
         const auto context = Context(nullptr, logger, TypeManager(), moduleManager, authenticationProvider);
 
         const ModulePtr deviceModule(MockDeviceModule_Create(context));

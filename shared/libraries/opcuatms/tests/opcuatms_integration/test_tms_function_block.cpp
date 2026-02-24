@@ -24,9 +24,19 @@ using namespace daq;
 using namespace opcua::tms;
 using namespace opcua;
 
-class TmsFunctionBlockTest : public TmsObjectIntegrationTest
+class TmsFunctionBlockTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
+
     FunctionBlockPtr createFunctionBlock(const FunctionBlockTypePtr& type = FunctionBlockType("UID", "Name", "Desc"))
     {
         const auto context = NullContext();

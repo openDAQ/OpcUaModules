@@ -4,6 +4,7 @@ set(MODULE_SOURCES tms_object_test.h
                    tms_object_test.cpp
                    test_input_port_notifications.h
                    test_input_port_notifications.cpp
+                   test_user_helper.h
     
 )
 
@@ -18,4 +19,5 @@ target_link_libraries(${MODULE_NAME} PUBLIC ${OPENDAQ_SDK_TARGET_NAMESPACE}::ope
                                             ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuaserver
                                             ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq
                                             ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua_daq_types
+                                            ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_server
 )

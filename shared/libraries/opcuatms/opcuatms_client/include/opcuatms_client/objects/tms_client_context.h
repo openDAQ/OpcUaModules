@@ -46,6 +46,7 @@ public:
     CachedReferenceBrowserPtr getReferenceBrowser();
     AttributeReaderPtr getAttributeReader();
     void readObjectAttributes(const OpcUaNodeId& nodeId, bool forceRead = false);
+    bool checkBrowseAccess(const OpcUaNodeId& nodeId);
     size_t getMaxNodesPerBrowse();
     size_t getMaxNodesPerRead();
     void addEnumerationTypesToTypeManager();

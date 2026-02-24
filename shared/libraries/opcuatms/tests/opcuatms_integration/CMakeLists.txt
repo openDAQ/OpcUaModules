@@ -19,6 +19,7 @@ set(TEST_SOURCES main.cpp
                  test_tms_function_property.cpp
                  test_tms_fusion_device.cpp
                  test_tms_function_block_type.cpp
+                 test_tms_user_access.cpp
 )
 
 set(SUPPORTS_ASAN 0)

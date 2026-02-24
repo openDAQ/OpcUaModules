@@ -25,7 +25,7 @@ struct RegisteredPropertyObject
     PropertyObjectPtr clientProp;
 };
 
-class TmsFusionDevice : public TmsObjectIntegrationTest
+class TmsFusionDevice : public TmsObjectIntegrationTest, public testing::Test
 {
 protected:
     TypeManagerPtr objManager;
@@ -39,7 +39,7 @@ protected:
 
     void SetUp() override
     {
-        TmsObjectIntegrationTest::SetUp();
+        TmsObjectIntegrationTest::Init();
         objManager = TypeManager();
 
         // Add Enumeration type to Type Manager
@@ -82,6 +82,7 @@ protected:
 
     void TearDown() override
     {
+        TmsObjectIntegrationTest::Clear();
     }
 
     RegisteredPropertyObject registerPropertyObject(const PropertyObjectPtr& prop)
