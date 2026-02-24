@@ -155,7 +155,7 @@ TEST_F(TmsUserAccessTest, Anonymous)
     DevicePtr clientDevice;
     ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
 
-    DISABLE_EXPECT_EQ(clientDevice.getDevices().getCount(), 1);
+    EXPECT_EQ(clientDevice.getDevices().getCount(), 1);
     EXPECT_EQ(clientDevice.getFunctionBlocks().getCount(), 0);
 }
 
@@ -171,8 +171,22 @@ TEST_F(TmsUserAccessTest, CommonUser)
     DevicePtr clientDevice;
     ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
 
-    DISABLE_EXPECT_EQ(clientDevice.getDevices().getCount(), 1);
+    EXPECT_EQ(clientDevice.getDevices().getCount(), 1);
     EXPECT_EQ(clientDevice.getFunctionBlocks().getCount(), 0);
+}
+
+TEST_F(TmsUserAccessTest, CommonUserForRootDevice)
+{
+    fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+
+    auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsPropertyObject.registerOpcUaNode();
+    auto ctx = NullContext();
+    CreateClient("commonUser", "commonUserPass");
+    DevicePtr clientDevice;
+    ASSERT_ANY_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
 }
 
 TEST_F(TmsUserAccessTest, ReaderUser)

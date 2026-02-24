@@ -22,7 +22,6 @@
 
 #include <opcuaclient/browser/opcuabrowser.h>
 #include <opcuashared/opcuanodeid.h>
-#include <unordered_set>
 #include <opcuashared/opcua.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
@@ -50,7 +49,16 @@ public:
     CachedReferenceBrowser(const OpcUaClientPtr& client, size_t maxNodesPerBrowse = 0);
 
     const CachedReferences& browse(const OpcUaNodeId& nodeId);
+
+    // Browses multiple nodes recursively, ignoring access errors.
     void browseMultiple(const std::vector<OpcUaNodeId>& nodes);
+
+    // Browses a node and checks the serviceResult and statusCode of the result for errors.
+    // It allows checking whether the node is accessible.
+    // If so, it browses the children recursively, ignoring children access errors.
+    // Return true if the node is accessible, false otherwise.
+    bool browseOne(const OpcUaNodeId& node);
+
     void invalidate(const OpcUaNodeId& nodeId);
     void invalidateRecursive(const OpcUaNodeId& nodeId);
 
@@ -65,6 +73,7 @@ private:
     bool isCached(const OpcUaNodeId& nodeId);
     void markAsCached(const OpcUaNodeId& nodeId);
     size_t browseBatch(const std::vector<OpcUaNodeId>& nodes, size_t startIndex, size_t size, std::vector<OpcUaNodeId>& browseNext);
+    void browseOne(const OpcUaNodeId& node, std::vector<OpcUaNodeId>& browseNext);
     void processBrowseResults(const std::vector<OpcUaNodeId>& nodes,
                               size_t startIndex,
                               size_t requestedSize,

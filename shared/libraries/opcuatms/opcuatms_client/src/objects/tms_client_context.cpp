@@ -89,6 +89,11 @@ void TmsClientContext::readObjectAttributes(const OpcUaNodeId& nodeId, bool forc
     attributeReader->read();
 }
 
+bool TmsClientContext::checkBrowseAccess(const OpcUaNodeId& nodeId)
+{
+    return referenceBrowser->browseOne(nodeId);
+}
+
 size_t TmsClientContext::getMaxNodesPerBrowse()
 {
     return maxNodesPerBrowse;
