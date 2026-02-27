@@ -27,7 +27,6 @@ target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MOD
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_test_utils
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuaclient
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_mocks
-                                          fmt::fmt
 )
 
 add_test(NAME ${TEST_APP}

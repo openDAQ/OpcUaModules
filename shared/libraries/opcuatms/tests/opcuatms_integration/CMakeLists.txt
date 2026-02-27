@@ -40,8 +40,7 @@ target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_server
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_client
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_mocks
-                                          ${BCRYPT_LIB}
-                                          fmt::fmt
+                                          ${BCRYPT_LIB}                                   
 )
 
 if(SUPPORTS_ASAN)
