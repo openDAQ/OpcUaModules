@@ -44,7 +44,11 @@ static InstancePtr CreateServerInstance()
     auto instance = InstanceBuilder().setContext(context).setDefaultRootDeviceLocalId("local").build();
 
     instance.addDevice("daqmock://phys_device");
-    instance.addFunctionBlock("mock_fb_uid");
+    FunctionBlockPtr fb = instance.addFunctionBlock("mock_fb_uid");
+    // Set first input port to private
+    auto inputPort = fb.getInputPorts(search::LocalId("TestInputPort1"))[0];
+    inputPort.setPublic(false);
+
     instance.addServer("OpenDAQOPCUA", nullptr);
     return instance;
 }
@@ -63,19 +67,34 @@ static InstancePtr CreateClientInstance()
 
 TEST_F(OpcUaComponentFilteringTest, FilterComponents)
 {
-    auto server = CreateServerInstance();
+    auto serverDevice = CreateServerInstance();
     auto client = CreateClientInstance();
+    auto clientDevice = client.getDevices(search::LocalId("local"))[0];
+    ASSERT_TRUE(clientDevice.assigned());
 
-    auto childDevices = server.getDevices(search::LocalId("mockdev"));
-    ASSERT_EQ(childDevices.getCount(), 1);
-    auto signals = childDevices[0].getSignals(search::LocalId("devicetimesigprivate"));
-    ASSERT_EQ(signals.getCount(), 1);
-    ASSERT_EQ(signals[0].getPublic(), False);
-
-    auto rootDeviceClient = client.getDevices(search::LocalId("local"))[0];
-    ASSERT_TRUE(rootDeviceClient.assigned());
-    auto childDevicesClient = rootDeviceClient.getDevices(search::LocalId("mockdev"));
+    auto childDevicesServer = serverDevice.getDevices(search::LocalId("mockdev"));
+    ASSERT_EQ(childDevicesServer.getCount(), 1);
+    auto childDevicesClient = clientDevice.getDevices(search::LocalId("mockdev"));
     ASSERT_EQ(childDevicesClient.getCount(), 1);
+
+    auto signalsServer = childDevicesServer[0].getSignals(search::LocalId("devicetimesigprivate"));
+    ASSERT_EQ(signalsServer.getCount(), 1);
+    ASSERT_EQ(signalsServer[0].getPublic(), False);
+
+    // Not available on client
     auto signalsClient = childDevicesClient[0].getSignals(search::LocalId("devicetimesigprivate"));
     ASSERT_EQ(signalsClient.getCount(), 0);
+
+    auto fbsServer = serverDevice.getFunctionBlocks();
+    ASSERT_EQ(fbsServer.getCount(), 1);
+    auto fbsClient = clientDevice.getFunctionBlocks();
+    ASSERT_EQ(fbsClient.getCount(), 1);
+
+    auto portsServer = fbsServer[0].getInputPorts(search::LocalId("TestInputPort1"));
+    ASSERT_EQ(portsServer.getCount(), 1);
+    ASSERT_FALSE(portsServer[0].getPublic());
+
+    // Not available on client
+    auto portsClient = fbsClient[0].getInputPorts(search::LocalId("TestInputPort1"));
+    ASSERT_EQ(portsClient.getCount(), 0);
 }
