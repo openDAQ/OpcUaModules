@@ -1,3 +1,4 @@
+#include <opcua_client_module/module_dll.h>
 #include <opendaq/opendaq.h>
 #include <opendaq/module_manager_ptr.h>
 #include <opendaq/mock/mock_device_module.h>
@@ -7,6 +8,13 @@
 using OpcuaDeviceModulesTest = testing::Test;
 
 using namespace daq;
+
+static ModulePtr CreateClientOpcUaModule(const ContextPtr& context)
+{
+    ModulePtr module;
+    createOpcUaClientModule(&module, context);
+    return module;
+}
 
 static InstancePtr CreateServerInstance()
 {
@@ -25,7 +33,11 @@ static InstancePtr CreateServerInstance()
 
 static InstancePtr CreateClientInstance()
 {
-    auto instance = InstanceBuilder().build();
+    auto instance = InstanceBuilder().setModulePath("[[none]]").build();
+    ContextPtr context = instance.getContext();
+    ModuleManagerPtr manager = instance.getModuleManager();
+
+    manager.addModule(CreateClientOpcUaModule(context));
 
     auto config = instance.createDefaultAddDeviceConfig();
     PropertyObjectPtr general = config.getPropertyValue("General");
@@ -37,7 +49,6 @@ static InstancePtr CreateClientInstance()
 
 TEST_F(OpcuaDeviceModulesTest, ComponentActiveChangedRecursive)
 {
-    // SKIP_TEST_MAC_CI;
     auto server = CreateServerInstance();
     auto client = CreateClientInstance();
 
@@ -63,8 +74,6 @@ TEST_F(OpcuaDeviceModulesTest, ComponentActiveChangedRecursive)
 
 TEST_F(OpcuaDeviceModulesTest, ComponentActiveChangedRecursiveGateway)
 {
-    // SKIP_TEST_MAC_CI;
-
     // Create leaf server
     auto leaf = InstanceBuilder().setDefaultRootDeviceLocalId("leaf").build();
     leaf.addServer("OpenDAQOPCUA", nullptr);
