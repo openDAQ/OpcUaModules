@@ -122,6 +122,6 @@ TEST_F(TmsInputPortTest, Permissions)
     lambdaTemplate(disconFbNodeID.getPtr(), test_helpers::createSessionCommon("common"), false, false, false);
     lambdaTemplate(disconFbNodeID.getPtr(), test_helpers::createSessionReader("reader"), true, false, false);
     lambdaTemplate(disconFbNodeID.getPtr(), test_helpers::createSessionWriter("writer"), true, true, false);
-    lambdaTemplate(disconFbNodeID.getPtr(), test_helpers::createSessionExecutor("executor"), true, false, true);    // <-
+    lambdaTemplate(disconFbNodeID.getPtr(), test_helpers::createSessionExecutor("executor"), true, false, false);    // <-
     lambdaTemplate(disconFbNodeID.getPtr(), test_helpers::createSessionAdmin("admin"), true, true, true);
 }

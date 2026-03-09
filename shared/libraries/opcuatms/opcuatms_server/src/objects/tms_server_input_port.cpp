@@ -158,7 +158,7 @@ bool TmsServerInputPort::checkPermission(const Permission permission,
     bool allow = true;
     if (permission == Permission::Execute)
     {
-        if (const auto browseName = TmsServerObject::readBrowseName(*nodeId); browseName == "Connect")
+        if (const auto browseName = TmsServerObject::readBrowseName(*nodeId); browseName == "Connect" || browseName == "Disconnect")
             allow = TmsServerComponent<InputPortPtr>::checkPermission(Permission::Write, nodeId, sessionContext);
     }
     return (allow && TmsServerComponent<InputPortPtr>::checkPermission(permission, nodeId, sessionContext));
