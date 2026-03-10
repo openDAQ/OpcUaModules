@@ -1,6 +1,12 @@
 name: Build and Test
 
 on:
+  workflow_dispatch:
+    inputs:
+      opendaq_ref:
+        description: "openDAQ SDK commit, branch or tag"
+        required: false
+        default: ""
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
 
@@ -35,6 +41,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || github.ref }}
+
+      - name: Overwrite opendaq_ref
+        if: ${{ github.event.inputs.opendaq_ref != '' }}
+        run: echo "${{ github.event.inputs.opendaq_ref }}" > opendaq_ref
 
       - name: Configure project with CMake
         run: cmake -B build/output -S . -G "${{ matrix.generator }}" -DDAQMODULES_OPCUA_ENABLE_TESTS=ON -DDAQMODULES_OPCUA_DEBUG_WARNINGS_AS_ERRORS=ON -DOPENDAQ_DEBUG_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE="${{ matrix.build_type }}"
@@ -78,6 +88,11 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || github.ref }}
           path: module
+
+      - name: Overwrite opendaq_ref
+        if: ${{ github.event.inputs.opendaq_ref != '' }}
+        working-directory: module
+        run: echo "${{ github.event.inputs.opendaq_ref }}" > opendaq_ref
 
       - name: Read openDAQ version
         shell: bash
