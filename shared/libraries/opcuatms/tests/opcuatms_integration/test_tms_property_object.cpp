@@ -219,6 +219,8 @@ TEST_F(TmsPropertyObjectTest, TestListProperty)
 TEST_F(TmsPropertyObjectTest, TestPropertyOrder)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     for (SizeT i = 0; i < 200; ++i)
         obj.addProperty(BoolProperty("Bool" + std::to_string(i), true));
     for (SizeT i = 0; i < 200; ++i)
@@ -227,7 +229,7 @@ TEST_F(TmsPropertyObjectTest, TestPropertyOrder)
     {
         obj.addProperty(FunctionProperty("Func" + std::to_string(i), ProcedureInfo()));
         ProcedurePtr test = Procedure([](){});
-        obj.setPropertyValue("Func" + std::to_string(i), test);
+        protectedObj.setProtectedPropertyValue("Func" + std::to_string(i), test);
     }
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);

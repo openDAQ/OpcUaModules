@@ -45,10 +45,12 @@ public:
 TEST_F(TmsFunctionTest, ProcedureNoArgs)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty("Proc", ProcedureInfo()));
     bool called = false;
     auto proc = Procedure([&called]() { called = true; });
-    obj.setPropertyValue("Proc", proc);
+    protectedObj.setProtectedPropertyValue("Proc", proc);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     ProcedurePtr clientProc = clientObj.getPropertyValue("Proc");
@@ -59,9 +61,11 @@ TEST_F(TmsFunctionTest, ProcedureNoArgs)
 TEST_F(TmsFunctionTest, FunctionNoArgs)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty("Func", FunctionInfo(ctBool)));
     auto func = Function([]() { return true; });
-    obj.setPropertyValue("Func", func);
+    protectedObj.setProtectedPropertyValue("Func", func);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     FunctionPtr clientFunc = clientObj.getPropertyValue("Func");
@@ -71,10 +75,12 @@ TEST_F(TmsFunctionTest, FunctionNoArgs)
 TEST_F(TmsFunctionTest, ProcedureOneArg)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty("Proc", ProcedureInfo(List<IArgumentInfo>(ArgumentInfo("Int", ctInt)))));
     Int callValue;
     auto proc = Procedure([&callValue](const IntegerPtr& arg) { callValue = arg; });
-    obj.setPropertyValue("Proc", proc);
+    protectedObj.setProtectedPropertyValue("Proc", proc);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     ProcedurePtr clientProc = clientObj.getPropertyValue("Proc");
@@ -89,10 +95,12 @@ TEST_F(TmsFunctionTest, ProcedureOneArg)
 TEST_F(TmsFunctionTest, FunctionOneArg)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty("Func", FunctionInfo(ctInt, List<IArgumentInfo>(ArgumentInfo("Int", ctInt)))));
     Int callValue;
     auto func = Function([&callValue](const IntegerPtr& arg) { return arg; });
-    obj.setPropertyValue("Func", func);
+    protectedObj.setProtectedPropertyValue("Func", func);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     FunctionPtr clientFunc = clientObj.getPropertyValue("Func");
@@ -104,6 +112,8 @@ TEST_F(TmsFunctionTest, FunctionOneArg)
 TEST_F(TmsFunctionTest, ProcedureMultipleArgs)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty(
         "Proc", ProcedureInfo(List<IArgumentInfo>(ArgumentInfo("Int", ctInt), ArgumentInfo("Ratio", ctRatio), ArgumentInfo("String", ctString)))));
 
@@ -116,7 +126,7 @@ TEST_F(TmsFunctionTest, ProcedureMultipleArgs)
             ratioArg = args[1];
             stringArg = args[2];
         });
-    obj.setPropertyValue("Proc", proc);
+    protectedObj.setProtectedPropertyValue("Proc", proc);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     ProcedurePtr clientProc = clientObj.getPropertyValue("Proc");
@@ -131,6 +141,8 @@ TEST_F(TmsFunctionTest, ProcedureMultipleArgs)
 TEST_F(TmsFunctionTest, FunctionMultipleArgs)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty(
         "Func",
         FunctionInfo(ctBool, List<IArgumentInfo>(ArgumentInfo("Int", ctInt), ArgumentInfo("Ratio", ctRatio), ArgumentInfo("String", ctString)))));
@@ -142,7 +154,7 @@ TEST_F(TmsFunctionTest, FunctionMultipleArgs)
             valid = valid && args[2] == "foo";
             return valid;
         });
-    obj.setPropertyValue("Func", func);
+    protectedObj.setProtectedPropertyValue("Func", func);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     FunctionPtr clientProc = clientObj.getPropertyValue("Func");
@@ -154,6 +166,8 @@ TEST_F(TmsFunctionTest, FunctionMultipleArgs)
 TEST_F(TmsFunctionTest, AllArgTypes)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty(
         "Proc",
         ProcedureInfo(List<IArgumentInfo>(ArgumentInfo("Int", ctInt),
@@ -176,7 +190,7 @@ TEST_F(TmsFunctionTest, AllArgTypes)
             boolArg = args[3];
             floatArg = args[4];
         });
-    obj.setPropertyValue("Proc", proc);
+    protectedObj.setProtectedPropertyValue("Proc", proc);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     ProcedurePtr clientProc = clientObj.getPropertyValue("Proc");
@@ -193,10 +207,12 @@ TEST_F(TmsFunctionTest, AllArgTypes)
 TEST_F(TmsFunctionTest, InvalidArgTypes)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty("Proc", ProcedureInfo(List<IArgumentInfo>(ArgumentInfo("Int", ctInt)))));
     Int callValue;
     auto proc = Procedure([&callValue](const IntegerPtr& arg) { callValue = arg; });
-    obj.setPropertyValue("Proc", proc);
+    protectedObj.setProtectedPropertyValue("Proc", proc);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     ProcedurePtr clientProc = clientObj.getPropertyValue("Proc");
@@ -209,9 +225,11 @@ TEST_F(TmsFunctionTest, InvalidArgTypes)
 TEST_F(TmsFunctionTest, InvalidReturnType)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty("Func", FunctionInfo(ctBool)));
     auto func = Function([]() { return "str"; });
-    obj.setPropertyValue("Func", func);
+    protectedObj.setProtectedPropertyValue("Func", func);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     FunctionPtr clientFunc = clientObj.getPropertyValue("Func");
@@ -222,10 +240,12 @@ TEST_F(TmsFunctionTest, InvalidReturnType)
 TEST_F(TmsFunctionTest, InvalidArgCount)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty("Proc", ProcedureInfo(List<IArgumentInfo>(ArgumentInfo("Int", ctInt)))));
     Int callValue;
     auto proc = Procedure([&callValue](const IntegerPtr& arg) { callValue = arg; });
-    obj.setPropertyValue("Proc", proc);
+    protectedObj.setProtectedPropertyValue("Proc", proc);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     ProcedurePtr clientProc = clientObj.getPropertyValue("Proc");
@@ -240,6 +260,8 @@ TEST_F(TmsFunctionTest, InvalidArgCount)
 TEST_F(TmsFunctionTest, ProcedureArgumentInfo)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty(
         "Proc",
         ProcedureInfo(List<IArgumentInfo>(ArgumentInfo("Int", ctInt),
@@ -302,13 +324,15 @@ TEST_F(TmsFunctionTest, UnsupportedReturnType)
 TEST_F(TmsFunctionTest, ServerThrow)
 {
     auto obj = PropertyObject();
+    auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
     obj.addProperty(FunctionProperty("Func", FunctionInfo(ctBool)));
     auto func = Function([]()
     {
         throw GeneralErrorException{};
         return false;
     });
-    obj.setPropertyValue("Func", func);
+    protectedObj.setProtectedPropertyValue("Func", func);
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     FunctionPtr clientFunc = clientObj.getPropertyValue("Func");

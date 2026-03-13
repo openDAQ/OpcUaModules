@@ -60,8 +60,7 @@ public:
                                    List<IType>(SimpleType(ctString), SimpleType(ctUndefined))));
 
 
-        auto functionProp = FunctionProperty(
-            "function", FunctionInfo(ctString, List<IArgumentInfo>(ArgumentInfo("Int", ctInt), ArgumentInfo("Float", ctFloat))));
+        auto functionProp = FunctionProperty("function", FunctionInfo(ctString, List<IArgumentInfo>(ArgumentInfo("Int", ctInt), ArgumentInfo("Float", ctFloat))));
         FunctionPtr funcCallback = Function(
             [](ListPtr<IBaseObject> args)
             {
@@ -89,11 +88,13 @@ public:
             });
 
         const auto obj = PropertyObject();
+        auto protectedObj = obj.asPtrOrNull<IPropertyObjectProtected>(true);
+
         obj.addProperty(IntProperty("ObjNumber", 0));
         obj.addProperty(functionProp);
-        obj.setPropertyValue("function", funcCallback);
+        protectedObj.setProtectedPropertyValue("function", funcCallback);
         obj.addProperty(procProp);
-        obj.setPropertyValue("procedure", procCallback);
+        protectedObj.setProtectedPropertyValue("procedure", procCallback);
 
         auto obj1 = PropertyObject();
         obj1.addProperty(StringProperty("foo", "bar"));
