@@ -1,11 +1,11 @@
 #include "opcuaserver/opcuasession.h"
-#include <future>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
-OpcUaSession::OpcUaSession(const OpcUaNodeId& sessionId, OpcUaServerLock* serverLock)
+OpcUaSession::OpcUaSession(const OpcUaNodeId& sessionId, OpcUaServerLock* serverLock, const UserPtr& authorizedUser)
     : sessionId(sessionId)
     , serverLock(serverLock)
+    , user(authorizedUser)
 {
 }
 
@@ -54,6 +54,11 @@ const OpcUaNodeId& OpcUaSession::getConfigurationLockTokenId() const
         return configurationLockTokenId;
 
     return sessionId;
+}
+
+const UserPtr& OpcUaSession::getUser() const
+{
+    return user;
 }
 
 END_NAMESPACE_OPENDAQ_OPCUA

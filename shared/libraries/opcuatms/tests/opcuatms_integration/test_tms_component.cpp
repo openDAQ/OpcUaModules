@@ -16,9 +16,19 @@ struct RegisteredComponent
     ComponentPtr clientComponent;
 };
 
-class TmsComponentTest : public TmsObjectIntegrationTest
+class TmsComponentTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
+
     ComponentPtr createTestComponent()
     {
         auto component = Component(ctx, nullptr, "test");

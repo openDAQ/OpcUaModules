@@ -53,6 +53,10 @@ public:
     bool createOptionalNode(const opcua::OpcUaNodeId& nodeId) override;
     void setMethodParentNodeId(const opcua::OpcUaNodeId& methodParentNodeId);
     void addProperty(const TmsServerPropertyPtr& childProperty);
+    bool checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext) override;
+    OpcUaNodeId getBeginUpdateNodeId() const { return beginUpdateNodeId; }
+    OpcUaNodeId getEndUpdateNodeId() const { return endUpdateNodeId; }
+
     std::unordered_set<std::string> ignoredProps;
     std::unordered_map<std::string, std::string> propBrowseName; // property name -> browse name (if not use browse name as property name)
 
@@ -78,6 +82,8 @@ protected:
     PropertyInternalPtr objProp;
     opcua::OpcUaNodeId methodParentNodeId;
     uint32_t numberinList = 0;
+    OpcUaNodeId beginUpdateNodeId;
+    OpcUaNodeId endUpdateNodeId;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

@@ -19,13 +19,12 @@
 #include <opcuaclient/opcuaclient.h>
 #include <opcuaserver/opcuaserver.h>
 
-class TmsObjectTest : public testing::Test
+class TmsObjectTest
 {
 public:
     TmsObjectTest();
-
-    virtual void SetUp() override;
-    virtual void TearDown() override;
+    virtual void Init();
+    virtual void Clear();
 
     daq::opcua::OpcUaServerPtr getServer();
     daq::opcua::OpcUaClientPtr getClient();
@@ -34,10 +33,11 @@ public:
                         const daq::opcua::OpcUaVariant& variant);
     daq::opcua::OpcUaVariant readChildNode(const daq::opcua::OpcUaNodeId& parent, const std::string& browseName);
     daq::opcua::OpcUaNodeId getChildNodeId(const daq::opcua::OpcUaNodeId& parent, const std::string& browseName);
+    daq::opcua::OpcUaObject<UA_BrowseResponse> browseNode(const daq::opcua::OpcUaNodeId& nodeId);
     void waitForInput();
 
     static daq::opcua::OpcUaServerPtr CreateAndStartTestServer();
-    static daq::opcua::OpcUaClientPtr CreateAndConnectTestClient();
+    static daq::opcua::OpcUaClientPtr CreateAndConnectTestClient(const std::string& username = "", const std::string& password = "");
 
 protected:
     daq::opcua::OpcUaServerPtr server;

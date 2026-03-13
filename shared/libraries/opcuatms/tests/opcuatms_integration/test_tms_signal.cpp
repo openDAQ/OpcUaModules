@@ -29,9 +29,19 @@ using namespace daq;
 using namespace opcua::tms;
 using namespace opcua;
 
-class TmsSignalTest : public TmsObjectIntegrationTest
+class TmsSignalTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
+
     SignalPtr createSignal(const std::string& id)
     {
         SignalPtr signal = Signal(NullContext(), nullptr, id);

@@ -1,10 +1,11 @@
-#include <tms_object_test.h>
 #include <opcuaclient/opcuaclient.h>
-#include <open62541/types_daqdevice_generated.h>
+#include <opcuatms_server/objects/tms_server_object.h>
 #include <open62541/types_daqbsp_generated.h>
-#include <open62541/types_di_generated.h>
-#include <open62541/types_daqhbk_generated.h>
+#include <open62541/types_daqdevice_generated.h>
 #include <open62541/types_daqesp_generated.h>
+#include <open62541/types_daqhbk_generated.h>
+#include <open62541/types_di_generated.h>
+#include <tms_object_test.h>
 
 using namespace daq::opcua;
 
@@ -12,19 +13,16 @@ TmsObjectTest::TmsObjectTest()
 {
 }
 
-void TmsObjectTest::SetUp()
+void TmsObjectTest::Init()
 {
-    testing::Test::SetUp();
-
     server = CreateAndStartTestServer();
     client = CreateAndConnectTestClient();
 }
 
-void TmsObjectTest::TearDown()
+void TmsObjectTest::Clear()
 {
     client.reset();
     server.reset();
-    testing::Test::TearDown();
 }
 
 OpcUaServerPtr TmsObjectTest::getServer()
@@ -75,6 +73,22 @@ OpcUaNodeId TmsObjectTest::getChildNodeId(const OpcUaNodeId& parent, const std::
     return OpcUaNodeId(UA_NODEID_NULL);
 }
 
+OpcUaObject<UA_BrowseResponse> TmsObjectTest::browseNode(const daq::opcua::OpcUaNodeId& nodeId)
+{
+    OpcUaObject<UA_BrowseRequest> br;
+    br->requestedMaxReferencesPerNode = 0;
+    br->nodesToBrowse = UA_BrowseDescription_new();
+    br->nodesToBrowseSize = 1;
+    br->nodesToBrowse[0].nodeId = nodeId.copyAndGetDetachedValue();
+    br->nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL;
+
+    OpcUaObject<UA_BrowseResponse> result = UA_Client_Service_browse(client->getUaClient(), *br);
+    if (result->resultsSize == 0)
+        throw OpcUaException(UA_STATUSCODE_BADUNEXPECTEDERROR, "");
+    CheckStatusCodeException(result->results[0].statusCode);
+    return result;
+}
+
 void TmsObjectTest::waitForInput()
 {
     std::cout << "Type q to quit..." << std::endl;
@@ -90,9 +104,9 @@ daq::opcua::OpcUaServerPtr TmsObjectTest::CreateAndStartTestServer()
     return server;
 }
 
-daq::opcua::OpcUaClientPtr TmsObjectTest::CreateAndConnectTestClient()
+daq::opcua::OpcUaClientPtr TmsObjectTest::CreateAndConnectTestClient(const std::string& username, const std::string& password)
 {
-    OpcUaEndpoint endpoint("opc.tcp://127.0.0.1:4840");
+    OpcUaEndpoint endpoint("opc.tcp://127.0.0.1:4840", username, password);
     endpoint.registerCustomTypes(UA_TYPES_DI_COUNT, UA_TYPES_DI);
     endpoint.registerCustomTypes(UA_TYPES_DAQBT_COUNT, UA_TYPES_DAQBT);
     endpoint.registerCustomTypes(UA_TYPES_DAQBSP_COUNT, UA_TYPES_DAQBSP);

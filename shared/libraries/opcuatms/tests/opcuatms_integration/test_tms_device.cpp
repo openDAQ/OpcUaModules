@@ -19,9 +19,19 @@ using namespace opcua::tms;
 using namespace opcua;
 using namespace std::chrono_literals;
 
-class TmsDeviceTest : public TmsObjectIntegrationTest
+class TmsDeviceTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
+
     InstancePtr createDevice()
     {
         const auto moduleManager = ModuleManager("[[none]]");

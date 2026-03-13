@@ -28,7 +28,7 @@ struct RegisteredPropertyObject
     PropertyObjectPtr clientProp;
 };
 
-class TmsPropertyObjectTest : public TmsObjectIntegrationTest
+class TmsPropertyObjectTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
 
@@ -36,7 +36,7 @@ public:
 
     void SetUp() override
     {
-        TmsObjectIntegrationTest::SetUp();
+        TmsObjectIntegrationTest::Init();
         manager = TypeManager();
         auto personClass = PropertyObjectClassBuilder("PersonObject").build();
         manager.addType(personClass);
@@ -44,7 +44,7 @@ public:
 
     void TearDown() override
     {
-        TmsObjectIntegrationTest::TearDown();
+        TmsObjectIntegrationTest::Clear();
     }
 
     PropertyObjectPtr createPropertyObject()
@@ -425,13 +425,13 @@ TEST_F(TmsPropertyObjectTest, StringSuggestedValues)
     ASSERT_NO_THROW(clientObj.setPropertyValue("StringSuggestedValues", "Tomato"));
 }
 
-class TmsNestedPropertyObjectTest : public TmsObjectIntegrationTest
+class TmsNestedPropertyObjectTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
 
     void SetUp() override
     {
-        TmsObjectIntegrationTest::SetUp();
+        TmsObjectIntegrationTest::Init();
         serverObj = test_utils::createMockNestedPropertyObject();
         auto registeredObj = registerPropertyObject(serverObj);
         serverTMSObj = registeredObj.serverProp;
@@ -440,7 +440,7 @@ public:
 
     void TearDown() override
     {
-        TmsObjectIntegrationTest::TearDown();
+        TmsObjectIntegrationTest::Clear();
     }
 
     RegisteredPropertyObject registerPropertyObject(const PropertyObjectPtr& prop)

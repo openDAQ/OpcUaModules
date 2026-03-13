@@ -18,9 +18,19 @@ struct RegisteredFolder
     FolderPtr clientFolder;
 };
 
-class TmsFolderTest : public TmsObjectIntegrationTest
+class TmsFolderTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
+
     FolderPtr createTestFolder()
     {
         auto folder1 = Folder(NullContext(), nullptr, "parent");
