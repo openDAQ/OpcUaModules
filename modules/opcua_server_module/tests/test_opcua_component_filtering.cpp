@@ -73,28 +73,28 @@ TEST_F(OpcUaComponentFilteringTest, FilterComponents)
     ASSERT_TRUE(clientDevice.assigned());
 
     auto childDevicesServer = serverDevice.getDevices(search::LocalId("mockdev"));
-    ASSERT_EQ(childDevicesServer.getCount(), 1);
+    ASSERT_EQ(childDevicesServer.getCount(), 1u);
     auto childDevicesClient = clientDevice.getDevices(search::LocalId("mockdev"));
-    ASSERT_EQ(childDevicesClient.getCount(), 1);
+    ASSERT_EQ(childDevicesClient.getCount(), 1u);
 
     auto signalsServer = childDevicesServer[0].getSignals(search::LocalId("devicetimesigprivate"));
-    ASSERT_EQ(signalsServer.getCount(), 1);
+    ASSERT_EQ(signalsServer.getCount(), 1u);
     ASSERT_EQ(signalsServer[0].getPublic(), False);
 
     // Not available on client
     auto signalsClient = childDevicesClient[0].getSignals(search::LocalId("devicetimesigprivate"));
-    ASSERT_EQ(signalsClient.getCount(), 0);
+    ASSERT_EQ(signalsClient.getCount(), 0u);
 
     auto fbsServer = serverDevice.getFunctionBlocks();
-    ASSERT_EQ(fbsServer.getCount(), 1);
+    ASSERT_EQ(fbsServer.getCount(), 1u);
     auto fbsClient = clientDevice.getFunctionBlocks();
-    ASSERT_EQ(fbsClient.getCount(), 1);
+    ASSERT_EQ(fbsClient.getCount(), 1u);
 
     auto portsServer = fbsServer[0].getInputPorts(search::LocalId("TestInputPort1"));
-    ASSERT_EQ(portsServer.getCount(), 1);
+    ASSERT_EQ(portsServer.getCount(), 1u);
     ASSERT_FALSE(portsServer[0].getPublic());
 
     // Not available on client
     auto portsClient = fbsClient[0].getInputPorts(search::LocalId("TestInputPort1"));
-    ASSERT_EQ(portsClient.getCount(), 0);
+    ASSERT_EQ(portsClient.getCount(), 0u);
 }
