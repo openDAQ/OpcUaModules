@@ -113,6 +113,13 @@ void TmsAttributeCollector::collectFunctionBlockAttributes(const OpcUaNodeId& no
 void TmsAttributeCollector::collectInputPortAttributes(const OpcUaNodeId& nodeId)
 {
     collectBaseObjectAttributes(nodeId);
+
+    const auto& references = browser->browse(nodeId);
+    for (const auto& [refNodeId, ref] : references.byNodeId)
+    {
+        if (ref->nodeClass == UA_NODECLASS_METHOD)
+            collectMethodAttributes(refNodeId);
+    }
 }
 
 void TmsAttributeCollector::collectSignalAttributes(const OpcUaNodeId& nodeId)
@@ -167,6 +174,8 @@ void TmsAttributeCollector::collectPropertyAttributes(const OpcUaNodeId& nodeId)
     attributes.insert({nodeId, UA_ATTRIBUTEID_DATATYPE});
     attributes.insert({nodeId, UA_ATTRIBUTEID_ACCESSLEVEL});
     attributes.insert({nodeId, UA_ATTRIBUTEID_USERACCESSLEVEL});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_EXECUTABLE});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USEREXECUTABLE});
 
     if (browser->hasReference(nodeId, "ValidationExpression"))
         attributes.insert({browser->getChildNodeId(nodeId, "ValidationExpression"), UA_ATTRIBUTEID_VALUE});
@@ -202,6 +211,9 @@ void TmsAttributeCollector::collectBaseObjectAttributes(const OpcUaNodeId& nodeI
 
 void TmsAttributeCollector::collectMethodAttributes(const OpcUaNodeId& nodeId)
 {
+    attributes.insert({nodeId, UA_ATTRIBUTEID_EXECUTABLE});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USEREXECUTABLE});
+
     if (browser->hasReference(nodeId, "InputArguments"))
         attributes.insert({browser->getChildNodeId(nodeId, "InputArguments"), UA_ATTRIBUTEID_VALUE});
     if (browser->hasReference(nodeId, "OutputArguments"))

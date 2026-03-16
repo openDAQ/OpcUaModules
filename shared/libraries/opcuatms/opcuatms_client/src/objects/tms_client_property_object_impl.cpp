@@ -430,6 +430,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::addMethodProperties(const OpcUaNodeI
                 ListPtr<IArgumentInfo> inputArgs;
                 ListPtr<IArgumentInfo> outputArgs;
                 uint32_t numberInList = std::numeric_limits<uint32_t>::max();
+                bool commonExecutable = true;
 
                 try
                 {
@@ -450,6 +451,10 @@ void TmsClientPropertyObjectBaseImpl<Impl>::addMethodProperties(const OpcUaNodeI
                         const auto numberInListId = browser->getChildNodeId(childNodeId, "NumberInList");
                         numberInList = VariantConverter<IInteger>::ToDaqObject(reader->getValue(numberInListId, UA_ATTRIBUTEID_VALUE));
                     }
+
+                    bool userExecutable = reader->getValue(childNodeId, UA_ATTRIBUTEID_USEREXECUTABLE).toBool();
+                    bool executable = reader->getValue(childNodeId, UA_ATTRIBUTEID_EXECUTABLE).toBool();
+                    commonExecutable = userExecutable & executable;
                 }
                 catch(const std::exception& e)
                 {
@@ -462,13 +467,13 @@ void TmsClientPropertyObjectBaseImpl<Impl>::addMethodProperties(const OpcUaNodeI
                 if (outputArgs.assigned() && outputArgs.getCount() == 1)
                 {
                     auto callableInfo = FunctionInfo(outputArgs[0].getType(), inputArgs);
-                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).build();
+                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).setVisible(commonExecutable).build();
                     func = TmsClientFunction(clientContext, daqContext, parentNodeId, childNodeId);
                 }
                 else
                 {
                     auto callableInfo = ProcedureInfo(inputArgs);
-                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).build();
+                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).setVisible(commonExecutable).build();
                     func = TmsClientProcedure(clientContext, daqContext, parentNodeId, childNodeId);
                 }
 

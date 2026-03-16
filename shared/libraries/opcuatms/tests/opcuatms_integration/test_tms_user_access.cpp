@@ -231,6 +231,7 @@ TEST_F(TmsUserAccessTest, ReaderUser)
         EXPECT_NE(mockDevice.getDescription(), "NewDeviceDescription");
 
         ProcedurePtr proc;
+        EXPECT_FALSE(mockDevice.getProperty("stop").getVisible());
         EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
         EXPECT_ANY_THROW(proc());
 
@@ -300,6 +301,7 @@ TEST_F(TmsUserAccessTest, WriterUser)
         EXPECT_EQ(mockDevice.getDescription(), "NewDeviceDescription");
 
         ProcedurePtr proc;
+        EXPECT_FALSE(mockDevice.getProperty("stop").getVisible());
         EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
         EXPECT_ANY_THROW(proc());
 
@@ -372,6 +374,7 @@ TEST_F(TmsUserAccessTest, ExecutorUser)
         EXPECT_NE(mockDevice.getDescription(), "NewDeviceDescription");
 
         ProcedurePtr proc;
+        EXPECT_TRUE(mockDevice.getProperty("stop").getVisible());
         EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
         EXPECT_NO_THROW(proc());
 
@@ -442,6 +445,7 @@ TEST_F(TmsUserAccessTest, AdminUser)
         EXPECT_EQ(mockDevice.getDescription(), "NewDeviceDescription");
 
         ProcedurePtr proc;
+        EXPECT_TRUE(mockDevice.getProperty("stop").getVisible());
         EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
         EXPECT_NO_THROW(proc());
 
