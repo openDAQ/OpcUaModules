@@ -230,9 +230,7 @@ TEST_F(TmsUserAccessTest, ReaderUser)
 
         ProcedurePtr proc;
         EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
-        // an exception has not been implemented on opc ua client side
-        // it checks errors and print error message to log but return success
-        DISABLE_EXPECT_ANY_THROW(proc());
+        EXPECT_ANY_THROW(proc());
 
         DISABLE_EXPECT_ANY_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
         EXPECT_NE(mockFb.getPropertyValue("TestConfigString"), "NewValue");
@@ -299,9 +297,7 @@ TEST_F(TmsUserAccessTest, WriterUser)
 
         ProcedurePtr proc;
         EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
-        // an exception has not been implemented on opc ua client side
-        // it checks errors and print error message to log but return success
-        DISABLE_EXPECT_ANY_THROW(proc());
+        EXPECT_ANY_THROW(proc());
 
         EXPECT_NO_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
         EXPECT_EQ(mockFb.getPropertyValue("TestConfigString"), "NewValue");
