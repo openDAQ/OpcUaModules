@@ -85,7 +85,13 @@ void TmsClientPropertyImpl::configurePropertyFields()
     const auto& references = clientContext->getReferenceBrowser()->browse(nodeId);
     const auto reader = clientContext->getAttributeReader();
 
-    for (auto [browseName, ref] : references.byBrowseName)
+    int64_t userAccessLevel = reader->getValue(nodeId, UA_ATTRIBUTEID_USERACCESSLEVEL).toInteger();
+    int64_t accessLevel = reader->getValue(nodeId, UA_ATTRIBUTEID_ACCESSLEVEL).toInteger();
+    int64_t commonAccessLevel = userAccessLevel & accessLevel;
+
+    this->readOnly = ((commonAccessLevel & UA_ACCESSLEVELMASK_WRITE) == 0);
+
+    for (const auto& [browseName, ref] : references.byBrowseName)
     {
         const auto childNodeId = OpcUaNodeId(ref->nodeId.nodeId);
 
@@ -120,7 +126,10 @@ void TmsClientPropertyImpl::configurePropertyFields()
                             break;
 
                         case details::PropertyField::IsReadOnly:
-                            this->readOnly = EvalValue(evalStr).asPtr<IBoolean>();
+                            if ((commonAccessLevel & UA_ACCESSLEVELMASK_WRITE) != 0)
+                                this->readOnly = EvalValue(evalStr).asPtr<IBoolean>();
+                            else
+                                this->readOnly = true;
                             break;
 
                         case details::PropertyField::IsVisible:
@@ -207,7 +216,10 @@ void TmsClientPropertyImpl::configurePropertyFields()
                             break;
                         }
                         case details::PropertyField::IsReadOnly:
-                            this->readOnly = VariantConverter<IBoolean>::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
+                            if ((commonAccessLevel & UA_ACCESSLEVELMASK_WRITE) != 0)
+                                this->readOnly = VariantConverter<IBoolean>::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
+                            else
+                                this->readOnly = true;
                             break;
                         case details::PropertyField::IsVisible:
                             this->visible = VariantConverter<IBoolean>::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));

@@ -219,7 +219,9 @@ TEST_F(TmsUserAccessTest, ReaderUser)
     // an exception has not been implemented on opc ua client side
     // it catchs opcua-wrapper exeption (via daqTry) and print error message to log but return seccess
     {
-        DISABLE_EXPECT_ANY_THROW(mockDevice.getProperty("TestProperty").setValue(String("NewValue")));
+
+        EXPECT_TRUE(mockDevice.getProperty("TestProperty").getReadOnly());
+        EXPECT_ANY_THROW(mockDevice.getProperty("TestProperty").setValue(String("NewValue")));
         EXPECT_NE(mockDevice.getPropertyValue("TestProperty"), "NewValue");
 
         DISABLE_EXPECT_ANY_THROW(mockDevice.setName("NewDevName"));
@@ -232,7 +234,8 @@ TEST_F(TmsUserAccessTest, ReaderUser)
         EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
         EXPECT_ANY_THROW(proc());
 
-        DISABLE_EXPECT_ANY_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
+        EXPECT_TRUE(mockFb.getProperty("TestConfigString").getReadOnly());
+        EXPECT_ANY_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
         EXPECT_NE(mockFb.getPropertyValue("TestConfigString"), "NewValue");
 
         DISABLE_EXPECT_ANY_THROW(mockFb.setName("NewFbName"));
@@ -286,6 +289,7 @@ TEST_F(TmsUserAccessTest, WriterUser)
     EXPECT_EQ(fb.getSignals().getCount() - 1, mockFb.getSignals().getCount());
 
     {
+        EXPECT_FALSE(mockDevice.getProperty("TestProperty").getReadOnly());
         EXPECT_NO_THROW(mockDevice.getProperty("TestProperty").setValue(String("NewValue")));
         EXPECT_EQ(mockDevice.getPropertyValue("TestProperty"), "NewValue");
 
@@ -299,6 +303,7 @@ TEST_F(TmsUserAccessTest, WriterUser)
         EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
         EXPECT_ANY_THROW(proc());
 
+        EXPECT_FALSE(mockFb.getProperty("TestConfigString").getReadOnly());
         EXPECT_NO_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
         EXPECT_EQ(mockFb.getPropertyValue("TestConfigString"), "NewValue");
 
@@ -356,7 +361,8 @@ TEST_F(TmsUserAccessTest, ExecutorUser)
     // an exception has not been implemented on opc ua client side
     // it catchs opcua-wrapper exeption (via daqTry) and print error message to log but return seccess
     {
-        DISABLE_EXPECT_ANY_THROW(mockDevice.getProperty("TestProperty").setValue(String("NewValue")));
+        EXPECT_TRUE(mockDevice.getProperty("TestProperty").getReadOnly());
+        EXPECT_ANY_THROW(mockDevice.getProperty("TestProperty").setValue(String("NewValue")));
         EXPECT_NE(mockDevice.getPropertyValue("TestProperty"), "NewValue");
 
         DISABLE_EXPECT_ANY_THROW(mockDevice.setName("NewDevName"));
@@ -369,7 +375,8 @@ TEST_F(TmsUserAccessTest, ExecutorUser)
         EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
         EXPECT_NO_THROW(proc());
 
-        DISABLE_EXPECT_ANY_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
+        EXPECT_TRUE(mockFb.getProperty("TestConfigString").getReadOnly());
+        EXPECT_ANY_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
         EXPECT_NE(mockFb.getPropertyValue("TestConfigString"), "NewValue");
 
         DISABLE_EXPECT_ANY_THROW(mockFb.setName("NewFbName"));
@@ -424,6 +431,7 @@ TEST_F(TmsUserAccessTest, AdminUser)
     EXPECT_EQ(fb.getSignals().getCount() - 1, mockFb.getSignals().getCount());
 
     {
+        EXPECT_FALSE(mockDevice.getProperty("TestProperty").getReadOnly());
         EXPECT_NO_THROW(mockDevice.getProperty("TestProperty").setValue(String("NewValue")));
         EXPECT_EQ(mockDevice.getPropertyValue("TestProperty"), "NewValue");
 
@@ -437,6 +445,7 @@ TEST_F(TmsUserAccessTest, AdminUser)
         EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
         EXPECT_NO_THROW(proc());
 
+        EXPECT_FALSE(mockFb.getProperty("TestConfigString").getReadOnly());
         EXPECT_NO_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
         EXPECT_EQ(mockFb.getPropertyValue("TestConfigString"), "NewValue");
 
