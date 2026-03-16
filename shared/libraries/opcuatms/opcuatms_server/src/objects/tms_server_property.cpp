@@ -118,11 +118,11 @@ void TmsServerProperty::bindCallbacks()
 
 opcua::OpcUaNodeId TmsServerProperty::getTmsTypeId()
 {
-    if (objectInternal.getSelectionValuesUnresolved().assigned())
-        return OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_SELECTIONVARIABLETYPE);
-
     if (objectInternal.getReferencedPropertyUnresolved().assigned())
         return OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_REFERENCEVARIABLETYPE);
+
+    if (objectInternal.getSelectionValuesUnresolved().assigned() && object.getItemType() != ctUndefined)
+        return OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_SELECTIONVARIABLETYPE);
 
     const auto type = object.getValueType();
 
