@@ -126,7 +126,7 @@ ErrCode TmsClientInputPortImpl::getSignal(ISignal** signal)
     return errCode;
 }
 
-SignalPtr TmsClientInputPortImpl::onGetSignal()
+SignalPtr TmsClientInputPortImpl::onGetSignal() const
 {
     auto browser = clientContext->getReferenceBrowser();
 
@@ -150,6 +150,11 @@ SignalPtr TmsClientInputPortImpl::onGetSignal()
 StringPtr TmsClientInputPortImpl::onGetRemoteId() const
 {
     return String(remoteComponentId).detach();
+}
+
+SignalPtr TmsClientInputPortImpl::getSignalNoLock()
+{
+    return onGetSignal();
 }
 
 ErrCode TmsClientInputPortImpl::getConnection(IConnection** connection)
