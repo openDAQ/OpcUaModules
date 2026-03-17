@@ -248,13 +248,11 @@ TEST_F(TmsUserAccessTest, ReaderUser)
 
     {
         // due to lack of access rights (the reader does not have write and execute permissions), these calls should fail
-        // an exception has not been implemented on opc ua client side
-        // it calls execution without checking of user access rights and when even doesn't check a call result
-        DISABLE_EXPECT_ANY_THROW(mockDevice->beginUpdate());
-        DISABLE_EXPECT_ANY_THROW(mockDevice->endUpdate());
+        EXPECT_EQ(mockDevice->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
+        EXPECT_EQ(mockDevice->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
 
-        DISABLE_EXPECT_ANY_THROW(mockFb->beginUpdate());
-        DISABLE_EXPECT_ANY_THROW(mockFb->endUpdate());
+        EXPECT_EQ(mockFb->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
+        EXPECT_EQ(mockFb->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
     }
     {
         EXPECT_ANY_THROW(clientDevice.addFunctionBlock("mock_fb_uid"));
@@ -318,13 +316,11 @@ TEST_F(TmsUserAccessTest, WriterUser)
 
     {
         // due to lack of access rights (the writer does not have execute permissions), these calls should fail
-        // an exception has not been implemented on opc ua client side
-        // it calls execution without checking of user access rights and when even doesn't check a call result
-        DISABLE_EXPECT_ANY_THROW(mockDevice->beginUpdate());
-        DISABLE_EXPECT_ANY_THROW(mockDevice->endUpdate());
+        EXPECT_EQ(mockDevice->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
+        EXPECT_EQ(mockDevice->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
 
-        DISABLE_EXPECT_ANY_THROW(mockFb->beginUpdate());
-        DISABLE_EXPECT_ANY_THROW(mockFb->endUpdate());
+        EXPECT_EQ(mockFb->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
+        EXPECT_EQ(mockFb->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
     }
     {
         EXPECT_ANY_THROW(clientDevice.addFunctionBlock("mock_fb_uid"));
@@ -391,13 +387,11 @@ TEST_F(TmsUserAccessTest, ExecutorUser)
 
     {
         // due to lack of access rights (the executor does not have write permissions), these calls should fail
-        // an exception has not been implemented on opc ua client side
-        // it calls execution without checking of user access rights and when even doesn't check a call result
-        DISABLE_EXPECT_ANY_THROW(mockDevice->beginUpdate());
-        DISABLE_EXPECT_ANY_THROW(mockDevice->endUpdate());
+        EXPECT_EQ(mockDevice->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
+        EXPECT_EQ(mockDevice->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
 
-        DISABLE_EXPECT_ANY_THROW(mockFb->beginUpdate());
-        DISABLE_EXPECT_ANY_THROW(mockFb->endUpdate());
+        EXPECT_EQ(mockFb->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
+        EXPECT_EQ(mockFb->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
     }
 
     {

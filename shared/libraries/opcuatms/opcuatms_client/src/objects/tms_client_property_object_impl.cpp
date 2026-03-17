@@ -287,7 +287,14 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::beginUpdate()
     request->inputArgumentsSize = 0;
     request->objectId = nodeId.copyAndGetDetachedValue();
     request->methodId = beginUpdateId.copyAndGetDetachedValue();
-    client->callMethod(request);
+    OpcUaObject<UA_CallMethodResult> callResult = client->callMethod(request);
+    if (callResult->statusCode != UA_STATUSCODE_GOOD)
+    {
+        if (callResult->statusCode == UA_STATUSCODE_BADUSERACCESSDENIED)
+            return OPENDAQ_ERR_ACCESSDENIED;
+        else
+            return OPENDAQ_ERR_CALLFAILED;
+    }
     return OPENDAQ_SUCCESS;
 }
 
@@ -302,7 +309,14 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::endUpdate()
     request->inputArgumentsSize = 0;
     request->objectId = nodeId.copyAndGetDetachedValue();
     request->methodId = endUpdateId.copyAndGetDetachedValue();
-    client->callMethod(request);
+    OpcUaObject<UA_CallMethodResult> callResult = client->callMethod(request);
+    if (callResult->statusCode != UA_STATUSCODE_GOOD)
+    {
+        if (callResult->statusCode == UA_STATUSCODE_BADUSERACCESSDENIED)
+            return OPENDAQ_ERR_ACCESSDENIED;
+        else
+            return OPENDAQ_ERR_CALLFAILED;
+    }
     return OPENDAQ_SUCCESS;
 }
 
