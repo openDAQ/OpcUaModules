@@ -448,9 +448,17 @@ TEST_F(TmsPropertyObjectTest, SelectionPropertyValues)
     ASSERT_FALSE(clientObj.getProperty("IntSelection").getSelectionValues().assigned());
     ASSERT_FALSE(clientObj.getProperty("FloatSelection").getSelectionValues().assigned());
 
-    ASSERT_ANY_THROW(clientObj.setPropertyValue("StringSelection", "Invalid"));
-    ASSERT_ANY_THROW(clientObj.setPropertyValue("IntSelection", 42));
-    ASSERT_ANY_THROW(clientObj.setPropertyValue("FloatSelection", 3.14));
+    // check default values
+    ASSERT_EQ(clientObj.getPropertyValue("StringSelection"), "foo");
+    ASSERT_EQ(clientObj.getPropertyValue("IntSelection"), 10);
+    ASSERT_EQ(clientObj.getPropertyValue("FloatSelection"), 5.12);
+
+    ASSERT_NO_THROW(clientObj.setPropertyValue("StringSelection", "Invalid")); // will print a warning but should not throw
+    ASSERT_EQ(clientObj.getPropertyValue("StringSelection"), "foo");
+    ASSERT_NO_THROW(clientObj.setPropertyValue("IntSelection", 42)); // will print a warning but should not throw
+    ASSERT_EQ(clientObj.getPropertyValue("IntSelection"), 10);
+    ASSERT_NO_THROW(clientObj.setPropertyValue("FloatSelection", 3.14)); // will print a warning but should not throw
+    ASSERT_EQ(clientObj.getPropertyValue("FloatSelection"), 5.12);
 
     ASSERT_NO_THROW(clientObj.setPropertyValue("StringSelection", "bar"));
     ASSERT_NO_THROW(clientObj.setPropertyValue("IntSelection", 0));
