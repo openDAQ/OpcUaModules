@@ -148,7 +148,6 @@ void TmsClientPropertyImpl::configurePropertyFields()
                     switch (propertyField)
                     {
                         case details::PropertyField::DefaultValue:
-
                             this->defaultValue = EvalValue(evalStr);
                             break;
 

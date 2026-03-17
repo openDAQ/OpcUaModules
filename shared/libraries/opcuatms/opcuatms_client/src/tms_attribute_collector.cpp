@@ -170,6 +170,8 @@ void TmsAttributeCollector::collectPropertyAttributes(const OpcUaNodeId& nodeId)
         attributes.insert({browser->getChildNodeId(nodeId, "ValidationExpression"), UA_ATTRIBUTEID_VALUE});
     if (browser->hasReference(nodeId, "CoercionExpression"))
         attributes.insert({browser->getChildNodeId(nodeId, "CoercionExpression"), UA_ATTRIBUTEID_VALUE});
+    if (browser->hasReference(nodeId, "PropertyType"))
+        attributes.insert({browser->getChildNodeId(nodeId, "PropertyType"), UA_ATTRIBUTEID_VALUE});
 
     const auto& references = browser->browse(nodeId);
 
