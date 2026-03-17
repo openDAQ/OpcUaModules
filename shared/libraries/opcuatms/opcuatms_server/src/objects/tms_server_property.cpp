@@ -145,7 +145,8 @@ opcua::OpcUaNodeId TmsServerProperty::getTmsTypeId()
     if (objectInternal.getReferencedPropertyUnresolved().assigned())
         return OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_REFERENCEVARIABLETYPE);
 
-    if (objectInternal.getSelectionValuesUnresolved().assigned() && object.getItemType() != ctUndefined)
+    PropertyType propertyType = object.getPropertyType();
+    if (propertyType == PropertyType::IndexSelection || propertyType == PropertyType::SparseSelection)
         return OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_SELECTIONVARIABLETYPE);
 
     const auto type = object.getValueType();

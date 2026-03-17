@@ -103,6 +103,8 @@ void TmsClientPropertyImpl::readBasicInfo()
         const auto object = VariantConverter<IBaseObject>::ToDaqObject(variant, daqContext);
         this->valueType = object.getCoreType();
     }
+
+    this->propertyType = static_cast<PropertyType>(this->valueType);
 }
 
 void TmsClientPropertyImpl::configurePropertyFields()
