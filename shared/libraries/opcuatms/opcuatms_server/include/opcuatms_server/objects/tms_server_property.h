@@ -81,6 +81,7 @@ private:
     void addNumericTypeChildNodes();
     void addSelectionTypeChildNodes();
     void addIntrospectionTypeChildNodes();
+    void addPropertyTypeNode();
     
     std::unordered_map<opcua::OpcUaNodeId, TmsServerObjectPtr> childObjects;
     PropertyInternalPtr objectInternal;
