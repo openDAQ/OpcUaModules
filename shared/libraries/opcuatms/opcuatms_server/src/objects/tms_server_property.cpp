@@ -142,12 +142,11 @@ void TmsServerProperty::bindCallbacks()
 
 opcua::OpcUaNodeId TmsServerProperty::getTmsTypeId()
 {
+    if (objectInternal.getSelectionValuesUnresolved().assigned() && object.getItemType() != CoreType::ctUndefined)
+        return OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_SELECTIONVARIABLETYPE);
+
     if (objectInternal.getReferencedPropertyUnresolved().assigned())
         return OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_REFERENCEVARIABLETYPE);
-
-    PropertyType propertyType = object.getPropertyType();
-    if (propertyType == PropertyType::IndexSelection || propertyType == PropertyType::SparseSelection)
-        return OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_SELECTIONVARIABLETYPE);
 
     const auto type = object.getValueType();
 
