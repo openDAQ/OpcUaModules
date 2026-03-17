@@ -14,30 +14,6 @@ BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
 using namespace opcua;
 
-StringPtr PropertyTypeToString(PropertyType type)
-{
-    switch (type)
-    {
-        case PropertyType::Bool:           return String("Bool");
-        case PropertyType::Int:            return String("Int");
-        case PropertyType::Float:          return String("Float");
-        case PropertyType::String:         return String("String");
-        case PropertyType::List:           return String("List");
-        case PropertyType::Dict:           return String("Dict");
-        case PropertyType::Ratio:          return String("Ratio");
-        case PropertyType::Procedure:      return String("Procedure");
-        case PropertyType::Object:         return String("Object");
-        case PropertyType::Function:       return String("Function");
-        case PropertyType::Struct:         return String("Struct");
-        case PropertyType::Enumeration:    return String("Enumeration");
-        case PropertyType::Reference:      return String("Reference");
-        case PropertyType::IndexSelection: return String("IndexSelection");
-        case PropertyType::Selection:      return String("Selection");
-        case PropertyType::SparseSelection:return String("SparseSelection");
-        default:                           return String("Undefined");
-    }
-}
-
 TmsServerProperty::TmsServerProperty(const PropertyPtr& object,
                                      const opcua::OpcUaServerPtr& server,
                                      const ContextPtr& context,
@@ -174,8 +150,6 @@ bool TmsServerProperty::createOptionalNode(const opcua::OpcUaNodeId& nodeId)
 
 void TmsServerProperty::addChildNodes()
 {
-    addPropertyTypeNode();
-
     if (isReferenceType())
     {
         addReferenceTypeChildNodes();
@@ -187,17 +161,6 @@ void TmsServerProperty::addChildNodes()
         addNumericTypeChildNodes();
     else if (isSelectionType())
         addSelectionTypeChildNodes();
-}
-
-void TmsServerProperty::addPropertyTypeNode()
-{
-    auto params = AddVariableNodeParams("PropertyType", nodeId);
-    params.setBrowseName("PropertyType");
-    params.setDataType(OpcUaNodeId(0, UA_NS0ID_STRING));
-    params.typeDefinition = OpcUaNodeId(0, UA_NS0ID_BASEDATAVARIABLETYPE);
-    params.attr->accessLevel = UA_ACCESSLEVELMASK_READ;
-    const auto propTypeNodeId = server->addVariableNode(params);
-    server->writeValue(propTypeNodeId, VariantConverter<IString>::ToVariant(PropertyTypeToString(object.getPropertyType())));
 }
 
 void TmsServerProperty::configureVariableNodeAttributes(opcua::OpcUaObject<UA_VariableAttributes>& attr)

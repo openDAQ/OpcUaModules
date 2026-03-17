@@ -14,32 +14,6 @@ using namespace daq::opcua;
 
 namespace details
 {
-    static PropertyType StringToPropertyType(const StringPtr& str)
-    {
-        if (!str.assigned())
-            return PropertyType::Undefined;
-        static const std::unordered_map<std::string, PropertyType> map{
-            {"Bool",            PropertyType::Bool},
-            {"Int",             PropertyType::Int},
-            {"Float",           PropertyType::Float},
-            {"String",          PropertyType::String},
-            {"List",            PropertyType::List},
-            {"Dict",            PropertyType::Dict},
-            {"Ratio",           PropertyType::Ratio},
-            {"Procedure",       PropertyType::Procedure},
-            {"Object",          PropertyType::Object},
-            {"Function",        PropertyType::Function},
-            {"Struct",          PropertyType::Struct},
-            {"Enumeration",     PropertyType::Enumeration},
-            {"Reference",       PropertyType::Reference},
-            {"IndexSelection",  PropertyType::IndexSelection},
-            {"Selection",       PropertyType::Selection},
-            {"SparseSelection", PropertyType::SparseSelection},
-        };
-        const auto it = map.find(str.toStdString());
-        return it != map.cend() ? it->second : PropertyType::Undefined;
-    }
-
     enum class PropertyField
     {
         CoercionExpression = 0,
@@ -103,8 +77,6 @@ void TmsClientPropertyImpl::readBasicInfo()
         const auto object = VariantConverter<IBaseObject>::ToDaqObject(variant, daqContext);
         this->valueType = object.getCoreType();
     }
-
-    this->propertyType = static_cast<PropertyType>(this->valueType);
 }
 
 void TmsClientPropertyImpl::configurePropertyFields()
@@ -117,14 +89,7 @@ void TmsClientPropertyImpl::configurePropertyFields()
     {
         const auto childNodeId = OpcUaNodeId(ref->nodeId.nodeId);
 
-        if (browseName == "PropertyType")
-        {
-            const StringPtr propTypeStr = VariantConverter<IString>::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
-            const auto parsedType = details::StringToPropertyType(propTypeStr);
-            if (parsedType != PropertyType::Undefined)
-                this->propertyType = parsedType;
-        }
-        else if (browseName == "CoercionExpression")
+        if (browseName == "CoercionExpression")
         {
             const auto eval = VariantConverter<IString>::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
             if (eval.assigned() && eval.getLength() > 0)
@@ -267,14 +232,6 @@ void TmsClientPropertyImpl::configurePropertyFields()
                         {
                             this->selectionValues =
                                 SelectionVariantConverter::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
-
-                            if (propertyType == PropertyType::Undefined)
-                            {
-                                if (this->selectionValues.supportsInterface<IList>())
-                                    this->propertyType = PropertyType::IndexSelection;
-                                else if (this->selectionValues.supportsInterface<IDict>())
-                                    this->propertyType = PropertyType::SparseSelection;
-                            }
 
                             if (this->selectionValues.supportsInterface<IFreezable>())
                                 this->selectionValues.freeze();
