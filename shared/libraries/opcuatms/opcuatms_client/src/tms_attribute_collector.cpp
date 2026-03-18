@@ -204,6 +204,8 @@ void TmsAttributeCollector::collectEvaluationPropertyAttributes(const OpcUaNodeI
 void TmsAttributeCollector::collectBaseObjectAttributes(const OpcUaNodeId& nodeId)
 {
     attributes.insert({nodeId, UA_ATTRIBUTEID_NODECLASS});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
 
     if (browser->hasReference(nodeId, "NumberInList"))
         attributes.insert({browser->getChildNodeId(nodeId, "NumberInList"), UA_ATTRIBUTEID_VALUE});
@@ -229,6 +231,9 @@ void TmsAttributeCollector::collectVariableBlockAttributes(const OpcUaNodeId& no
 
 void TmsAttributeCollector::collectIoNode(const OpcUaNodeId& nodeId)
 {
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
+
     const auto& references = browser->browse(nodeId);
 
     for (const auto& [refNodeId, ref] : references.byNodeId)
@@ -242,6 +247,9 @@ void TmsAttributeCollector::collectIoNode(const OpcUaNodeId& nodeId)
 
 void TmsAttributeCollector::collectInputPortNode(const OpcUaNodeId& nodeId)
 {
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
+
     const auto& references = browser->browse(nodeId);
 
     for (const auto& [refNodeId, ref] : references.byNodeId)
@@ -253,6 +261,9 @@ void TmsAttributeCollector::collectInputPortNode(const OpcUaNodeId& nodeId)
 
 void TmsAttributeCollector::collectFunctionBlockNode(const OpcUaNodeId& nodeId)
 {
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
+
     const auto& references = browser->browse(nodeId);
 
     for (const auto& [refNodeId, ref] : references.byNodeId)
@@ -264,6 +275,9 @@ void TmsAttributeCollector::collectFunctionBlockNode(const OpcUaNodeId& nodeId)
 
 void TmsAttributeCollector::collectSignalsNode(const OpcUaNodeId& nodeId)
 {
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
+
     const auto& signalReferences = browser->browse(nodeId);
 
     for (const auto& [refNodeId, ref] : signalReferences.byNodeId)

@@ -28,34 +28,10 @@
 
 using namespace daq;
 using namespace opcua::tms;
-// using namespace opcua;
 
-#define DISABLE_EXPECTED_FAILURE
-#ifdef DISABLE_EXPECTED_FAILURE
-#define DISABLE_EXPECT_ANY_THROW(statement) EXPECT_NO_THROW(statement)
-#else
-#define DISABLE_EXPECT_ANY_THROW(statement) EXPECT_ANY_THROW(statement)
-#endif
-#ifdef DISABLE_EXPECTED_FAILURE
-#define DISABLE_EXPECT_EQ(val1, val2) EXPECT_NE(val1, val2)
-#else
-#define DISABLE_EXPECT_EQ(val1, val2) EXPECT_EQ(val1, val2)
-#endif
-
-class TmsUserAccessTest : public TmsObjectIntegrationTest, public testing::Test
+class TmsUserAccess : public TmsObjectIntegrationTest
 {
 public:
-    void SetUp() override
-    {
-        TmsObjectIntegrationTest::Init();
-        createDevice();
-    }
-
-    void TearDown() override
-    {
-        TmsObjectIntegrationTest::Clear();
-    }
-
     InstancePtr createDevice()
     {
         const auto moduleManager = ModuleManager("[[none]]");
@@ -131,9 +107,136 @@ public:
         std::cout << "---end---" << std::endl;
     }
 
+    bool ListContains(daq::ListPtr<daq::IString> list, const std::string& value)
+    {
+        for (const auto& item : list)
+        {
+            if (item == value)
+                return true;
+        }
+        return false;
+    };
+
     InstancePtr instance;
     DevicePtr device;
     FunctionBlockPtr fb;
+};
+
+class TmsUserAccessTest : public TmsUserAccess, public testing::Test
+{
+public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+        createDevice();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
+};
+
+class UserPermission
+{
+public:
+    enum PermissionType : uint32_t
+    {
+        Read = 0b001,
+        Write = 0b010,
+        Execute = 0b100
+    };
+
+    UserPermission(PermissionType permissionType) : permissionType(permissionType) {};
+
+    bool hasPermission(PermissionType permissionType) const
+    {
+        return ((static_cast<uint32_t>(this->permissionType) & static_cast<uint32_t>(permissionType)) == permissionType);
+    }
+protected:
+    PermissionType permissionType;
+};
+
+namespace {
+    std::string ParamNameGenerator(const testing::TestParamInfo<UserPermission::PermissionType>& info)
+    {
+        using UP = UserPermission::PermissionType;
+        UserPermission perms(info.param);
+        if (perms.hasPermission(UP::Write) && perms.hasPermission(UP::Execute))
+        {
+            return "adminRights";
+        }
+        else if (perms.hasPermission(UP::Write))
+        {
+            return "writerRights";
+        }
+        else if (perms.hasPermission(UP::Execute))
+        {
+            return "executorRights";
+        }
+        else if (perms.hasPermission(UP::Read))
+        {
+            return "readerRights";
+        }
+        else
+        {
+            throw std::runtime_error("Invalid permissions for test user");
+        }
+        return "";
+    }
+}
+
+class TmsUserAccessPTest : public TmsUserAccess, public ::testing::TestWithParam<UserPermission::PermissionType>
+{
+public:
+    void SetUp() override
+    {
+        TmsObjectIntegrationTest::Init();
+        createDevice();
+    }
+
+    void TearDown() override
+    {
+        TmsObjectIntegrationTest::Clear();
+    }
+
+    void CreateClient(UserPermission perms)
+    {
+        using UP = UserPermission::PermissionType;
+        if (perms.hasPermission(UP::Write) && perms.hasPermission(UP::Execute))
+        {
+            client = CreateAndConnectTestClient("adminUser", "adminUserPass");
+        }
+        else if (perms.hasPermission(UP::Write))
+        {
+            client = CreateAndConnectTestClient("writerUser", "writerUserPass");
+        }
+        else if (perms.hasPermission(UP::Execute))
+        {
+            client = CreateAndConnectTestClient("executorUser", "executorUserPass");
+        }
+        else if (perms.hasPermission(UP::Read))
+        {
+            client = CreateAndConnectTestClient("readerUser", "readerUserPass");
+        }
+        else
+        {
+            throw std::runtime_error("Invalid permissions for test user");
+        }
+
+        ctxClient = daq::NullContext(logger);
+        clientContext = std::make_shared<TmsClientContext>(client, ctxClient);
+
+        clientContext->addEnumerationTypesToTypeManager();
+    }
+
+    const std::vector<std::string>& attributesToCheck()
+    {
+        return attributes;
+    }
+
+protected:
+    std::vector<std::string> attributes{"Name", "Description", "Active"};
 };
 
 TEST_F(TmsUserAccessTest, CreateClientDevice)
@@ -189,8 +292,10 @@ TEST_F(TmsUserAccessTest, CommonUserForRootDevice)
     ASSERT_ANY_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
 }
 
-TEST_F(TmsUserAccessTest, ReaderUser)
+TEST_P(TmsUserAccessPTest, CommonChecks)
 {
+    const UserPermission userPerm(GetParam());
+
     fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
     device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
     instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
@@ -198,7 +303,7 @@ TEST_F(TmsUserAccessTest, ReaderUser)
     auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
     auto nodeId = tmsPropertyObject.registerOpcUaNode();
     auto ctx = NullContext();
-    CreateClient("readerUser", "readerUserPass");
+    CreateClient(userPerm);
     DevicePtr clientDevice;
     ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
 
@@ -212,56 +317,15 @@ TEST_F(TmsUserAccessTest, ReaderUser)
     EXPECT_EQ(device.getAllProperties().getCount() - 1, mockDevice.getAllProperties().getCount());
     EXPECT_EQ(fb.getAllProperties().getCount(), mockFb.getAllProperties().getCount());
 
-    // struct property in a mock device
     EXPECT_EQ(device.getSignals().getCount() - 1, mockDevice.getSignals().getCount());
     EXPECT_EQ(fb.getSignals().getCount() - 1, mockFb.getSignals().getCount());
-
-    // an exception has not been implemented on opc ua client side
-    // it catchs opcua-wrapper exeption (via daqTry) and print error message to log but return seccess
-    {
-
-        EXPECT_TRUE(mockDevice.getProperty("TestProperty").getReadOnly());
-        EXPECT_ANY_THROW(mockDevice.getProperty("TestProperty").setValue(String("NewValue")));
-        EXPECT_NE(mockDevice.getPropertyValue("TestProperty"), "NewValue");
-
-        DISABLE_EXPECT_ANY_THROW(mockDevice.setName("NewDevName"));
-        EXPECT_NE(mockDevice.getName(), "NewDevName");
-
-        DISABLE_EXPECT_ANY_THROW(mockDevice.setDescription("NewDeviceDescription"));
-        EXPECT_NE(mockDevice.getDescription(), "NewDeviceDescription");
-
-        ProcedurePtr proc;
-        EXPECT_FALSE(mockDevice.getProperty("stop").getVisible());
-        EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
-        EXPECT_ANY_THROW(proc());
-
-        EXPECT_TRUE(mockFb.getProperty("TestConfigString").getReadOnly());
-        EXPECT_ANY_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
-        EXPECT_NE(mockFb.getPropertyValue("TestConfigString"), "NewValue");
-
-        DISABLE_EXPECT_ANY_THROW(mockFb.setName("NewFbName"));
-        EXPECT_NE(mockFb.getName(), "NewFbName");
-
-        DISABLE_EXPECT_ANY_THROW(mockFb.setDescription("NewFbDescription"));
-        EXPECT_NE(mockFb.getDescription(), "NewFbDescription");
-    }
-
-    {
-        // due to lack of access rights (the reader does not have write and execute permissions), these calls should fail
-        EXPECT_EQ(mockDevice->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-        EXPECT_EQ(mockDevice->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-
-        EXPECT_EQ(mockFb->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-        EXPECT_EQ(mockFb->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-    }
-    {
-        EXPECT_ANY_THROW(clientDevice.addFunctionBlock("mock_fb_uid"));
-        EXPECT_ANY_THROW(clientDevice.removeFunctionBlock(mockFb));
-    }
 }
 
-TEST_F(TmsUserAccessTest, WriterUser)
+TEST_P(TmsUserAccessPTest, Properties)
 {
+    using UP = UserPermission::PermissionType;
+    const UserPermission userPerm(GetParam());
+
     fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
     device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
     instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
@@ -269,7 +333,7 @@ TEST_F(TmsUserAccessTest, WriterUser)
     auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
     auto nodeId = tmsPropertyObject.registerOpcUaNode();
     auto ctx = NullContext();
-    CreateClient("writerUser", "writerUserPass");
+    CreateClient(userPerm);
     DevicePtr clientDevice;
     ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
 
@@ -279,129 +343,48 @@ TEST_F(TmsUserAccessTest, WriterUser)
     DevicePtr mockDevice = clientDevice.getDevices()[1];
     FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
 
-    // one private signal in MockFunctionBlockImpl. and one in MockPhysicalDeviceImpl
-    EXPECT_EQ(device.getAllProperties().getCount() - 1, mockDevice.getAllProperties().getCount());
-    EXPECT_EQ(fb.getAllProperties().getCount(), mockFb.getAllProperties().getCount());
-
-    // struct property in a mock device
-    EXPECT_EQ(device.getSignals().getCount() - 1, mockDevice.getSignals().getCount());
-    EXPECT_EQ(fb.getSignals().getCount() - 1, mockFb.getSignals().getCount());
-
+    EXPECT_EQ(mockDevice.getProperty("TestProperty").getReadOnly(), userPerm.hasPermission(UP::Write) ? False : True);
+    if (userPerm.hasPermission(UP::Write))
     {
-        EXPECT_FALSE(mockDevice.getProperty("TestProperty").getReadOnly());
         EXPECT_NO_THROW(mockDevice.getProperty("TestProperty").setValue(String("NewValue")));
         EXPECT_EQ(mockDevice.getPropertyValue("TestProperty"), "NewValue");
-
-        EXPECT_NO_THROW(mockDevice.setName("NewDevName"));
-        EXPECT_EQ(mockDevice.getName(), "NewDevName");
-
-        EXPECT_NO_THROW(mockDevice.setDescription("NewDeviceDescription"));
-        EXPECT_EQ(mockDevice.getDescription(), "NewDeviceDescription");
-
-        ProcedurePtr proc;
-        EXPECT_FALSE(mockDevice.getProperty("stop").getVisible());
-        EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
-        EXPECT_ANY_THROW(proc());
-
-        EXPECT_FALSE(mockFb.getProperty("TestConfigString").getReadOnly());
-        EXPECT_NO_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
-        EXPECT_EQ(mockFb.getPropertyValue("TestConfigString"), "NewValue");
-
-        EXPECT_NO_THROW(mockFb.setName("NewFbName"));
-        EXPECT_EQ(mockFb.getName(), "NewFbName");
-
-        EXPECT_NO_THROW(mockFb.setDescription("NewFbDescription"));
-        EXPECT_EQ(mockFb.getDescription(), "NewFbDescription");
     }
-
+    else
     {
-        // due to lack of access rights (the writer does not have execute permissions), these calls should fail
-        EXPECT_EQ(mockDevice->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-        EXPECT_EQ(mockDevice->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-
-        EXPECT_EQ(mockFb->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-        EXPECT_EQ(mockFb->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-    }
-    {
-        EXPECT_ANY_THROW(clientDevice.addFunctionBlock("mock_fb_uid"));
-        EXPECT_ANY_THROW(clientDevice.removeFunctionBlock(mockFb));
-    }
-}
-
-TEST_F(TmsUserAccessTest, ExecutorUser)
-{
-    fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
-    device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
-    instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
-
-    auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
-    auto nodeId = tmsPropertyObject.registerOpcUaNode();
-    auto ctx = NullContext();
-    CreateClient("executorUser", "executorUserPass");
-    DevicePtr clientDevice;
-    ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
-
-    ASSERT_EQ(clientDevice.getDevices().getCount(), 2);
-    ASSERT_EQ(clientDevice.getFunctionBlocks().getCount(), 1);
-
-    DevicePtr mockDevice = clientDevice.getDevices()[1];
-    FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
-
-    // one private signal in MockFunctionBlockImpl. and one in MockPhysicalDeviceImpl
-    EXPECT_EQ(device.getAllProperties().getCount() - 1, mockDevice.getAllProperties().getCount());
-    EXPECT_EQ(fb.getAllProperties().getCount(), mockFb.getAllProperties().getCount());
-
-    // struct property in a mock device
-    EXPECT_EQ(device.getSignals().getCount() - 1, mockDevice.getSignals().getCount());
-    EXPECT_EQ(fb.getSignals().getCount() - 1, mockFb.getSignals().getCount());
-
-    // due to lack of access rights (the executor does not have write permissions), ally write calls should fail
-    // an exception has not been implemented on opc ua client side
-    // it catchs opcua-wrapper exeption (via daqTry) and print error message to log but return seccess
-    {
-        EXPECT_TRUE(mockDevice.getProperty("TestProperty").getReadOnly());
         EXPECT_ANY_THROW(mockDevice.getProperty("TestProperty").setValue(String("NewValue")));
         EXPECT_NE(mockDevice.getPropertyValue("TestProperty"), "NewValue");
+    }
 
-        DISABLE_EXPECT_ANY_THROW(mockDevice.setName("NewDevName"));
-        EXPECT_NE(mockDevice.getName(), "NewDevName");
-
-        DISABLE_EXPECT_ANY_THROW(mockDevice.setDescription("NewDeviceDescription"));
-        EXPECT_NE(mockDevice.getDescription(), "NewDeviceDescription");
-
-        ProcedurePtr proc;
-        EXPECT_TRUE(mockDevice.getProperty("stop").getVisible());
-        EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
+    ProcedurePtr proc;
+    EXPECT_EQ(mockDevice.getProperty("stop").getVisible(), userPerm.hasPermission(UP::Execute) ? True : False);
+    EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
+    if (userPerm.hasPermission(UP::Execute))
+    {
         EXPECT_NO_THROW(proc());
+    }
+    else
+    {
+        EXPECT_ANY_THROW(proc());
+    }
 
-        EXPECT_TRUE(mockFb.getProperty("TestConfigString").getReadOnly());
+
+    EXPECT_EQ(mockFb.getProperty("TestConfigString").getReadOnly(), userPerm.hasPermission(UP::Write) ? False : True);
+    if (userPerm.hasPermission(UP::Write))
+    {
+        EXPECT_NO_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
+        EXPECT_EQ(mockFb.getPropertyValue("TestConfigString"), "NewValue");
+    }
+    else
+    {
         EXPECT_ANY_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
         EXPECT_NE(mockFb.getPropertyValue("TestConfigString"), "NewValue");
-
-        DISABLE_EXPECT_ANY_THROW(mockFb.setName("NewFbName"));
-        EXPECT_NE(mockFb.getName(), "NewFbName");
-
-        DISABLE_EXPECT_ANY_THROW(mockFb.setDescription("NewFbDescription"));
-        EXPECT_NE(mockFb.getDescription(), "NewFbDescription");
-    }
-
-    {
-        // due to lack of access rights (the executor does not have write permissions), these calls should fail
-        EXPECT_EQ(mockDevice->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-        EXPECT_EQ(mockDevice->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-
-        EXPECT_EQ(mockFb->beginUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-        EXPECT_EQ(mockFb->endUpdate(), OPENDAQ_ERR_ACCESSDENIED);
-    }
-
-    {
-        EXPECT_ANY_THROW(clientDevice.addFunctionBlock("mock_fb_uid"));
-        EXPECT_ANY_THROW(clientDevice.removeFunctionBlock(mockFb));
     }
 }
 
-TEST_F(TmsUserAccessTest, AdminUser)
+TEST_P(TmsUserAccessPTest, Attributes)
 {
+    const UserPermission userPerm(GetParam());
+
     fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
     device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
     instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
@@ -409,7 +392,7 @@ TEST_F(TmsUserAccessTest, AdminUser)
     auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
     auto nodeId = tmsPropertyObject.registerOpcUaNode();
     auto ctx = NullContext();
-    CreateClient("adminUser", "adminUserPass");
+    CreateClient(userPerm);
     DevicePtr clientDevice;
     ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
 
@@ -419,51 +402,123 @@ TEST_F(TmsUserAccessTest, AdminUser)
     DevicePtr mockDevice = clientDevice.getDevices()[1];
     FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
 
-    // one private signal in MockFunctionBlockImpl. and one in MockPhysicalDeviceImpl
-    EXPECT_EQ(device.getAllProperties().getCount() - 1, mockDevice.getAllProperties().getCount());
-    EXPECT_EQ(fb.getAllProperties().getCount(), mockFb.getAllProperties().getCount());
+    daq::ListPtr<daq::IComponent> list = List<daq::IComponent>();
+    list.pushBack(mockDevice);
+    list.pushBack(mockFb);
 
-    // struct property in a mock device
-    EXPECT_EQ(device.getSignals().getCount() - 1, mockDevice.getSignals().getCount());
-    EXPECT_EQ(fb.getSignals().getCount() - 1, mockFb.getSignals().getCount());
+    for (const auto& sig : mockDevice.getSignals())
+        list.pushBack(sig);
 
-    {
-        EXPECT_FALSE(mockDevice.getProperty("TestProperty").getReadOnly());
-        EXPECT_NO_THROW(mockDevice.getProperty("TestProperty").setValue(String("NewValue")));
-        EXPECT_EQ(mockDevice.getPropertyValue("TestProperty"), "NewValue");
+    for (const auto& channel : mockDevice.getChannels())
+        list.pushBack(channel);
 
-        EXPECT_NO_THROW(mockDevice.setName("NewDevName"));
-        EXPECT_EQ(mockDevice.getName(), "NewDevName");
+    for (const auto& sig : mockFb.getSignals())
+        list.pushBack(sig);
 
-        EXPECT_NO_THROW(mockDevice.setDescription("NewDeviceDescription"));
-        EXPECT_EQ(mockDevice.getDescription(), "NewDeviceDescription");
-
-        ProcedurePtr proc;
-        EXPECT_TRUE(mockDevice.getProperty("stop").getVisible());
-        EXPECT_NO_THROW(proc = mockDevice.getPropertyValue("stop"));
-        EXPECT_NO_THROW(proc());
-
-        EXPECT_FALSE(mockFb.getProperty("TestConfigString").getReadOnly());
-        EXPECT_NO_THROW(mockFb.getProperty("TestConfigString").setValue(String("NewValue")));
-        EXPECT_EQ(mockFb.getPropertyValue("TestConfigString"), "NewValue");
-
-        EXPECT_NO_THROW(mockFb.setName("NewFbName"));
-        EXPECT_EQ(mockFb.getName(), "NewFbName");
-
-        EXPECT_NO_THROW(mockFb.setDescription("NewFbDescription"));
-        EXPECT_EQ(mockFb.getDescription(), "NewFbDescription");
-    }
+    for (const auto& ip : mockFb.getInputPorts())
+        list.pushBack(ip);
 
     {
-        EXPECT_NO_THROW(mockDevice->beginUpdate());
-        EXPECT_NO_THROW(mockDevice->endUpdate());
+        for (const auto& comp : list)
+        {
+            const auto listLockedAttr = comp.getLockedAttributes();
+            for (const auto& attr : attributesToCheck())
+            {
+                EXPECT_EQ(ListContains(listLockedAttr, attr), !userPerm.hasPermission(UserPermission::PermissionType::Write));
+            }
 
-        EXPECT_NO_THROW(mockFb->beginUpdate());
-        EXPECT_NO_THROW(mockFb->endUpdate());
+            EXPECT_NO_THROW(comp.setName("NewCompName"));
+            EXPECT_NO_THROW(comp.setDescription("NewCompDescription"));
+
+            if (userPerm.hasPermission(UserPermission::PermissionType::Write))
+            {
+
+                EXPECT_EQ(comp.getName(), "NewCompName");
+                EXPECT_EQ(comp.getDescription(), "NewCompDescription");
+            }
+            else
+            {
+                EXPECT_NE(comp.getName(), "NewCompName");
+                EXPECT_NE(comp.getDescription(), "NewCompDescription");
+            }
+
+        }
     }
+}
 
+TEST_P(TmsUserAccessPTest, BeginEndUpdate)
+{
+    using UP = UserPermission::PermissionType;
+    const UserPermission userPerm(GetParam());
+
+    fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+
+    auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsPropertyObject.registerOpcUaNode();
+    auto ctx = NullContext();
+    CreateClient(userPerm);
+    DevicePtr clientDevice;
+    ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
+
+    ASSERT_EQ(clientDevice.getDevices().getCount(), 2);
+    ASSERT_EQ(clientDevice.getFunctionBlocks().getCount(), 1);
+
+    DevicePtr mockDevice = clientDevice.getDevices()[1];
+    FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
+
+    const ErrCode expectedCode = (userPerm.hasPermission(UP::Write | UP::Execute)) ? OPENDAQ_SUCCESS : OPENDAQ_ERR_ACCESSDENIED;
+
+    ErrCode code = OPENDAQ_SUCCESS;
+    ASSERT_NO_THROW(code = mockDevice->beginUpdate());
+    EXPECT_EQ(code, expectedCode);
+    ASSERT_NO_THROW(code = mockDevice->endUpdate());
+    EXPECT_EQ(code, expectedCode);
+
+    ASSERT_NO_THROW(code = mockFb->beginUpdate());
+    EXPECT_EQ(code, expectedCode);
+    ASSERT_NO_THROW(code = mockFb->endUpdate());
+    EXPECT_EQ(code, expectedCode);
+}
+
+TEST_P(TmsUserAccessPTest, AddRemoveFb)
+{
+    using UP = UserPermission::PermissionType;
+    const UserPermission userPerm(GetParam());
+
+    fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+
+    auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsPropertyObject.registerOpcUaNode();
+    auto ctx = NullContext();
+    CreateClient(userPerm);
+    DevicePtr clientDevice;
+    ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
+
+    ASSERT_EQ(clientDevice.getDevices().getCount(), 2);
+    ASSERT_EQ(clientDevice.getFunctionBlocks().getCount(), 1);
+
+    DevicePtr mockDevice = clientDevice.getDevices()[1];
+    FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
+
+    if (userPerm.hasPermission(UP::Write | UP::Execute))
     {
         EXPECT_NO_THROW(clientDevice.addFunctionBlock("mock_fb_uid"));
         EXPECT_NO_THROW(clientDevice.removeFunctionBlock(mockFb));
     }
+    else
+    {
+        EXPECT_ANY_THROW(clientDevice.addFunctionBlock("mock_fb_uid"));
+        EXPECT_ANY_THROW(clientDevice.removeFunctionBlock(mockFb));
+    }
 }
+
+INSTANTIATE_TEST_SUITE_P(UserAccess,
+                         TmsUserAccessPTest,
+                         ::testing::Values(UserPermission::PermissionType::Read,
+                                           UserPermission::PermissionType::Read | UserPermission::PermissionType::Write,
+                                           UserPermission::PermissionType::Read | UserPermission::PermissionType::Execute,
+                                           UserPermission::PermissionType::Read | UserPermission::PermissionType::Write | UserPermission::PermissionType::Execute), ParamNameGenerator);

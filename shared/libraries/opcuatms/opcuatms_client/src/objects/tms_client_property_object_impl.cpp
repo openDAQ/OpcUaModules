@@ -129,6 +129,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::init()
     }
     clientContext->readObjectAttributes(nodeId);
     browseRawProperties();
+    setLocksForAttributes();
 }
 
 template <typename Impl>
@@ -581,6 +582,33 @@ void TmsClientPropertyObjectBaseImpl<Impl>::browseRawProperties()
     for (const auto& val : functionPropValues)
         daq::checkErrorInfo(Impl::setProtectedPropertyValue(String(val.first), val.second));
 
+}
+
+template <typename Impl>
+void TmsClientPropertyObjectBaseImpl<Impl>::setLocksForAttributes()
+{
+    int64_t commonWriteMask = 1;
+    try {
+        const auto reader = clientContext->getAttributeReader();
+        const int64_t userWriteMask = reader->getValue(nodeId, UA_ATTRIBUTEID_USERWRITEMASK).toInteger();
+        const int64_t writeMask = reader->getValue(nodeId, UA_ATTRIBUTEID_WRITEMASK).toInteger();
+        commonWriteMask = userWriteMask & writeMask;
+    } catch (...) {
+        LOG_W("Cannot read write mask attributes for OpcUA node, cannot determine if attributes should be locked for write protection");
+        DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTIMPLEMENTED, "Cannot read write mask attributes for OpcUA node");
+    }
+
+    if (commonWriteMask == 0)
+    {
+        if (this->objPtr.template supportsInterface<IComponentPrivate>())
+        {
+            this->objPtr.template asPtrOrNull<IComponentPrivate>(true).lockAllAttributes();
+        }
+        else
+        {
+            LOG_W("Object does not support IComponentPrivate, cannot lock attributes for write protection");
+        }
+    }
 }
 
 template <class Impl>
