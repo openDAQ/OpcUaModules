@@ -482,6 +482,56 @@ TEST_P(TmsUserAccessPTest, BeginEndUpdate)
     EXPECT_EQ(code, expectedCode);
 }
 
+TEST_P(TmsUserAccessPTest, AvailableComponents)
+{
+    using UP = UserPermission::PermissionType;
+    const UserPermission userPerm(GetParam());
+
+    fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+
+    auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsPropertyObject.registerOpcUaNode();
+    auto ctx = NullContext();
+    CreateClient(userPerm);
+    DevicePtr clientDevice;
+    ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
+
+    ASSERT_EQ(clientDevice.getDevices().getCount(), 2);
+    ASSERT_EQ(clientDevice.getFunctionBlocks().getCount(), 1);
+
+    DevicePtr mockDevice = clientDevice.getDevices()[1];
+    FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
+
+    if (userPerm.hasPermission(UP::Write))
+    {
+        EXPECT_EQ(clientDevice.getAvailableFunctionBlockTypes().getCount(), instance.getRootDevice().getAvailableFunctionBlockTypes().getCount());
+        EXPECT_EQ(mockDevice.getAvailableFunctionBlockTypes().getCount(), device.getAvailableFunctionBlockTypes().getCount());
+    }
+    else
+    {
+        EXPECT_EQ(clientDevice.getAvailableFunctionBlockTypes().getCount(), 0);
+        EXPECT_EQ(mockDevice.getAvailableFunctionBlockTypes().getCount(), 0);
+    }
+
+    {
+        // getAvailableFunctionBlockTypes() has not been implemented for a function block (client and server sides),
+        // so it will return 0 regardless of permissions.
+        EXPECT_EQ(mockFb.getAvailableFunctionBlockTypes().getCount(), 0);
+
+        // getAvailableDeviceTypes() has not been implemented for a device (client and server sides),
+        // so it will return 0 regardless of permissions.
+        EXPECT_EQ(clientDevice.getAvailableDeviceTypes().getCount(), 0);
+        EXPECT_EQ(mockDevice.getAvailableDeviceTypes().getCount(), 0);
+
+        // getAvailableDevices() has not been implemented for a device (client and server sides),
+        // so it will return 0 regardless of permissions.
+        EXPECT_EQ(clientDevice.getAvailableDevices().getCount(), 0);
+        EXPECT_EQ(mockDevice.getAvailableDevices().getCount(), 0);
+    }
+}
+
 TEST_P(TmsUserAccessPTest, AddRemoveFb)
 {
     using UP = UserPermission::PermissionType;

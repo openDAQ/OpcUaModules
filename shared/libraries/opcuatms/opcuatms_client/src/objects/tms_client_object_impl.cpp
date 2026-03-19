@@ -105,4 +105,21 @@ CachedReferences TmsClientObjectImpl::getChildReferencesOfType(const opcua::OpcU
     return clientContext->getReferenceBrowser()->browseFiltered(nodeId, filter);
 }
 
+bool TmsClientObjectImpl::getWritePermmission()
+{
+    int64_t commonWriteMask = 1;
+    try
+    {
+        const auto reader = clientContext->getAttributeReader();
+        const int64_t userWriteMask = reader->getValue(nodeId, UA_ATTRIBUTEID_USERWRITEMASK).toInteger();
+        const int64_t writeMask = reader->getValue(nodeId, UA_ATTRIBUTEID_WRITEMASK).toInteger();
+        commonWriteMask = userWriteMask & writeMask;
+    }
+    catch (...)
+    {
+        DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTIMPLEMENTED, "Cannot read write mask attributes for OpcUA node");
+    }
+    return (commonWriteMask != 0);
+}
+
 END_NAMESPACE_OPENDAQ_OPCUA_TMS
