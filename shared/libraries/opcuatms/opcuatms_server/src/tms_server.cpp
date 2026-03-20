@@ -82,6 +82,10 @@ void TmsServer::start()
             }
         }
     );
+    server->setAllowBrowsingNodeCallback(TmsServerObject::allowBrowsingNodeCallback);
+    server->setGetUserAccessLevelCallback(TmsServerObject::getUserAccessLevelCallback);
+    server->setGetUserRightsMaskCallback(TmsServerObject::getUserRightsMaskCallback);
+    server->setGetUserExecutableCallback(TmsServerObject::getUserExecutableCallback);
     server->prepare();
 
     tmsContext = std::make_shared<TmsServerContext>(context, device);

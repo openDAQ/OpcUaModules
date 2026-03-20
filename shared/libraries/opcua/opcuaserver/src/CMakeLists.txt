@@ -47,6 +47,7 @@ target_link_libraries(${MODULE_NAME} PUBLIC  ${OPENDAQ_SDK_TARGET_NAMESPACE}::op
                                              ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_utils
                                      PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua_daq_types
                                              ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq
+                                             ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_server
 )
 
 set_target_properties(${MODULE_NAME} PROPERTIES PUBLIC_HEADER "${SOURCE_HEADERS}")

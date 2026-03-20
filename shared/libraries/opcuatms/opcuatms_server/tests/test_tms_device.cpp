@@ -1,13 +1,13 @@
-#include <opendaq/mock/mock_device_module.h>
-#include <opendaq/mock/mock_fb_module.h>
-#include <opendaq/mock/mock_physical_device.h>
-#include <open62541/daqdevice_nodeids.h>
-#include <opendaq/instance_factory.h>
 #include <coreobjects/property_object_factory.h>
 #include <coreobjects/unit_factory.h>
 #include <gtest/gtest.h>
 #include <opcuaclient/opcuaclient.h>
 #include <opcuatms_server/objects/tms_server_device.h>
+#include <open62541/daqdevice_nodeids.h>
+#include <opendaq/instance_factory.h>
+#include <opendaq/mock/mock_device_module.h>
+#include <opendaq/mock/mock_fb_module.h>
+#include <opendaq/mock/mock_physical_device.h>
 #include "test_helpers.h"
 #include "tms_server_test.h"
 
@@ -16,7 +16,19 @@ using namespace opcua::tms;
 using namespace opcua;
 using namespace std::chrono_literals;
 
-using TmsDeviceTest = TmsServerObjectTest;
+class TmsDeviceTest : public TmsServerObjectTest, public testing::Test
+{
+public:
+    void SetUp() override
+    {
+        TmsServerObjectTest::Init();
+    }
+
+    void TearDown() override
+    {
+        TmsServerObjectTest::Clear();
+    }
+};
 
 TEST_F(TmsDeviceTest, Create)
 {
@@ -109,3 +121,49 @@ TEST_F(TmsDeviceTest, Components)
     auto componentB = getChildNodeId(devices[1], "componentB");
     ASSERT_FALSE(componentB.isNull());
 }
+
+TEST_F(TmsDeviceTest, Permissions)
+{
+    auto instance = test_helpers::SetupInstance();
+    auto device = instance.getRootDevice();
+
+    device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+
+    auto tmsObj = TmsServerDevice(device, this->getServer(), ctx, tmsCtx);
+    const auto nodeId = tmsObj.registerOpcUaNode();
+    const auto addFbNodeID = tmsObj.getAddFunctionBlockNodeId();
+    const auto removeFbNodeID = tmsObj.getRemoveFunctionBlockNodeId();
+
+    ASSERT_TRUE(this->getClient()->nodeExists(nodeId));
+
+    auto lambdaMain = [&](const OpcUaSession& session, bool read, bool write, bool execute)
+    {
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, nodeId.getPtr(), &session), read);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, nodeId.getPtr(), &session), write);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, nodeId.getPtr(), &session), execute);
+    };
+
+    auto lambdaSpecial = [&](const OpcUaSession& session, bool read, bool write, bool execute)
+    {
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, addFbNodeID.getPtr(), &session), read);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, addFbNodeID.getPtr(), &session), write);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, addFbNodeID.getPtr(), &session), execute);
+
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, removeFbNodeID.getPtr(), &session), read);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, removeFbNodeID.getPtr(), &session), write);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, removeFbNodeID.getPtr(), &session), execute);
+    };
+
+    lambdaMain(test_helpers::createSessionCommon("common"), false, false, false);
+    lambdaMain(test_helpers::createSessionReader("reader"), true, false, false);
+    lambdaMain(test_helpers::createSessionWriter("writer"), true, true, false);
+    lambdaMain(test_helpers::createSessionExecutor("executor"), true, false, true);
+    lambdaMain(test_helpers::createSessionAdmin("admin"), true, true, true);
+
+    lambdaSpecial(test_helpers::createSessionCommon("common"), false, false, false);
+    lambdaSpecial(test_helpers::createSessionReader("reader"), true, false, false);
+    lambdaSpecial(test_helpers::createSessionWriter("writer"), true, true, false);
+    lambdaSpecial(test_helpers::createSessionExecutor("executor"), true, false, false);
+    lambdaSpecial(test_helpers::createSessionAdmin("admin"), true, true, true);
+}
+

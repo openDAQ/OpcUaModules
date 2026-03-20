@@ -39,9 +39,9 @@ public:
     ErrCode INTERFACE_FUNC setRequiresSignal(Bool value) override;
 
     StringPtr onGetRemoteId() const override; // fixme move to protected
-
+    SignalPtr getSignalNoLock() override;
 protected:
-    SignalPtr onGetSignal();
+    SignalPtr onGetSignal() const;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

@@ -1,3 +1,5 @@
+opendaq_get_cmake_mode(_OPC_UA_CMAKE_MODERN_MODE_SAVED)
+opendaq_set_cmake_mode(ANCIENT)
 set(CMAKE_FOLDER external)
 list(APPEND CMAKE_MESSAGE_CONTEXT external)
 
@@ -10,3 +12,5 @@ endif()
 
 add_subdirectory(open62541 EXCLUDE_FROM_ALL)
 add_subdirectory(opcua_daq_types EXCLUDE_FROM_ALL)
+
+opendaq_set_cmake_mode(${_OPC_UA_CMAKE_MODERN_MODE_SAVED})

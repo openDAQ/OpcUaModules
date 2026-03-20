@@ -22,8 +22,8 @@
 class TmsServerObjectTest : public TmsObjectTest
 {
 public:
-    void SetUp() override;
-    void TearDown() override;
+    void Init() override;
+    void Clear() override;
 
     daq::ContextPtr ctx;
     daq::opcua::tms::TmsServerContextPtr tmsCtx;

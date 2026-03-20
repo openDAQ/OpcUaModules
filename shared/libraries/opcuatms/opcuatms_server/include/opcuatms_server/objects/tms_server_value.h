@@ -35,6 +35,8 @@ public:
 
     static opcua::OpcUaNodeId SampleTypeToOpcUaDataType(SampleType sampleType);
 
+    bool checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext) override;
+
 protected:
     opcua::OpcUaNodeId getTmsTypeId() override;
     opcua::OpcUaNodeId getDataTypeId() override;

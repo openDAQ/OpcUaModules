@@ -139,6 +139,44 @@ void CachedReferenceBrowser::browseMultiple(const std::vector<OpcUaNodeId>& node
         browseMultiple(browseNext);
 }
 
+bool CachedReferenceBrowser::browseOne(const OpcUaNodeId& node)
+{
+    std::vector<OpcUaNodeId> browseNext;
+
+    try
+    {
+        browseOne(node, browseNext);
+    }
+    catch (const OpcUaException&)
+    {
+        return false;
+    }
+
+    if (!browseNext.empty())
+        browseMultiple(browseNext);
+    return true;
+}
+
+void CachedReferenceBrowser::browseOne(const OpcUaNodeId& node, std::vector<OpcUaNodeId>& browseNext)
+{
+    const std::vector<OpcUaNodeId> nodes{node};
+    OpcUaObject<UA_BrowseRequest> request;
+    request->requestedMaxReferencesPerNode = 0;
+    request->nodesToBrowse = (UA_BrowseDescription*) UA_Array_new(1, &UA_TYPES[UA_TYPES_BROWSEDESCRIPTION]);
+    request->nodesToBrowseSize = 1;
+    request->nodesToBrowse[0].nodeId = node.copyAndGetDetachedValue();
+    request->nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL;
+    request->nodesToBrowse[0].browseDirection = UA_BROWSEDIRECTION_FORWARD;
+
+    OpcUaObject<UA_BrowseResponse> response = UA_Client_Service_browse(client->getLockedUaClient(), *request);
+
+    CheckStatusCodeException(response->responseHeader.serviceResult, "Browse result error");
+    CheckStatusCodeException(response->results[0].statusCode, "Browse result error");
+
+    markAsCached(node);
+    processBrowseResults(nodes, 0, 1, response->results, response->resultsSize, browseNext);
+}
+
 size_t CachedReferenceBrowser::browseBatch(const std::vector<OpcUaNodeId>& nodes,
                                            size_t startIndex,
                                            size_t size,

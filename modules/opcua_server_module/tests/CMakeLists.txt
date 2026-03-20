@@ -2,6 +2,7 @@ set(MODULE_NAME opcua_server_module)
 set(TEST_APP test_${MODULE_NAME})
 
 set(TEST_SOURCES test_opcua_server_module.cpp
+                 test_opcua_component_filtering.cpp
                  test_app.cpp
 )
 

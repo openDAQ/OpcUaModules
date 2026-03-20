@@ -127,5 +127,15 @@ void TmsServerValue::bindCallbacks()
     Super::bindCallbacks();
 }
 
+bool TmsServerValue::checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext)
+{
+    bool allow = true;
+    if (auto propObj = signal.asPtrOrNull<daq::IPropertyObject>(); propObj.assigned() && sessionContext)
+    {
+        allow = propObj.getPermissionManager().isAuthorized(sessionContext->getUser(), permission);
+    }
+    return allow;
+}
+
 END_NAMESPACE_OPENDAQ_OPCUA_TMS
 

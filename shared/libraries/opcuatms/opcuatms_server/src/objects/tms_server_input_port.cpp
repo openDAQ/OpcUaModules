@@ -46,7 +46,7 @@ void TmsServerInputPort::createConnectMethodNode()
     params.inputArguments[0].dataType = UA_TYPES[UA_TYPES_STRING].typeId;
     params.inputArguments[0].valueRank = UA_VALUERANK_SCALAR;
 
-    auto methodNodeId = server->addMethodNode(params);
+    connectNodeId = server->addMethodNode(params);
 
     auto callback = [this](NodeEventManager::MethodArgs args) -> UA_StatusCode
     {
@@ -66,7 +66,7 @@ void TmsServerInputPort::createConnectMethodNode()
         return UA_STATUSCODE_GOOD;
     };
 
-    addEvent(methodNodeId)->onMethodCall(callback);
+    addEvent(connectNodeId)->onMethodCall(callback);
 }
 
 void TmsServerInputPort::createDisconnectMethodNode()
@@ -77,7 +77,7 @@ void TmsServerInputPort::createDisconnectMethodNode()
     params.setBrowseName("Disconnect");
     params.inputArgumentsSize = 0;
 
-    auto methodNodeId = server->addMethodNode(params);
+    disconnectNodeId = server->addMethodNode(params);
 
     auto callback = [this](NodeEventManager::MethodArgs args) -> UA_StatusCode
     {
@@ -97,7 +97,7 @@ void TmsServerInputPort::createDisconnectMethodNode()
         return UA_STATUSCODE_GOOD;
     };
 
-    addEvent(methodNodeId)->onMethodCall(callback);
+    addEvent(disconnectNodeId)->onMethodCall(callback);
 }
 
 void TmsServerInputPort::onConnectSignal(NodeEventManager::MethodArgs args)
@@ -149,6 +149,19 @@ void TmsServerInputPort::createNonhierarchicalReferences()
         if (!connectedSignalNodeId.isNull())
             addReference(connectedSignalNodeId, OpcUaNodeId(NAMESPACE_DAQBSP, UA_DAQBSPID_CONNECTEDTOSIGNAL));
     }
+}
+
+bool TmsServerInputPort::checkPermission(const Permission permission,
+                                         const UA_NodeId* const nodeId,
+                                         const OpcUaSession* const sessionContext)
+{
+    bool allow = true;
+    if (permission == Permission::Execute)
+    {
+        if (const auto browseName = TmsServerObject::readBrowseName(*nodeId); browseName == "Connect" || browseName == "Disconnect")
+            allow = TmsServerComponent<InputPortPtr>::checkPermission(Permission::Write, nodeId, sessionContext);
+    }
+    return (allow && TmsServerComponent<InputPortPtr>::checkPermission(permission, nodeId, sessionContext));
 }
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS
