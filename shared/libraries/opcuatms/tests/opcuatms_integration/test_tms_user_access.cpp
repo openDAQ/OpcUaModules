@@ -193,6 +193,7 @@ public:
     {
         TmsObjectIntegrationTest::Init();
         createDevice();
+        serverContext = std::make_shared<TmsServerContext>(ctx, instance.getRootDevice());
     }
 
     void TearDown() override
@@ -613,6 +614,91 @@ TEST_P(TmsUserAccessPTest, DeviceOperationMode)
         EXPECT_ANY_THROW(clientDevice.setOperationMode(opToSet));
         ASSERT_NO_THROW(op = clientDevice.getOperationMode());
         EXPECT_NE(op, opToSet);
+    }
+}
+
+TEST_P(TmsUserAccessPTest, Connect)
+{
+    using UP = UserPermission::PermissionType;
+    const UserPermission userPerm(GetParam());
+
+    fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+
+    auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsPropertyObject.registerOpcUaNode();
+    auto ctx = NullContext();
+    CreateClient(userPerm);
+    DevicePtr clientDevice;
+    ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
+
+    ASSERT_EQ(clientDevice.getDevices().getCount(), 2);
+    ASSERT_EQ(clientDevice.getFunctionBlocks().getCount(), 1);
+
+    DevicePtr mockDevice = clientDevice.getDevices()[1];
+    FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
+
+    daq::ListPtr<daq::IInputPort> ip;
+    daq::ListPtr<daq::ISignal> sig;
+    ASSERT_NO_THROW(ip = mockFb.getInputPorts());
+    ASSERT_NE(ip.getCount(), 0);
+    ASSERT_NO_THROW(sig = mockDevice.getSignals());
+    ASSERT_NE(sig.getCount(), 0);
+
+    if (userPerm.hasPermission(UP::Write | UP::Execute))
+    {
+        ASSERT_NO_THROW(ip[0].connect(sig[0]));
+    }
+    else
+    {
+        ASSERT_ANY_THROW(ip[0].connect(sig[0]));
+    }
+}
+
+TEST_P(TmsUserAccessPTest, Disconnect)
+{
+    using UP = UserPermission::PermissionType;
+    const UserPermission userPerm(GetParam());
+
+    fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+
+    {
+        daq::ListPtr<daq::IInputPort> ip;
+        daq::ListPtr<daq::ISignal> sig;
+        ASSERT_NO_THROW(ip = fb.getInputPorts());
+        ASSERT_NE(ip.getCount(), 0);
+        ASSERT_NO_THROW(sig = device.getSignals());
+        ASSERT_NE(sig.getCount(), 0);
+        ASSERT_NO_THROW(ip[0].connect(sig[0]));
+    }
+
+    auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsPropertyObject.registerOpcUaNode();
+    auto ctx = NullContext();
+    CreateClient(userPerm);
+    DevicePtr clientDevice;
+    ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
+
+    ASSERT_EQ(clientDevice.getDevices().getCount(), 2);
+    ASSERT_EQ(clientDevice.getFunctionBlocks().getCount(), 1);
+
+    DevicePtr mockDevice = clientDevice.getDevices()[1];
+    FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
+
+    daq::ListPtr<daq::IInputPort> ip;
+    ASSERT_NO_THROW(ip = mockFb.getInputPorts());
+    ASSERT_NE(ip.getCount(), 0);
+
+    if (userPerm.hasPermission(UP::Write | UP::Execute))
+    {
+        ASSERT_NO_THROW(ip[0].disconnect());
+    }
+    else
+    {
+        ASSERT_ANY_THROW(ip[0].disconnect());
     }
 }
 
