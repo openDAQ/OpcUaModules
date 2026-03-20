@@ -91,22 +91,11 @@ void TmsClientPropertyImpl::configurePropertyFields()
 
     this->readOnly = ((commonAccessLevel & UA_ACCESSLEVELMASK_WRITE) == 0);
 
-
-    bool commonExecutable = true;
     bool isExecutableProperty = (valueType == CoreType::ctFunc || valueType == CoreType::ctProc);
+    bool commonExecutable = true;
     if (isExecutableProperty)
     {
-        try
-        {
-            bool userExecutable = reader->getValue(nodeId, UA_ATTRIBUTEID_USEREXECUTABLE).toBool();
-            bool executable = reader->getValue(nodeId, UA_ATTRIBUTEID_EXECUTABLE).toBool();
-            commonExecutable = userExecutable & executable;
-        }
-        catch (const std::exception& e)
-        {
-            LOG_W("Failed to get an executable attribute of a method property: {}", e.what());
-        }
-
+        commonExecutable = getExecutePermission(nodeId);
         this->visible = commonExecutable;
     }
 

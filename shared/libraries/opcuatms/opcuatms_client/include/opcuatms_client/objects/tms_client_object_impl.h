@@ -43,7 +43,8 @@ protected:
     uint32_t tryReadChildNumberInList(const std::string& nodeName);
     uint32_t tryReadChildNumberInList(const opcua::OpcUaNodeId& nodeId);
     CachedReferences getChildReferencesOfType(const opcua::OpcUaNodeId& nodeId, const opcua::OpcUaNodeId& typeId);
-    bool getWritePermmission();
+    bool getAttributeWritePermission(const opcua::OpcUaNodeId& nodeId);
+    bool getExecutePermission(const opcua::OpcUaNodeId& nodeId);
 
     opcua::MonitoredItem* monitoredItemsCreateEvent(
         const opcua::EventMonitoredItemCreateRequest& item,

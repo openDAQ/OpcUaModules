@@ -745,7 +745,7 @@ DictPtr<IString, IFunctionBlockType> TmsClientDeviceImpl::onGetAvailableFunction
     auto browser = clientContext->getReferenceBrowser();
     auto types = Dict<IString, IFunctionBlockType>();
 
-    if (getWritePermmission() == false)
+    if (getAttributeWritePermission(this->nodeId) == false)
         return types;
 
     const auto fbFolderNodeId = browser->getChildNodeId(nodeId, "FB");

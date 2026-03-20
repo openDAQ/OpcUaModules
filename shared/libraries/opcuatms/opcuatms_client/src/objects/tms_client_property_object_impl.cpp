@@ -466,10 +466,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::addMethodProperties(const OpcUaNodeI
                         const auto numberInListId = browser->getChildNodeId(childNodeId, "NumberInList");
                         numberInList = VariantConverter<IInteger>::ToDaqObject(reader->getValue(numberInListId, UA_ATTRIBUTEID_VALUE));
                     }
-
-                    bool userExecutable = reader->getValue(childNodeId, UA_ATTRIBUTEID_USEREXECUTABLE).toBool();
-                    bool executable = reader->getValue(childNodeId, UA_ATTRIBUTEID_EXECUTABLE).toBool();
-                    commonExecutable = userExecutable & executable;
+                    commonExecutable = getExecutePermission(childNodeId);
                 }
                 catch(const std::exception& e)
                 {
@@ -587,7 +584,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::browseRawProperties()
 template <typename Impl>
 void TmsClientPropertyObjectBaseImpl<Impl>::setLocksForAttributes()
 {
-    if (!getWritePermmission())
+    if (!getAttributeWritePermission(nodeId))
     {
         if (this->objPtr.template supportsInterface<IComponentPrivate>())
         {
