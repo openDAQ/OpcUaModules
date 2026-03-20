@@ -37,8 +37,7 @@ ErrCode TmsClientInputPortImpl::setRequiresSignal(Bool value)
 
 ErrCode TmsClientInputPortImpl::acceptsSignal(ISignal* signal, Bool* accepts)
 {
-    return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_OPCUA_CLIENT_CALL_NOT_AVAILABLE);
-
+    return getAttributeWritePermission(nodeId);
     //const ErrCode errCode = daqTry([&]()
     //{
     //    OpcUaNodeId methodId(NAMESPACE_DAQBSP, UA_DAQBSPID_INPUTPORTTYPE_ACCEPTSSIGNAL);

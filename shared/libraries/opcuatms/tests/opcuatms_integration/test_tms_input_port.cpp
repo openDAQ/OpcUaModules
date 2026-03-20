@@ -122,7 +122,9 @@ TEST_F(TmsInputPortTest, MethodAcceptsSignal)
     InputPortPtr clientInputPort = TmsClientInputPort(NullContext(), nullptr, "inputPort", clientContext, nodeId);
 
     //TODO: More testing when the server in fact really checks the signal if the signal is ok
-    EXPECT_THROW(clientInputPort.acceptsSignal(signal), daq::opcua::OpcUaClientCallNotAvailableException);
+    bool ok = false;
+    ASSERT_NO_THROW(ok = clientInputPort.acceptsSignal(signal));
+    EXPECT_TRUE(ok);
 }
 
 TEST_F(TmsInputPortTest, ConnectedToReference)
