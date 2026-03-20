@@ -156,40 +156,40 @@ ErrCode TmsClientDeviceImpl::getAvailableOperationModes(IList** availableOpModes
 
 ErrCode TmsClientDeviceImpl::setOperationMode(OperationModeType modeType)
 {
-    if (!this->hasReference("OperationMode"))
-        return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOT_SUPPORTED, "OperationModes are not supported by the server");
-
-    const auto nodeId = getNodeId("OperationMode");
-    const auto modeTypeStr = OperationModeTypeToString(modeType);
-
-    const auto variant = VariantConverter<IString>::ToVariant(String(modeTypeStr), nullptr, daqContext);
-    try
-    {
-        client->writeValue(nodeId, variant);
-    }
-    catch (OpcUaException& e)
-    {
-        if (e.getStatusCode() == UA_STATUSCODE_BADUSERACCESSDENIED)
-            return OPENDAQ_ERR_ACCESSDENIED;
-        else
-            throw;
-    }
-
-    return OPENDAQ_SUCCESS;
+    return setOperationModeImpl(modeType, false);
 }
 
 ErrCode TmsClientDeviceImpl::setOperationModeRecursive(OperationModeType modeType)
 {
-    if (!this->hasReference("OperationMode"))
-        return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOT_SUPPORTED, "OperationModes are not supported by the server");
-    
-    const auto nodeId = getNodeId("OperationMode");
-    const auto modeTypeStr = "Recursive" + OperationModeTypeToString(modeType);
+    return setOperationModeImpl(modeType, true);
+}
 
-    const auto variant = VariantConverter<IString>::ToVariant(String(modeTypeStr), nullptr, daqContext);
-    client->writeValue(nodeId, variant);   
+ErrCode TmsClientDeviceImpl::setOperationModeImpl(OperationModeType modeType, bool recursiveCall)
+{
+    ErrCode errCode = OPENDAQ_SUCCESS;
+    if (this->hasReference("OperationMode"))
+    {
+        const auto nodeId = getNodeId("OperationMode");
+        const auto modeTypeStr = ((recursiveCall) ? "Recursive" : "") + OperationModeTypeToString(modeType);
 
-    return OPENDAQ_SUCCESS;
+        const auto variant = VariantConverter<IString>::ToVariant(String(modeTypeStr), nullptr, daqContext);
+        try
+        {
+            client->writeValue(nodeId, variant);
+        }
+        catch (OpcUaException& e)
+        {
+            if (e.getStatusCode() == UA_STATUSCODE_BADUSERACCESSDENIED)
+                errCode = DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ACCESSDENIED, "Access denied when setting OperationModes");
+            else
+                errCode = DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_OPCUA_GENERAL, "Failed to set OperationMode on server");
+        }
+    }
+    else
+    {
+        errCode = DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOT_SUPPORTED, "OperationModes are not supported by the server");
+    }
+    return errCode;
 }
 
 ErrCode TmsClientDeviceImpl::getOperationMode(OperationModeType* modeType)
