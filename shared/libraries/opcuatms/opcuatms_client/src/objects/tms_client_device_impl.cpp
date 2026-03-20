@@ -158,13 +158,23 @@ ErrCode TmsClientDeviceImpl::setOperationMode(OperationModeType modeType)
 {
     if (!this->hasReference("OperationMode"))
         return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOT_SUPPORTED, "OperationModes are not supported by the server");
-    
+
     const auto nodeId = getNodeId("OperationMode");
     const auto modeTypeStr = OperationModeTypeToString(modeType);
 
     const auto variant = VariantConverter<IString>::ToVariant(String(modeTypeStr), nullptr, daqContext);
-    client->writeValue(nodeId, variant);   
-           
+    try
+    {
+        client->writeValue(nodeId, variant);
+    }
+    catch (OpcUaException& e)
+    {
+        if (e.getStatusCode() == UA_STATUSCODE_BADUSERACCESSDENIED)
+            return OPENDAQ_ERR_ACCESSDENIED;
+        else
+            throw;
+    }
+
     return OPENDAQ_SUCCESS;
 }
 

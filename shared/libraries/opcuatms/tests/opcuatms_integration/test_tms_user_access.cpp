@@ -566,6 +566,56 @@ TEST_P(TmsUserAccessPTest, AddRemoveFb)
     }
 }
 
+TEST_P(TmsUserAccessPTest, DeviceOperationMode)
+{
+    using UP = UserPermission::PermissionType;
+    using OMT = daq::OperationModeType;
+    const UserPermission userPerm(GetParam());
+
+    fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    device.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+    instance.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
+
+    auto tmsPropertyObject = TmsServerDevice(instance, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsPropertyObject.registerOpcUaNode();
+    auto ctx = NullContext();
+    CreateClient(userPerm);
+    DevicePtr clientDevice;
+    ASSERT_NO_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
+
+    ASSERT_EQ(clientDevice.getDevices().getCount(), 2);
+    ASSERT_EQ(clientDevice.getFunctionBlocks().getCount(), 1);
+
+    DevicePtr mockDevice = clientDevice.getDevices()[1];
+    FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
+
+    if (userPerm.hasPermission(UP::Write))
+    {
+        OMT op;
+        ASSERT_NO_THROW(clientDevice.setOperationMode(OMT::Idle));
+        ASSERT_NO_THROW(op = clientDevice.getOperationMode());
+        EXPECT_EQ(op, OMT::Idle);
+
+        ASSERT_NO_THROW(clientDevice.setOperationMode(OMT::SafeOperation));
+        ASSERT_NO_THROW(op = clientDevice.getOperationMode());
+        EXPECT_EQ(op, OMT::SafeOperation);
+
+        ASSERT_NO_THROW(clientDevice.setOperationMode(OMT::Operation));
+        ASSERT_NO_THROW(op = clientDevice.getOperationMode());
+        EXPECT_EQ(op, OMT::Operation);
+    }
+    else
+    {
+        OMT op = OMT::Idle;
+        ASSERT_NO_THROW(op = clientDevice.getOperationMode());
+
+        OMT opToSet = (op == OMT::Idle) ? OMT::SafeOperation : OMT::Idle;
+        EXPECT_ANY_THROW(clientDevice.setOperationMode(opToSet));
+        ASSERT_NO_THROW(op = clientDevice.getOperationMode());
+        EXPECT_NE(op, opToSet);
+    }
+}
+
 INSTANTIATE_TEST_SUITE_P(UserAccess,
                          TmsUserAccessPTest,
                          ::testing::Values(UserPermission::PermissionType::Read,
