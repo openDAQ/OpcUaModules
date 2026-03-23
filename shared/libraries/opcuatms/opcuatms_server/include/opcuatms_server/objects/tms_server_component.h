@@ -156,6 +156,10 @@ void TmsServerComponent<Ptr>::bindCallbacks()
         });
     }
 
+    this->addReadCallback("LocalActive", [this] { return VariantConverter<IBoolean>::ToVariant( this->object.getLocalActive()); });
+
+    this->addReadCallback("ParentActive", [this] { return VariantConverter<IBoolean>::ToVariant( this->object.getParentActive()); });
+
 	this->addReadCallback("Visible", [this] { return VariantConverter<IBoolean>::ToVariant( this->object.getVisible()); });
 
     if (!this->object.template supportsInterface<IFreezable>() || !this->object.isFrozen())
@@ -230,17 +234,47 @@ void TmsServerComponent<Ptr>::registerToTmsServerContext()
 template <typename Ptr>
 void TmsServerComponent<Ptr>::addChildNodes()
 {
-	OpcUaNodeId newNodeId(0);
-	AddVariableNodeParams params(newNodeId, this->nodeId);
-	params.setBrowseName("Visible");
-	params.setDataType(OpcUaNodeId(UA_TYPES[UA_TYPES_BOOLEAN].typeId));
-    params.typeDefinition = OpcUaNodeId(UA_NODEID_NUMERIC(0, UA_NS0ID_PROPERTYTYPE));
+    {
+        OpcUaNodeId newNodeId(0);
+        AddVariableNodeParams params(newNodeId, this->nodeId);
+        params.setBrowseName("Visible");
+        params.setDataType(OpcUaNodeId(UA_TYPES[UA_TYPES_BOOLEAN].typeId));
+        params.typeDefinition = OpcUaNodeId(UA_NODEID_NUMERIC(0, UA_NS0ID_PROPERTYTYPE));
 
-    OpcUaObject<UA_VariableAttributes> attr = UA_VariableAttributes_default;
-    attr->accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    params.attr = attr;
-    
-    this->server->addVariableNode(params);
+        OpcUaObject<UA_VariableAttributes> attr = UA_VariableAttributes_default;
+        attr->accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+        params.attr = attr;
+        
+        this->server->addVariableNode(params);
+    }
+
+    {
+        OpcUaNodeId newNodeId(0);
+        AddVariableNodeParams params(newNodeId, this->nodeId);
+        params.setBrowseName("LocalActive");
+        params.setDataType(OpcUaNodeId(UA_TYPES[UA_TYPES_BOOLEAN].typeId));
+        params.typeDefinition = OpcUaNodeId(UA_NODEID_NUMERIC(0, UA_NS0ID_PROPERTYTYPE));
+
+        OpcUaObject<UA_VariableAttributes> attr = UA_VariableAttributes_default;
+        attr->accessLevel = UA_ACCESSLEVELMASK_READ;
+        params.attr = attr;
+        
+        this->server->addVariableNode(params);
+    }
+
+    {
+        OpcUaNodeId newNodeId(0);
+        AddVariableNodeParams params(newNodeId, this->nodeId);
+        params.setBrowseName("ParentActive");
+        params.setDataType(OpcUaNodeId(UA_TYPES[UA_TYPES_BOOLEAN].typeId));
+        params.typeDefinition = OpcUaNodeId(UA_NODEID_NUMERIC(0, UA_NS0ID_PROPERTYTYPE));
+
+        OpcUaObject<UA_VariableAttributes> attr = UA_VariableAttributes_default;
+        attr->accessLevel = UA_ACCESSLEVELMASK_READ;
+        params.attr = attr;
+        
+        this->server->addVariableNode(params);
+    }
 
     tmsPropertyObject->registerToExistingOpcUaNode(this->nodeId);
     if (tmsComponentConfig)
