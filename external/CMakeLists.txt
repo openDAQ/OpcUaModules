@@ -8,6 +8,11 @@ opendaq_ignore_compiler_warnings()
 if (${REPO_OPTION_PREFIX}_ENABLE_TESTS AND (NOT TARGET gtest OR NOT TARGET gmock))
     set(BUILD_GMOCK ON)
     opendaq_module_setup_gtest("1.12.1")
+
+    # GMock somehow doesn't have proper include paths set for GTest dependency
+    get_target_property(GTEST_INCLUDE_DIRS gtest INTERFACE_INCLUDE_DIRECTORIES)
+    target_include_directories(gmock PRIVATE ${GTEST_INCLUDE_DIRS})
+    target_include_directories(gmock_main PRIVATE ${GTEST_INCLUDE_DIRS})
 endif()
 
 add_subdirectory(open62541 EXCLUDE_FROM_ALL)
