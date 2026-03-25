@@ -29,7 +29,7 @@ public:
     static PropertyObjectPtr createDefaultConfig();
 protected:
     static std::atomic<int> localIndex;
-    static std::string getLocalId();
+    static std::string generateLocalId();
 
     void removed() override;
     DeviceInfoPtr onGetInfo() override;

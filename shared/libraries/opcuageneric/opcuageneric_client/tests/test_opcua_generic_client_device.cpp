@@ -6,12 +6,25 @@
 #include <opendaq/instance_factory.h>
 #include <testutils/testutils.h>
 #include "opcuageneric_client/constants.h"
+#include "opcuaservertesthelper.h"
 #include "test_daq_test_helper.h"
 
 namespace daq::opcua::generic
 {
 class GenericOpcuaClientDeviceTest : public testing::Test, public DaqTestHelper
 {
+protected:
+    void SetUp() override
+    {
+        testing::Test::SetUp();
+        testHelper.startServer();
+    }
+    void TearDown() override
+    {
+        testHelper.stop();
+        testing::Test::TearDown();
+    }
+    OpcUaServerTestHelper testHelper;
 };
 } // namespace daq::modules::mqtt_streaming_module
 
@@ -55,7 +68,7 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
 {
     const auto instance = Instance();
     daq::GenericDevicePtr<daq::IDevice> device;
-    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1"));
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842"));
     ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
               Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
     ASSERT_EQ(device.getInfo().getName(), GENERIC_OPCUA_CLIENT_DEVICE_NAME);
@@ -75,4 +88,32 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
     ASSERT_TRUE(deviceFromList.assigned());
     ASSERT_EQ(deviceFromList.getInfo().getName(), device.getInfo().getName());
     ASSERT_TRUE(deviceFromList == device);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, RemovingDevice)
+{
+    const auto instance = Instance();
+    daq::GenericDevicePtr<daq::IDevice> device;
+    {
+        ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842"));
+        ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+                  Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+        ASSERT_NO_THROW(instance.removeDevice(device));
+    }
+
+    {
+        ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842"));
+        ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+                  Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+        ASSERT_NO_THROW(instance.removeDevice(device));
+    }
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, CheckDeviceFunctionalBlocks)
+{
+    StartUp();
+    daq::DictPtr<daq::IString, daq::IFunctionBlockType> fbTypes;
+    ASSERT_NO_THROW(fbTypes = device.getAvailableFunctionBlockTypes());
+    ASSERT_GE(fbTypes.getCount(), 1);
+    ASSERT_TRUE(fbTypes.hasKey(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME));
 }

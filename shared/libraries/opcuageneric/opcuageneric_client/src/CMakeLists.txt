@@ -5,14 +5,20 @@ set(HEADERS_DIR ../include/${TARGET_FOLDER_NAME})
 set(SRC_PublicHeaders   constants.h
                         opcuageneric.h
                         generic_client_device_impl.h
+                        opcua_monitored_item_fb_impl.h
 )
-set(SRC_Cpp generic_client_device_impl.cpp)
+set(SRC_Cpp generic_client_device_impl.cpp
+            opcua_monitored_item_fb_impl.cpp
+)
 
+source_group("common" FILES ${HEADERS_DIR}/constants.h
+                            ${HEADERS_DIR}/opcuageneric.h
+)
 source_group("device" FILES ${HEADERS_DIR}/generic_client_device_impl.h
                             generic_client_device_impl.cpp
 )
-source_group("common" FILES ${HEADERS_DIR}/constants.h
-                            ${HEADERS_DIR}/opcuageneric.h
+source_group("function_block" FILES ${HEADERS_DIR}/opcua_monitored_item_fb_impl.h
+                            opcua_monitored_item_fb_impl.cpp
 )
 
 opendaq_prepend_include(${LIB_NAME} SRC_PublicHeaders)

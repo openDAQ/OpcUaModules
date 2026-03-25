@@ -2,8 +2,11 @@ set(MODULE_NAME opcuageneric_client)
 set(TEST_APP test_${MODULE_NAME})
 
 set(TEST_SOURCES test_app.cpp
+                 opcuaservertesthelper.h
+                 opcuaservertesthelper.cpp
                  test_daq_test_helper.h
                  test_opcua_generic_client_device.cpp
+                 test_opcua_monitored_item_fb.cpp
 )
 
 set(SUPPORTS_ASAN 0)

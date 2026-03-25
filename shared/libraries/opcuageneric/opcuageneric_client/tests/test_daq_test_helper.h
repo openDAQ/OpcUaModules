@@ -11,7 +11,7 @@ public:
     daq::InstancePtr daqInstance;
     daq::DevicePtr device;
 
-    void StartUp(std::string connectionStr = "daq.opcua.generic://127.0.0.1")
+    void StartUp(std::string connectionStr = "daq.opcua.generic://127.0.0.1:4842", daq::PropertyObjectPtr config = nullptr)
     {
         DaqInstanceInit();
         DaqOpcuaGenericClientDeviceInit(connectionStr);
@@ -24,10 +24,10 @@ public:
         return daqInstance;
     }
 
-    daq::GenericDevicePtr<daq::IDevice> DaqOpcuaGenericClientDeviceInit(std::string connectionStr)
+    daq::GenericDevicePtr<daq::IDevice> DaqOpcuaGenericClientDeviceInit(std::string connectionStr, daq::PropertyObjectPtr config = nullptr)
     {
         if (!device.assigned())
-            device = daqInstance.addDevice(connectionStr);
+            device = daqInstance.addDevice(connectionStr, config);
 
         return device;
     }

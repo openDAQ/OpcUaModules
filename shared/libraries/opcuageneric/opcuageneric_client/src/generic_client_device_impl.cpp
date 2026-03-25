@@ -3,6 +3,7 @@
 #include <opendaq/device_info_factory.h>
 #include <opendaq/function_block_type_factory.h>
 #include <opcuageneric_client/constants.h>
+#include <opcuageneric_client/opcua_monitored_item_fb_impl.h>
 #include "opcuashared/opcuaendpoint.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
@@ -10,7 +11,7 @@ BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 std::atomic<int> OpcuaGenericClientDeviceImpl::localIndex = 0;
 
 OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx, const ComponentPtr& parent, const PropertyObjectPtr& config)
-    : Device(ctx, parent, getLocalId()),
+    : Device(ctx, parent, generateLocalId()),
     connectionStatus(Enumeration("ConnectionStatusType", "Connected", this->context.getTypeManager()))
 {
     this->name = GENERIC_OPCUA_CLIENT_DEVICE_NAME;
@@ -77,10 +78,10 @@ void OpcuaGenericClientDeviceImpl::initNestedFbTypes()
 {
     nestedFbTypes = Dict<IString, IFunctionBlockType>();
     // Add a function block type for monitoring an OPCUA node
-    // {
-    //     const auto fbType = MonitoredItemFbImpl::CreateType();
-    //     nestedFbTypes.set(fbType.getId(), fbType);
-    // }
+    {
+        const auto fbType = OpcUaMonitoredItemFbImpl::CreateType();
+        nestedFbTypes.set(fbType.getId(), fbType);
+    }
 }
 
 
@@ -95,16 +96,16 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
     {
         if (nestedFbTypes.hasKey(typeId))
         {
-            // auto fbTypePtr = nestedFbTypes.getOrDefault(typeId);
-            // if (fbTypePtr.getName() == GENERIC_OPCUA_MONITORED_ITEM_FB_NAME)
-            // {
-            //     nestedFunctionBlock = createWithImplementation<IFunctionBlock, MonitoredItemFbImpl>(...);
-            // }
-            // else
-            // {
-            //     setComponentStatusWithMessage(ComponentStatus::Error, "Function block type is not available: " + typeId.toStdString());
-            //     return nestedFunctionBlock;
-            // }
+            auto fbTypePtr = nestedFbTypes.getOrDefault(typeId);
+            if (fbTypePtr.getName() == GENERIC_OPCUA_MONITORED_ITEM_FB_NAME)
+            {
+                nestedFunctionBlock = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(context, functionBlocks, fbTypePtr, client, config);
+            }
+            else
+            {
+                setComponentStatusWithMessage(ComponentStatus::Error, "Function block type is not available: " + typeId.toStdString());
+                return nestedFunctionBlock;
+            }
         }
         if (nestedFunctionBlock.assigned())
         {
@@ -119,7 +120,7 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
     return nestedFunctionBlock;
 }
 
-std::string OpcuaGenericClientDeviceImpl::getLocalId()
+std::string OpcuaGenericClientDeviceImpl::generateLocalId()
 {
     return std::string(GENERIC_OPCUA_CLIENT_DEVICE_NAME + std::to_string(localIndex++));
 }
