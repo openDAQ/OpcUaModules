@@ -1,6 +1,7 @@
-#include <opcuatms_client/objects/tms_client_object_impl.h>
 #include <opcuaclient/browse_request.h>
 #include <opcuaclient/browser/opcuabrowser.h>
+#include <opcuatms_client/objects/tms_client_object_impl.h>
+#include "opendaq/custom_log.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
@@ -120,7 +121,11 @@ bool TmsClientObjectImpl::getAttributeWritePermission(const opcua::OpcUaNodeId& 
     }
     catch (...)
     {
-        DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTIMPLEMENTED, "Cannot read write mask attributes for OpcUA node");
+        if (this->daqContext.getLogger().assigned())
+        {
+            auto loggerComponent = this->daqContext.getLogger().getOrAddComponent("OpcUaClientObject");
+            LOG_W("Cannot read write mask attributes for OpcUA node");
+        }
     }
     return commonWritePerm;
 }
@@ -139,7 +144,11 @@ bool TmsClientObjectImpl::getExecutePermission(const opcua::OpcUaNodeId& nodeId)
     }
     catch (...)
     {
-        DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTIMPLEMENTED, "Cannot read executable mask attributes for OpcUA node");
+        if (this->daqContext.getLogger().assigned())
+        {
+            auto loggerComponent = this->daqContext.getLogger().getOrAddComponent("OpcUaClientObject");
+            LOG_W("Cannot read executable mask attributes for OpcUA node");
+        }
     }
     return commonExecutable;
 }
