@@ -292,9 +292,9 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::beginUpdate()
     if (callResult->statusCode != UA_STATUSCODE_GOOD)
     {
         if (callResult->statusCode == UA_STATUSCODE_BADUSERACCESSDENIED)
-            return OPENDAQ_ERR_ACCESSDENIED;
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ACCESSDENIED);
         else
-            return OPENDAQ_ERR_CALLFAILED;
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_CALLFAILED);
     }
     return OPENDAQ_SUCCESS;
 }
@@ -314,9 +314,9 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::endUpdate()
     if (callResult->statusCode != UA_STATUSCODE_GOOD)
     {
         if (callResult->statusCode == UA_STATUSCODE_BADUSERACCESSDENIED)
-            return OPENDAQ_ERR_ACCESSDENIED;
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ACCESSDENIED);
         else
-            return OPENDAQ_ERR_CALLFAILED;
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_CALLFAILED);
     }
     return OPENDAQ_SUCCESS;
 }

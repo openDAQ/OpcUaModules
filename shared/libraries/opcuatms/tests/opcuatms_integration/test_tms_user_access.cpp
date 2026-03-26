@@ -25,6 +25,7 @@
 #include <opendaq/server_type_factory.h>
 #include "test_user_helper.h"
 #include "tms_object_integration_test.h"
+#include <testutils/testutils.h>
 
 using namespace daq;
 using namespace opcua::tms;
@@ -473,14 +474,14 @@ TEST_P(TmsUserAccessPTest, BeginEndUpdate)
 
     ErrCode code = OPENDAQ_SUCCESS;
     ASSERT_NO_THROW(code = mockDevice->beginUpdate());
-    EXPECT_EQ(code, expectedCode);
+    ASSERT_ERROR_CODE_EQ(code, expectedCode);
     ASSERT_NO_THROW(code = mockDevice->endUpdate());
-    EXPECT_EQ(code, expectedCode);
+    ASSERT_ERROR_CODE_EQ(code, expectedCode);
 
     ASSERT_NO_THROW(code = mockFb->beginUpdate());
-    EXPECT_EQ(code, expectedCode);
+    ASSERT_ERROR_CODE_EQ(code, expectedCode);
     ASSERT_NO_THROW(code = mockFb->endUpdate());
-    EXPECT_EQ(code, expectedCode);
+    ASSERT_ERROR_CODE_EQ(code, expectedCode);
 }
 
 TEST_P(TmsUserAccessPTest, AvailableComponents)
@@ -592,15 +593,17 @@ TEST_P(TmsUserAccessPTest, DeviceOperationMode)
 
     if (userPerm.hasPermission(UP::Write))
     {
-        OMT op;
+        OMT op = OMT::SafeOperation;
         ASSERT_NO_THROW(clientDevice.setOperationMode(OMT::Idle));
         ASSERT_NO_THROW(op = clientDevice.getOperationMode());
         EXPECT_EQ(op, OMT::Idle);
 
+        op = OMT::Idle;
         ASSERT_NO_THROW(clientDevice.setOperationMode(OMT::SafeOperation));
         ASSERT_NO_THROW(op = clientDevice.getOperationMode());
         EXPECT_EQ(op, OMT::SafeOperation);
 
+        op = OMT::Idle;
         ASSERT_NO_THROW(clientDevice.setOperationMode(OMT::Operation));
         ASSERT_NO_THROW(op = clientDevice.getOperationMode());
         EXPECT_EQ(op, OMT::Operation);
