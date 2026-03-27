@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "opcuacommon.h"
 #include <opcuashared/opcuanodeid.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
@@ -26,15 +25,17 @@ using OpcUaVariantPtr = std::shared_ptr<OpcUaVariant>;
 
 namespace VariantUtils
 {
-    inline bool IsScalar(const UA_Variant& value)
-    {
-        return UA_Variant_isScalar(&value);
-    }
+    bool IsScalar(const UA_Variant& value);
+    bool IsVector(const UA_Variant& value);
+    bool IsInteger(const UA_Variant& value);
+    bool isReal(const UA_Variant& value);
+    bool isNull(const UA_Variant& value);
 
-    inline bool IsVector(const UA_Variant& value)
-    {
-        return !IsScalar(value);
-    }
+    std::string ToString(const UA_Variant& value);
+    int64_t ToNumber(const UA_Variant& value);
+    OpcUaNodeId ToNodeId(const UA_Variant& value);
+    void ToInt32Variant(OpcUaVariant& variant);
+    void ToInt64Variant(OpcUaVariant& variant);
 
     template <typename T>
     inline bool IsType(const UA_Variant& value)
@@ -69,47 +70,6 @@ namespace VariantUtils
             throw std::runtime_error("Variant does not contain a scalar of specified return type");
         return *static_cast<T*>(value.data);
     }
-
-    inline std::string ToString(const UA_Variant& value)
-    {
-        return utils::ToStdString(ReadScalar<UA_String>(value));
-    }
-
-    inline int64_t ToNumber(const UA_Variant& value)
-    {
-        switch (value.type->typeKind)
-        {
-            case UA_TYPES_SBYTE:
-                return ReadScalar<UA_SByte>(value);
-            case UA_TYPES_BYTE:
-                return ReadScalar<UA_Byte>(value);
-            case UA_TYPES_INT16:
-                return ReadScalar<UA_Int16>(value);
-            case UA_TYPES_UINT16:
-                return ReadScalar<UA_UInt16>(value);
-            case UA_TYPES_INT32:
-            case UA_TYPES_ENUMERATION:
-                return ReadScalar<UA_Int32>(value);
-            case UA_TYPES_UINT32:
-                return ReadScalar<UA_UInt32>(value);
-            case UA_TYPES_INT64:
-                return ReadScalar<UA_Int64>(value);
-            case UA_TYPES_UINT64:
-                return ReadScalar<UA_UInt64>(value);
-
-            default:
-                throw std::runtime_error("Type not supported!");
-        }
-    }
-
-    inline OpcUaNodeId ToNodeId(const UA_Variant& value)
-    {
-        UA_NodeId nodeId = ReadScalar<UA_NodeId>(value);
-        return OpcUaNodeId(nodeId);
-    }
-
-    void ToInt32Variant(OpcUaVariant& variant);
-    void ToInt64Variant(OpcUaVariant& variant);
 }
 
 class OpcUaVariant : public OpcUaObject<UA_Variant>
@@ -170,6 +130,8 @@ public:
     bool isNull() const;
     bool isReal() const;
     bool isNumber() const;
+    bool isScalar() const;
+    bool isVector() const;
 
     std::string toString() const;
     int64_t toInteger() const;
@@ -177,17 +139,6 @@ public:
     float toFloat() const;
     bool toBool() const;
     OpcUaNodeId toNodeId() const;
-
-    inline bool isScalar() const
-    {
-        return VariantUtils::IsScalar(value);
-    }
-    inline bool isVector() const
-    {
-        return VariantUtils::IsVector(value);
-    }
-
-    static bool IsInteger(const UA_Variant& value);
 };
 
 class OpcUaVariableConversionError : public OpcUaException

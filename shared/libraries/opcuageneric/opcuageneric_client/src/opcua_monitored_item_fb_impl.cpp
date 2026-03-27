@@ -281,7 +281,7 @@ void OpcUaMonitoredItemFbImpl::validateNode()
 
 bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaDataValue& value)
 {
-    OpcUaNodeId valueDataType(value.getValue().getValue().type->typeId);
+    OpcUaNodeId valueDataType(value.getValue().value.type->typeId);
     if (valueDataType != nodeDataType)
     {
         nodeDataType = std::move(valueDataType);
@@ -289,7 +289,7 @@ bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaDataValue& value
         outputSignal.setDescriptor(outputSignalDescriptor);
     }
 
-    valueValidationError = !(value.getValue().isNumber() || value.getValue().isString());
+    valueValidationError = !(value.isNumber() || value.isString());
     return !valueValidationError;
 }
 
@@ -382,50 +382,50 @@ OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(
     DataPackets dps;
     dps.domainDataPacket = buildDomainDataPacket(value);
 
-    if (value.getValue().isString())
+    if (value.isString())
     {
-        const auto convertedValue = value.getValue().toString();
+        const auto convertedValue = value.toString();
         dps.dataPacket = daq::BinaryDataPacket(dps.domainDataPacket, outputSignalDescriptor, convertedValue.size());
         std::memcpy(dps.dataPacket.getRawData(), convertedValue.data(), convertedValue.size());
     }
-    else if (value.getValue().isInteger() || value.getValue().isReal())
+    else if (value.isInteger() || value.isReal())
     {
         if (dps.domainDataPacket.assigned())
             dps.dataPacket = daq::DataPacketWithDomain(dps.domainDataPacket, outputSignalDescriptor, 1);
         else
             dps.dataPacket = daq::DataPacket(outputSignalDescriptor, 1);
 
-        switch (value.getValue().getValue().type->typeKind)
+        switch (value.getValue().value.type->typeKind)
         {
             case UA_TYPES_SBYTE:
-                *(static_cast<int8_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_SByte>(value.getValue().getValue());
+                *(static_cast<int8_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_SByte>();
                 break;
             case UA_TYPES_BYTE:
-                *(static_cast<uint8_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_Byte>(value.getValue().getValue());
+                *(static_cast<uint8_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Byte>();
                 break;
             case UA_TYPES_INT16:
-                *(static_cast<int16_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_Int16>(value.getValue().getValue());
+                *(static_cast<int16_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Int16>();
                 break;
             case UA_TYPES_UINT16:
-                *(static_cast<uint16_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_UInt16>(value.getValue().getValue());
+                *(static_cast<uint16_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_UInt16>();
                 break;
             case UA_TYPES_INT32:
-                *(static_cast<int32_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_Int32>(value.getValue().getValue());
+                *(static_cast<int32_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Int32>();
                 break;
             case UA_TYPES_UINT32:
-                *(static_cast<uint32_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_UInt32>(value.getValue().getValue());
+                *(static_cast<uint32_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_UInt32>();
                 break;
             case UA_TYPES_INT64:
-                *(static_cast<int64_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_Int64>(value.getValue().getValue());
+                *(static_cast<int64_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Int64>();
                 break;
             case UA_TYPES_UINT64:
-                *(static_cast<uint64_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_UInt64>(value.getValue().getValue());
+                *(static_cast<uint64_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_UInt64>();
                 break;
             case UA_TYPES_FLOAT:
-                *(static_cast<float*>(dps.dataPacket.getRawData())) = value.getValue().toFloat();
+                *(static_cast<float*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Float>();
                 break;
             case UA_TYPES_DOUBLE:
-                *(static_cast<double*>(dps.dataPacket.getRawData())) = value.getValue().toDouble();
+                *(static_cast<double*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Double>();
                 break;
             default:
                 break;

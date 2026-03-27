@@ -1,6 +1,8 @@
 #include "opcuashared/opcuavariant.h"
+#include "opcuashared/opcuacommon.h"
 #include <cctype>
 #include <open62541/types_generated_handling.h>
+
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
@@ -93,7 +95,7 @@ void OpcUaVariant::setValue(const UA_Variant& value, bool shallowCopy)
 
 bool OpcUaVariant::isInteger() const
 {
-    return OpcUaVariant::IsInteger(this->value);
+    return VariantUtils::IsInteger(this->value);
 }
 
 bool OpcUaVariant::isString() const
@@ -119,22 +121,12 @@ bool OpcUaVariant::isNodeId() const
 
 bool OpcUaVariant::isNull() const
 {
-    return UA_Variant_isEmpty(&value);
+    return VariantUtils::isNull(value);
 }
 
 bool OpcUaVariant::isReal() const
 {
-    if (value.type == NULL)
-        return false;
-
-    switch (value.type->typeKind)
-    {
-        case UA_TYPES_FLOAT:
-        case UA_TYPES_DOUBLE:
-            return true;
-        default:
-            return false;
-    }
+    return VariantUtils::isReal(value);
 }
 
 bool OpcUaVariant::isNumber() const
@@ -142,44 +134,19 @@ bool OpcUaVariant::isNumber() const
     return isInteger() || isReal();
 }
 
-bool OpcUaVariant::IsInteger(const UA_Variant& value)
+bool OpcUaVariant::isScalar() const
 {
-    if (value.type && value.type->typeId.namespaceIndex == 0)  // built-in types
-    {
-        switch (value.type->typeKind)
-        {
-            case UA_TYPES_SBYTE:
-            case UA_TYPES_BYTE:
-            case UA_TYPES_INT16:
-            case UA_TYPES_UINT16:
-            case UA_TYPES_INT32:
-            case UA_TYPES_UINT32:
-            case UA_TYPES_INT64:
-            case UA_TYPES_UINT64:
-                return true;
-            default:
-                return false;
-        }
-    }
-    return false;
+    return VariantUtils::IsScalar(value);
+}
+
+bool OpcUaVariant::isVector() const
+{
+    return VariantUtils::IsVector(value);
 }
 
 std::string OpcUaVariant::toString() const
 {
-    if (isType<UA_LocalizedText>())
-    {
-        UA_LocalizedText localizedText = readScalar<UA_LocalizedText>();
-        return ToStdString(localizedText.text);
-    }
-
-    if (isType<UA_QualifiedName>())
-    {
-        UA_QualifiedName localizedText = readScalar<UA_QualifiedName>();
-        return ToStdString(localizedText.name);
-    }
-
-    UA_String str = readScalar<UA_String>();
-    return ToStdString(str);
+    return VariantUtils::ToString(value);
 }
 
 int64_t OpcUaVariant::toInteger() const
@@ -208,6 +175,110 @@ OpcUaNodeId OpcUaVariant::toNodeId() const
 }
 
 // VariantUtils
+
+bool VariantUtils::IsScalar(const UA_Variant& value)
+{
+    return UA_Variant_isScalar(&value);
+}
+
+bool VariantUtils::IsVector(const UA_Variant& value)
+{
+    return !IsScalar(value);
+}
+
+bool VariantUtils::IsInteger(const UA_Variant& value)
+{
+    if (value.type && value.type->typeId.namespaceIndex == 0)  // built-in types
+    {
+        switch (value.type->typeKind)
+        {
+            case UA_TYPES_SBYTE:
+            case UA_TYPES_BYTE:
+            case UA_TYPES_INT16:
+            case UA_TYPES_UINT16:
+            case UA_TYPES_INT32:
+            case UA_TYPES_UINT32:
+            case UA_TYPES_INT64:
+            case UA_TYPES_UINT64:
+                return true;
+            default:
+                return false;
+        }
+    }
+    return false;
+}
+
+bool VariantUtils::isReal(const UA_Variant& value)
+{
+    if (value.type == NULL)
+        return false;
+
+    switch (value.type->typeKind)
+    {
+        case UA_TYPES_FLOAT:
+        case UA_TYPES_DOUBLE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool VariantUtils::isNull(const UA_Variant& value)
+{
+    return UA_Variant_isEmpty(&value);
+}
+
+std::string VariantUtils::ToString(const UA_Variant& value)
+{
+    std::string result;
+    if (IsType<UA_LocalizedText>(value))
+    {
+        result = utils::ToStdString(ReadScalar<UA_LocalizedText>(value).text);
+    }
+    else if (IsType<UA_QualifiedName>(value))
+    {
+        result = utils::ToStdString(ReadScalar<UA_QualifiedName>(value).name);
+    }
+    else
+    {
+        result = utils::ToStdString(ReadScalar<UA_String>(value));
+    }
+    return result;
+}
+
+int64_t VariantUtils::ToNumber(const UA_Variant& value)
+{
+    switch (value.type->typeKind)
+    {
+        case UA_TYPES_SBYTE:
+            return ReadScalar<UA_SByte>(value);
+        case UA_TYPES_BYTE:
+            return ReadScalar<UA_Byte>(value);
+        case UA_TYPES_INT16:
+            return ReadScalar<UA_Int16>(value);
+        case UA_TYPES_UINT16:
+            return ReadScalar<UA_UInt16>(value);
+        case UA_TYPES_INT32:
+        case UA_TYPES_ENUMERATION:
+            return ReadScalar<UA_Int32>(value);
+        case UA_TYPES_UINT32:
+            return ReadScalar<UA_UInt32>(value);
+        case UA_TYPES_INT64:
+            return ReadScalar<UA_Int64>(value);
+        case UA_TYPES_UINT64:
+            return ReadScalar<UA_UInt64>(value);
+
+        default:
+            throw std::runtime_error("Type not supported!");
+    }
+}
+
+OpcUaNodeId VariantUtils::ToNodeId(const UA_Variant& value)
+{
+    UA_NodeId nodeId = ReadScalar<UA_NodeId>(value);
+    return OpcUaNodeId(nodeId);
+}
+
 
 void VariantUtils::ToInt32Variant(OpcUaVariant& variant)
 {

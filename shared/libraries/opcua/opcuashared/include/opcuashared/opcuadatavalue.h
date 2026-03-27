@@ -33,7 +33,6 @@ public:
     const UA_DataValue& getDataValue() const;
 
     bool hasValue() const;
-    OpcUaVariant getValue() const;
 
     UA_StatusCode getStatusCode() const;
 
@@ -45,8 +44,32 @@ public:
 
     bool isStatusOK() const;
 
-protected:
+    bool isInteger() const;
+    bool isString() const;
+    bool isDouble() const;
+    bool isNull() const;
+    bool isReal() const;
+    bool isNumber() const;
 
+    std::string toString() const;
+    int64_t toInteger() const;
+
+    template <typename T>
+    inline T readScalar() const
+    {
+        return VariantUtils::ReadScalar<T>(this->value.value);
+    }
+
+    template <typename T, typename UATYPE = TypeToUaDataType<T>>
+    void setScalar(const T& value)
+    {
+        static_assert(UATYPE::DataType != nullptr, "Implement specialization of TypeToUaDataType");
+
+        this->clear();
+
+        const auto status = UA_Variant_setScalarCopy(&(this->value.value), &value, UATYPE::DataType);
+        CheckStatusCodeException(status);
+    }
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA

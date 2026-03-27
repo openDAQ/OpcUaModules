@@ -2,11 +2,6 @@
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
-OpcUaVariant OpcUaDataValue::getValue() const
-{
-    return OpcUaVariant(OpcUaObject<UA_DataValue>::getValue().value, true);
-}
-
 UA_StatusCode OpcUaDataValue::getStatusCode() const
 {
     if (!getDataValue().hasStatus)
@@ -58,4 +53,44 @@ uint64_t OpcUaDataValue::toUnixTimeUs(UA_DateTime date)
     return static_cast<uint64_t>((date - UA_DATETIME_UNIX_EPOCH) / UA_DATETIME_USEC);
 }
 
+bool OpcUaDataValue::isInteger() const
+{
+    return VariantUtils::IsInteger(this->value.value);
+}
+
+bool OpcUaDataValue::isString() const
+{
+    return VariantUtils::HasScalarType<UA_String>(value.value) ||
+           VariantUtils::HasScalarType<UA_LocalizedText>(value.value);
+}
+
+bool OpcUaDataValue::isDouble() const
+{
+    return VariantUtils::HasScalarType<UA_Double>(value.value);
+}
+
+bool OpcUaDataValue::isNull() const
+{
+    return VariantUtils::isNull(value.value);
+}
+
+bool OpcUaDataValue::isReal() const
+{
+    return VariantUtils::isReal(value.value);
+}
+
+bool OpcUaDataValue::isNumber() const
+{
+    return isInteger() || isReal();
+}
+
+std::string OpcUaDataValue::toString() const
+{
+    return VariantUtils::ToString(value.value);
+}
+
+int64_t OpcUaDataValue::toInteger() const
+{
+    return VariantUtils::ToNumber(value.value);
+}
 END_NAMESPACE_OPENDAQ_OPCUA
