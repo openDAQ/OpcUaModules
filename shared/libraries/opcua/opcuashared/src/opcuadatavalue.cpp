@@ -2,44 +2,60 @@
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
-OpcUaDataValue::OpcUaDataValue(const UA_DataValue* dataValue)
-    : dataValue(dataValue)
-    , variant(dataValue->value, true)
+OpcUaVariant OpcUaDataValue::getValue() const
 {
+    return OpcUaVariant(OpcUaObject<UA_DataValue>::getValue().value, true);
 }
 
-OpcUaDataValue::~OpcUaDataValue()
+UA_StatusCode OpcUaDataValue::getStatusCode() const
 {
-}
-
-bool OpcUaDataValue::hasValue() const
-{
-    return dataValue->hasValue;
-}
-
-const OpcUaVariant& OpcUaDataValue::getValue() const
-{
-    return variant;
-}
-
-const UA_StatusCode& OpcUaDataValue::getStatusCode() const
-{
-    return dataValue->status;
+    if (!getDataValue().hasStatus)
+        return UA_STATUSCODE_BADUNEXPECTEDERROR;
+    return OpcUaObject<UA_DataValue>::getValue().status;
 }
 
 bool OpcUaDataValue::isStatusOK() const
 {
+    if (!getDataValue().hasStatus)
+        return false;
     return (getStatusCode() == UA_STATUSCODE_GOOD);
 }
 
-const UA_DataValue* OpcUaDataValue::getDataValue() const
+bool OpcUaDataValue::hasServerTimestamp() const
 {
-    return dataValue;
+    return getDataValue().hasServerTimestamp;
 }
 
-OpcUaDataValue::operator const UA_DataValue*() const
+bool OpcUaDataValue::hasSourceTimestamp() const
 {
-    return getDataValue();
+    return getDataValue().hasSourceTimestamp;
+}
+
+UA_DateTime OpcUaDataValue::getServerTimestampUnixEpoch() const
+{
+    return (hasServerTimestamp()) ? toUnixTimeUs(getDataValue().serverTimestamp) : 0;
+}
+
+UA_DateTime OpcUaDataValue::getSourceTimestampUnixEpoch() const
+{
+    return (hasSourceTimestamp()) ? toUnixTimeUs(getDataValue().sourceTimestamp) : 0;
+}
+
+const UA_DataValue& OpcUaDataValue::getDataValue() const
+{
+    return OpcUaObject<UA_DataValue>::getValue();
+}
+
+bool OpcUaDataValue::hasValue() const
+{
+    return getDataValue().hasValue;
+}
+
+uint64_t OpcUaDataValue::toUnixTimeUs(UA_DateTime date)
+{
+    if (date == 0)
+        return 0;
+    return static_cast<uint64_t>((date - UA_DATETIME_UNIX_EPOCH) / UA_DATETIME_USEC);
 }
 
 END_NAMESPACE_OPENDAQ_OPCUA

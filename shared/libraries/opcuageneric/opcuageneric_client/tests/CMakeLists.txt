@@ -5,6 +5,7 @@ set(TEST_SOURCES test_app.cpp
                  opcuaservertesthelper.h
                  opcuaservertesthelper.cpp
                  test_daq_test_helper.h
+                 timer.h
                  test_opcua_generic_client_device.cpp
                  test_opcua_monitored_item_fb.cpp
 )

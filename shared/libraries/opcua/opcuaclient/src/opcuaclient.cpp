@@ -394,34 +394,34 @@ OpcUaVariant OpcUaClient::readValue(const OpcUaNodeId& node)
     return val;
 }
 
+OpcUaDataValue OpcUaClient::readDataValue(const OpcUaNodeId& node)
+{
+    OpcUaObject<UA_ReadRequest> request;
+
+    request->nodesToRead = UA_ReadValueId_new();
+    request->nodesToReadSize = 1;
+
+    request->nodesToRead[0].nodeId = node.copyAndGetDetachedValue();
+    request->nodesToRead[0].attributeId = UA_ATTRIBUTEID_VALUE;
+
+    request->timestampsToReturn = UA_TIMESTAMPSTORETURN_BOTH;
+
+    OpcUaObject<UA_ReadResponse> response = UA_Client_Service_read(getLockedUaClient(), *request);
+    const auto status = response->responseHeader.serviceResult;
+    if (status != UA_STATUSCODE_GOOD)
+        throw OpcUaException(status, "Attribute read request failed");
+    if (response->resultsSize != 1)
+        throw OpcUaException(UA_STATUSCODE_BADINVALIDSTATE, "Read request returned incorrect number of results");
+
+
+    OpcUaDataValue result(*response->results);
+
+    return result;
+}
+
 OpcUaObject<UA_ReadResponse> OpcUaClient::readNodeAttributes(const OpcUaObject<UA_ReadRequest>& request)
 {
     return UA_Client_Service_read(getLockedUaClient(), *request);
-}
-
-void OpcUaClient::readNodeAttributes(const std::vector<OpcUaReadValueIdWithCallback>& requests)
-{
-    size_t requestCnt = std::size(requests);
-    if (requestCnt == 0)
-        return;
-
-    OpcUaObject<UA_ReadRequest> readRequest;
-    CheckStatusCodeException(
-        UA_Array_resize((void**) &readRequest->nodesToRead, &readRequest->nodesToReadSize, requestCnt, &UA_TYPES[UA_TYPES_READVALUEID]));
-
-    for (size_t i = 0; i < requestCnt; i++)
-        UA_ReadValueId_copy(requests[i].get(), &readRequest->nodesToRead[i]);
-
-    readRequest->timestampsToReturn = UA_TimestampsToReturn::UA_TIMESTAMPSTORETURN_NEITHER;
-
-    OpcUaObject<UA_ReadResponse> response = readNodeAttributes(readRequest);
-    CheckStatusCodeException(response->responseHeader.serviceResult);
-
-    for (size_t i = 0; i < requestCnt; i++)
-    {
-        UA_DataValue* v = &response->results[i];
-        requests[i].processFunction(v);
-    }
 }
 
 OpcUaObject<UA_CallResponse> OpcUaClient::callMethods(const OpcUaObject<UA_CallRequest>& request)

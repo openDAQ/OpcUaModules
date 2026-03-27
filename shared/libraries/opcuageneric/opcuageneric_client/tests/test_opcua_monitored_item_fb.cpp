@@ -6,7 +6,14 @@
 #include <testutils/testutils.h>
 #include "opcuageneric_client/constants.h"
 #include "opcuaservertesthelper.h"
+#include "opendaq/reader_factory.h"
+#include "opendaq/sample_type_traits.h"
 #include "test_daq_test_helper.h"
+#include "timer.h"
+
+#define ASSERT_DOUBLE_NE(val1, val2) ASSERT_GT(std::abs((val1) - (val2)), 1e-9)
+
+#define ASSERT_FLOAT_NE(val1, val2) ASSERT_GT(std::fabs((val1) - (val2)), 1e-6f)
 
 namespace daq::opcua::generic
 {
@@ -188,7 +195,6 @@ TEST_F(GenericOpcuaMonitoredItemTest, CreationWithPartialConfig)
         device.removeFunctionBlock(fb);
     }
     fb = nullptr;
-
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, CreationWithCustomConfig)
@@ -223,33 +229,254 @@ TEST_P(GenericOpcuaMonitoredItemPTest, ReadValue)
             else
                 variant.setScalar(templateParam);
 
+            daq::BaseObjectPtr prevVal;
+            daq::BaseObjectPtr val;
+            {
+                // before writing
+                {
+                    // waiting to be sure that FB has read initial value
+                    helper::utils::Timer timer(interval * 3);
+                    do
+                    {
+                        prevVal = fb.getSignals()[0].getLastValue();
+                    } while (!prevVal.assigned() && !timer.expired());
+                    ASSERT_TRUE(prevVal.assigned());
+                }
+                {
+                    // check that the initial and target values are different
+                    if constexpr (std::is_same_v<T, double>)
+                        ASSERT_DOUBLE_NE(prevVal.asPtr<INumber>().getValue<T>(T(0)), templateParam);
+                    else if constexpr (std::is_same_v<T, float>)
+                        ASSERT_FLOAT_NE(prevVal.asPtr<INumber>().getValue<T>(T(0)), templateParam);
+                    else if constexpr (std::is_same_v<T, std::string>)
+                        ASSERT_NE(prevVal, templateParam);
+                    else
+                        ASSERT_NE(prevVal.asPtr<INumber>().getValue<T>(T(0)), templateParam);
+                }
+            }
+
+            // write new value to the node
             ASSERT_NO_THROW(testHelper.writeNode(param.first, variant));
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(interval * 3));
-            ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
-            auto val = fb.getSignals()[0].getLastValue();
-
-            if constexpr (std::is_same_v<T, double>)
-                ASSERT_DOUBLE_EQ(val, templateParam);
-            else if constexpr (std::is_same_v<T, float>)
-                ASSERT_FLOAT_EQ(val, templateParam);
-            else
-                ASSERT_EQ(val, templateParam);
+            {
+                // after writing
+                ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+                {
+                    // the FB needs time to read the new value from the node
+                    // read the last value until it becomes different from the initial or until the timer expires
+                    helper::utils::Timer timer(interval * 3);
+                    do
+                    {
+                        val = fb.getSignals()[0].getLastValue();
+                    } while (val == prevVal && !timer.expired());
+                }
+                {
+                    // check that the target and read values are the same
+                    if constexpr (std::is_same_v<T, double>)
+                        ASSERT_DOUBLE_EQ(val.asPtr<INumber>().getValue<T>(T(0)), templateParam);
+                    else if constexpr (std::is_same_v<T, float>)
+                        ASSERT_FLOAT_EQ(val.asPtr<INumber>().getValue<T>(T(0)), templateParam);
+                    else if constexpr (std::is_same_v<T, std::string>)
+                        ASSERT_EQ(val, templateParam);
+                    else
+                        ASSERT_EQ(val.asPtr<INumber>().getValue<T>(T(0)), templateParam);
+                }
+            }
         },
         param.second);
 }
 
-INSTANTIATE_TEST_SUITE_P(ReadNumericValue,
-                         GenericOpcuaMonitoredItemPTest,
-                         ::testing::Values(std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui8"), H{uint8_t{88}}},
-                                           std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i8"), H{int8_t{-88}}},
-                                           std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui16"), H{uint16_t{456}}},
-                                           std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i16"), H{int16_t{-456}}},
-                                           std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui32"), H{uint32_t{85535}}},
-                                           std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i32"), H{int32_t{-85535}}},
-                                           std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui64"), H{uint64_t{8055535}}},
-                                           std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i64"), H{int64_t{-8055535}}},
-                                           std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".d"), H{double{123.456789}}},
-                                           std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".f"), H{float{float(1) / 3}}},
-                                           std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".s"), H{std::string{"String with a value"}}}),
-                         ParamNameGenerator);
+TEST_P(GenericOpcuaMonitoredItemPTest, ReadValueWithServerTimestampUsingLastValue)
+{
+    constexpr uint32_t interval = 50;
+    StartUp();
+    auto param = GetParam();
+
+    CreateMonitoredItemFB(param.first.getIdentifier(), param.first.getNamespaceIndex(), interval);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    fb.getSignals()[0].getDomainSignal();
+
+    auto domainSig = fb.getSignals()[0].getDomainSignal();
+    ASSERT_TRUE(domainSig.assigned());
+
+    auto getTime = []()
+    {
+        using namespace std::chrono;
+        return duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
+    };
+
+    std::visit(
+        [&](auto& templateParam)
+        {
+            using T = std::decay_t<decltype(templateParam)>;
+
+            OpcUaVariant variant;
+            if constexpr (std::is_same_v<T, std::string>)
+                variant = OpcUaVariant(templateParam.c_str());
+            else
+                variant.setScalar(templateParam);
+
+            daq::BaseObjectPtr prevVal;
+            daq::BaseObjectPtr val;
+            {
+                // before writing
+                // waiting to be sure that FB has read initial value
+                helper::utils::Timer timer(interval * 3);
+                do
+                {
+                    prevVal = fb.getSignals()[0].getLastValue();
+                } while (!prevVal.assigned() && !timer.expired());
+                ASSERT_TRUE(prevVal.assigned());
+            }
+
+            const auto timeBefore = getTime();
+
+            ASSERT_NO_THROW(testHelper.writeNode(param.first, variant));
+
+            {
+                // after writing
+                ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+                {
+                    // the FB needs time to read the new value from the node
+                    // read the last value until it becomes different from the initial or until the timer expires
+                    helper::utils::Timer timer(interval * 3);
+                    do
+                    {
+                        val = fb.getSignals()[0].getLastValue();
+                    } while (val == prevVal && !timer.expired());
+                }
+
+                auto domainVal = domainSig.getLastValue();
+                const auto timeAfter = getTime();
+                {
+                    // check that the target and read values are the same
+                    if constexpr (std::is_same_v<T, double>)
+                        ASSERT_DOUBLE_EQ(val.asPtr<INumber>().getValue<T>(T(0)), templateParam);
+                    else if constexpr (std::is_same_v<T, float>)
+                        ASSERT_FLOAT_EQ(val.asPtr<INumber>().getValue<T>(T(0)), templateParam);
+                    else if constexpr (std::is_same_v<T, std::string>)
+                        ASSERT_EQ(val, templateParam);
+                    else
+                        ASSERT_EQ(val.asPtr<INumber>().getValue<T>(T(0)), templateParam);
+                }
+
+                // check the ts is between start and stop points
+                ASSERT_TRUE(domainVal.assigned());
+                EXPECT_GE(timeAfter, domainVal.asPtr<INumber>().getValue<uint64_t>(uint64_t(0)));
+                EXPECT_LE(timeBefore, domainVal.asPtr<INumber>().getValue<uint64_t>(uint64_t(0)));
+            }
+        },
+        param.second);
+}
+
+TEST_P(GenericOpcuaMonitoredItemPTest, ReadValueWithServerTimestampUsingTailReader)
+{
+    constexpr uint32_t interval = 50;
+    StartUp();
+    auto param = GetParam();
+
+    CreateMonitoredItemFB(param.first.getIdentifier(), param.first.getNamespaceIndex(), interval);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    fb.getSignals()[0].getDomainSignal();
+
+    auto domainSig = fb.getSignals()[0].getDomainSignal();
+    ASSERT_TRUE(domainSig.assigned());
+
+    auto getTime = []()
+    {
+        using namespace std::chrono;
+        return duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
+    };
+
+    std::visit(
+        [&](auto& templateParam)
+        {
+            using T = std::decay_t<decltype(templateParam)>;
+
+            // TailReader does not support String type, just skip test
+            if constexpr (!std::is_same_v<T, std::string>)
+            {
+                OpcUaVariant variant;
+                variant.setScalar(templateParam);
+
+                daq::BaseObjectPtr prevVal;
+                {
+                    // before writing
+                    // waiting to be sure that FB has read initial value
+                    helper::utils::Timer timer(interval * 3);
+                    do
+                    {
+                        prevVal = fb.getSignals()[0].getLastValue();
+                    } while (!prevVal.assigned() && !timer.expired());
+                    ASSERT_TRUE(prevVal.assigned());
+                }
+
+                const auto timeBefore = getTime();
+
+                auto reader = TailReaderBuilder()
+                                  .setSignal(fb.getSignals()[0])
+                                  .setHistorySize(1)
+                                  .setValueReadType(SampleTypeFromType<T>::SampleType)
+                                  .setDomainReadType(SampleType::UInt64)
+                                  .setSkipEvents(true)
+                                  .build();
+
+                ASSERT_NO_THROW(testHelper.writeNode(param.first, variant));
+
+                {
+                    // after writing
+                    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+                    {
+                        // the FB needs time to read the new value from the node
+                        // read the last value until it becomes different from the initial or until the timer expires
+                        helper::utils::Timer timer(interval * 3);
+                        while (!timer.expired())
+                        {
+                        }
+                    }
+
+                    SizeT count{1};
+                    T values{};
+                    uint64_t domain{};
+                    reader.readWithDomain(&values, &domain, &count);
+                    const auto timeAfter = getTime();
+
+                    {
+                        // check that the target and read values are the same
+                        if constexpr (std::is_same_v<T, double>)
+                            ASSERT_DOUBLE_EQ(values, templateParam);
+                        else if constexpr (std::is_same_v<T, float>)
+                            ASSERT_FLOAT_EQ(values, templateParam);
+                        else
+                            ASSERT_EQ(values, templateParam);
+                    }
+
+                    // check the ts is between start and stop points
+                    EXPECT_GE(timeAfter, domain);
+                    EXPECT_LE(timeBefore, domain);
+                }
+            }
+        },
+        param.second);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ReadNumericValue,
+    GenericOpcuaMonitoredItemPTest,
+    ::testing::Values(std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui8"), H{uint8_t{std::numeric_limits<uint8_t>::max()}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i8"), H{int8_t{std::numeric_limits<uint8_t>::min()}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui16"), H{uint16_t{std::numeric_limits<uint16_t>::max()}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i16"), H{int16_t{std::numeric_limits<uint16_t>::min()}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui32"), H{uint32_t{std::numeric_limits<uint32_t>::max()}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i32"), H{int32_t{std::numeric_limits<int32_t>::min()}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui64"), H{uint64_t{std::numeric_limits<uint64_t>::max()}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i64"), H{int64_t{std::numeric_limits<int64_t>::min()}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".d"), H{double{123.456789}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".f"), H{float{float(-85) / 3}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".s"), H{std::string{"String with a value"}}}),
+    ParamNameGenerator);

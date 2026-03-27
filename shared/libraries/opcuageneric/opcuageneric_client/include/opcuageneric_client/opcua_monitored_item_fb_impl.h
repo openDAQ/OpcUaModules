@@ -37,6 +37,14 @@ public:
         _count
     };
 
+    enum class DomainSource : int
+    {
+        None = 0,
+        ServerTimestamp,
+        SourceTimestamp,
+        _count
+    };
+
     explicit OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
                                       const ComponentPtr& parent,
                                       const FunctionBlockTypePtr& type,
@@ -46,11 +54,18 @@ public:
     /*DAQ_OPCUA_MODULE_API*/ static FunctionBlockTypePtr CreateType();
 protected:
 
+    struct DataPackets
+    {
+        daq::DataPacketPtr dataPacket;
+        daq::DataPacketPtr domainDataPacket;
+    };
+
     struct FbConfig {
         NodeIDType nodeIdType;
         std::string nodeId;
         uint32_t namespaceIndex;
         uint32_t samplingInterval;
+        DomainSource domainSource;
     };
 
     static std::atomic<int> localIndex;
@@ -88,12 +103,13 @@ protected:
     void updateStatuses();
 
     void validateNode();
-    bool validateValueDataType(const OpcUaVariant& value);
+    bool validateValueDataType(const OpcUaDataValue& value);
 
     void runReaderThread();
     void readerLoop();
 
-    daq::DataPacketPtr buildDataPacket(const OpcUaVariant& value);
+    DataPackets buildDataPacket(const OpcUaDataValue& value);
+    daq::DataPacketPtr buildDomainDataPacket(const OpcUaDataValue& value);
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_GENERIC

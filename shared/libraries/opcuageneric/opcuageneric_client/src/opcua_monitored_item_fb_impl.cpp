@@ -203,6 +203,8 @@ void OpcUaMonitoredItemFbImpl::readProperties()
         config.samplingInterval = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
     }
 
+    config.domainSource = DomainSource::ServerTimestamp;
+
     updateStatuses();
 }
 
@@ -277,9 +279,9 @@ void OpcUaMonitoredItemFbImpl::validateNode()
     }
 }
 
-bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaVariant& value)
+bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaDataValue& value)
 {
-    OpcUaNodeId valueDataType(value.getValue().type->typeId);
+    OpcUaNodeId valueDataType(value.getValue().getValue().type->typeId);
     if (valueDataType != nodeDataType)
     {
         nodeDataType = std::move(valueDataType);
@@ -287,7 +289,7 @@ bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaVariant& value)
         outputSignal.setDescriptor(outputSignalDescriptor);
     }
 
-    valueValidationError = !(value.isNumber() || value.isString());
+    valueValidationError = !(value.getValue().isNumber() || value.getValue().isString());
     return !valueValidationError;
 }
 
@@ -297,12 +299,27 @@ void OpcUaMonitoredItemFbImpl::createSignal()
     LOG_I("Creating a signal...");
 
     outputSignal = createAndAddSignal(OPCUA_VALUE_SIGNAL_LOCAL_ID, outputSignalDescriptor);
-    outputSignal.setDomainSignal(createDomainSignal());
+    if (config.domainSource != DomainSource::None)
+        outputSignal.setDomainSignal(createDomainSignal());
 }
 
 void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
 {
     auto lock = this->getRecursiveConfigLock();
+
+    if (config.domainSource != DomainSource::None)
+    {
+        if (outputDomainSignal.assigned())
+        {
+            outputSignal.setDomainSignal(nullptr);
+            removeSignal(outputDomainSignal);
+            outputDomainSignal = nullptr;
+        }
+    }
+    else if (!outputDomainSignal.assigned())
+    {
+        outputSignal.setDomainSignal(createDomainSignal());
+    }
 }
 
 SignalConfigPtr OpcUaMonitoredItemFbImpl::createDomainSignal()
@@ -334,17 +351,20 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
             if (configValid && nodeValidationError == false)
             {
 
-                OpcUaVariant opcUaVariant;
-                try {
-                    opcUaVariant = client->readValue(nodeId);
+                OpcUaDataValue opcUaVariant;
+                try
+                {
+                    opcUaVariant = client->readDataValue(nodeId);
                     if (!validateValueDataType(opcUaVariant))
                     {
-                       // updateStatuses?
+                        // updateStatuses?
                     }
                     else
                     {
-                        const auto dp = buildDataPacket(opcUaVariant);
-                        outputSignal.sendPacket(dp);
+                        const auto dps = buildDataPacket(opcUaVariant);
+                        outputSignal.sendPacket(dps.dataPacket);
+                        if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
+                            outputDomainSignal.sendPacket(dps.domainDataPacket);
                     }
                 }
                 catch (OpcUaException&)
@@ -357,34 +377,87 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
     }
 }
 
-DataPacketPtr OpcUaMonitoredItemFbImpl::buildDataPacket(const OpcUaVariant& value)
+OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(const OpcUaDataValue& value)
 {
-    DataPacketPtr dp;
-    if (value.isString())
+    DataPackets dps;
+    dps.domainDataPacket = buildDomainDataPacket(value);
+
+    if (value.getValue().isString())
     {
-        const auto convertedValue = value.toString();
-        dp = daq::BinaryDataPacket(nullptr, outputSignalDescriptor, convertedValue.size());
-        std::memcpy(dp.getRawData(), convertedValue.data(), convertedValue.size());
+        const auto convertedValue = value.getValue().toString();
+        dps.dataPacket = daq::BinaryDataPacket(dps.domainDataPacket, outputSignalDescriptor, convertedValue.size());
+        std::memcpy(dps.dataPacket.getRawData(), convertedValue.data(), convertedValue.size());
     }
-    else if (value.isInteger())
+    else if (value.getValue().isInteger() || value.getValue().isReal())
     {
-        dp = daq::DataPacket(outputSignalDescriptor, 1);
-        *(static_cast<int64_t*>(dp.getRawData())) = value.toInteger();
-    }
-    else if (value.isReal())
-    {
-        if (value.getValue().type->typeKind == UA_TYPES_FLOAT)
+        if (dps.domainDataPacket.assigned())
+            dps.dataPacket = daq::DataPacketWithDomain(dps.domainDataPacket, outputSignalDescriptor, 1);
+        else
+            dps.dataPacket = daq::DataPacket(outputSignalDescriptor, 1);
+
+        switch (value.getValue().getValue().type->typeKind)
         {
-            dp = daq::DataPacket(outputSignalDescriptor, 1);
-            *(static_cast<float*>(dp.getRawData())) = value.toFloat();
-        }
-        else if (value.getValue().type->typeKind == UA_TYPES_DOUBLE)
-        {
-            dp = daq::DataPacket(outputSignalDescriptor, 1);
-            *(static_cast<double*>(dp.getRawData())) = value.toDouble();
+            case UA_TYPES_SBYTE:
+                *(static_cast<int8_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_SByte>(value.getValue().getValue());
+                break;
+            case UA_TYPES_BYTE:
+                *(static_cast<uint8_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_Byte>(value.getValue().getValue());
+                break;
+            case UA_TYPES_INT16:
+                *(static_cast<int16_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_Int16>(value.getValue().getValue());
+                break;
+            case UA_TYPES_UINT16:
+                *(static_cast<uint16_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_UInt16>(value.getValue().getValue());
+                break;
+            case UA_TYPES_INT32:
+                *(static_cast<int32_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_Int32>(value.getValue().getValue());
+                break;
+            case UA_TYPES_UINT32:
+                *(static_cast<uint32_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_UInt32>(value.getValue().getValue());
+                break;
+            case UA_TYPES_INT64:
+                *(static_cast<int64_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_Int64>(value.getValue().getValue());
+                break;
+            case UA_TYPES_UINT64:
+                *(static_cast<uint64_t*>(dps.dataPacket.getRawData())) = VariantUtils::ReadScalar<UA_UInt64>(value.getValue().getValue());
+                break;
+            case UA_TYPES_FLOAT:
+                *(static_cast<float*>(dps.dataPacket.getRawData())) = value.getValue().toFloat();
+                break;
+            case UA_TYPES_DOUBLE:
+                *(static_cast<double*>(dps.dataPacket.getRawData())) = value.getValue().toDouble();
+                break;
+            default:
+                break;
         }
     }
-    return dp;
+
+    return dps;
+}
+
+DataPacketPtr OpcUaMonitoredItemFbImpl::buildDomainDataPacket(const OpcUaDataValue& value)
+{
+    DataPacketPtr domainDp;
+    if (!outputDomainSignal.assigned())
+        return domainDp;
+
+    auto fillDmainPacket = [this](uint64_t ts)
+    {
+        DataPacketPtr domainDp = daq::DataPacket(outputDomainSignal.getDescriptor(), 1);
+        std::memcpy(domainDp.getRawData(), &ts, sizeof(ts));
+        return domainDp;
+    };
+
+    if (config.domainSource == DomainSource::ServerTimestamp && value.hasServerTimestamp())
+    {
+        domainDp = fillDmainPacket(value.getServerTimestampUnixEpoch());
+    }
+    else if (config.domainSource == DomainSource::SourceTimestamp && value.hasSourceTimestamp())
+    {
+        domainDp = fillDmainPacket(value.getSourceTimestampUnixEpoch());
+    }
+
+    return domainDp;
 }
 
 END_NAMESPACE_OPENDAQ_OPCUA_GENERIC

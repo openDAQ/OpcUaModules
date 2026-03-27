@@ -29,7 +29,6 @@
 #include <thread>
 
 #include <opcuaclient/opcuacallmethodrequest.h>
-#include <opcuaclient/opcuareadvalueid.h>
 #include <opcuashared/opcuacallmethodresult.h>
 #include <opcuashared/opcuaendpoint.h>
 #include <opcuashared/opcuanodeid.h>
@@ -40,6 +39,7 @@
 
 #include <opcuaclient/opcuatimertaskcontextcollection.h>
 #include "opcuashared/node/opcuanodemethod.h"
+#include "opcuashared/opcuadatavalue.h"
 
 #include <opcuaclient/subscriptions.h>
 
@@ -126,6 +126,7 @@ public:
 
     bool nodeExists(const OpcUaNodeId& nodeId);
     OpcUaVariant readValue(const OpcUaNodeId& node);
+    OpcUaDataValue readDataValue(const OpcUaNodeId& node);
     UA_NodeClass readNodeClass(const OpcUaNodeId& nodeId);
     std::string readBrowseName(const OpcUaNodeId& nodeId);
     std::string readDisplayName(const OpcUaNodeId& nodeId);
@@ -146,8 +147,6 @@ public:
     void writeValue(const OpcUaNodeId& nodeId, const OpcUaVariant& value);
 
     OpcUaObject<UA_ReadResponse> readNodeAttributes(const OpcUaObject<UA_ReadRequest>& request);
-
-    void readNodeAttributes(const std::vector<OpcUaReadValueIdWithCallback>& request);
 
     Subscription* createSubscription(const OpcUaObject<UA_CreateSubscriptionRequest>& request,
                                      const StatusChangeNotificationCallbackType& statusChangeCallback = nullptr);
