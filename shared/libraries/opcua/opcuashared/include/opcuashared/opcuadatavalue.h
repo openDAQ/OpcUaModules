@@ -29,6 +29,7 @@ public:
     using OpcUaObject<UA_DataValue>::OpcUaObject;
 
     static uint64_t toUnixTimeUs(UA_DateTime date);
+    static UA_DateTime fromUnixTimeUs(uint64_t date);
 
     const UA_DataValue& getDataValue() const;
 

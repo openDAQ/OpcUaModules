@@ -32,6 +32,7 @@ static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_TYPE = "NodeIDType";
 static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID = "NodeID";
 static constexpr const char* PROPERTY_NAME_OPCUA_NAMESPACE_INDEX = "NamespaceIndex";
 static constexpr const char* PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL = "SamplingInterval";
+static constexpr const char* PROPERTY_NAME_OPCUA_TS_MODE = "TimestampMode";
 // ----------
 
 // Defaults

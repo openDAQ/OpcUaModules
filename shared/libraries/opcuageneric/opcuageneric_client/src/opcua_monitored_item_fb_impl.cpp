@@ -7,18 +7,19 @@ BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
 std::atomic<int> OpcUaMonitoredItemFbImpl::localIndex = 0;
 
-std::unordered_map<OpcUaNodeId, daq::SampleType> OpcUaMonitoredItemFbImpl::supportedDataTypes = {{OpcUaNodeId(), daq::SampleType::Undefined},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_FLOAT), daq::SampleType::Float32},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_DOUBLE), daq::SampleType::Float64},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_SBYTE), daq::SampleType::Int8},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_BYTE), daq::SampleType::UInt8},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_INT16), daq::SampleType::Int16},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_UINT16), daq::SampleType::UInt16},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_INT32), daq::SampleType::Int32},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_UINT32), daq::SampleType::UInt32},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_INT64), daq::SampleType::Int64},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_UINT64), daq::SampleType::UInt64},
-                                                                        {OpcUaNodeId(0, UA_NS0ID_STRING), daq::SampleType::String}};
+std::unordered_map<OpcUaNodeId, daq::SampleType> OpcUaMonitoredItemFbImpl::supportedDataTypes = {
+    {OpcUaNodeId(), daq::SampleType::Undefined},
+    {OpcUaNodeId(0, UA_NS0ID_FLOAT), daq::SampleType::Float32},
+    {OpcUaNodeId(0, UA_NS0ID_DOUBLE), daq::SampleType::Float64},
+    {OpcUaNodeId(0, UA_NS0ID_SBYTE), daq::SampleType::Int8},
+    {OpcUaNodeId(0, UA_NS0ID_BYTE), daq::SampleType::UInt8},
+    {OpcUaNodeId(0, UA_NS0ID_INT16), daq::SampleType::Int16},
+    {OpcUaNodeId(0, UA_NS0ID_UINT16), daq::SampleType::UInt16},
+    {OpcUaNodeId(0, UA_NS0ID_INT32), daq::SampleType::Int32},
+    {OpcUaNodeId(0, UA_NS0ID_UINT32), daq::SampleType::UInt32},
+    {OpcUaNodeId(0, UA_NS0ID_INT64), daq::SampleType::Int64},
+    {OpcUaNodeId(0, UA_NS0ID_UINT64), daq::SampleType::UInt64},
+    {OpcUaNodeId(0, UA_NS0ID_STRING), daq::SampleType::String}};
 
 namespace
 {
@@ -109,9 +110,11 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
     }
 
     {
-        auto builder = StringPropertyBuilder(PROPERTY_NAME_OPCUA_NODE_ID, String(""))
-                           .setDescription(fmt::format("Specifies the NodeID of the OPCUA node to monitor. The format of the NodeID should correspond "
-                                           "to the type specified in the \"{}\" property.", PROPERTY_NAME_OPCUA_NODE_ID_TYPE));
+        auto builder =
+            StringPropertyBuilder(PROPERTY_NAME_OPCUA_NODE_ID, String(""))
+                .setDescription(fmt::format("Specifies the NodeID of the OPCUA node to monitor. The format of the NodeID should correspond "
+                                            "to the type specified in the \"{}\" property.",
+                                            PROPERTY_NAME_OPCUA_NODE_ID_TYPE));
         defaultConfig.addProperty(builder.build());
     }
 
@@ -131,11 +134,18 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
         defaultConfig.addProperty(builder.build());
     }
 
-    const auto fbType =
-        FunctionBlockType(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME,
-                          GENERIC_OPCUA_MONITORED_ITEM_FB_NAME,
-                          "Monitors a specified OPCUA node and outputs the value and timestamp as signals.",
-                          defaultConfig);
+    {
+        auto builder = SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_TS_MODE,
+                                                List<IString>("None", "ServerTimestamp", "SourceTimestamp"),
+                                                static_cast<int>(DomainSource::ServerTimestamp))
+                           .setDescription("Defines what to use as a domain signal. By default it is set to ServerTimestamp.");
+        defaultConfig.addProperty(builder.build());
+    }
+
+    const auto fbType = FunctionBlockType(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME,
+                                          GENERIC_OPCUA_MONITORED_ITEM_FB_NAME,
+                                          "Monitors a specified OPCUA node and outputs the value and timestamp as signals.",
+                                          defaultConfig);
     return fbType;
 }
 
@@ -185,7 +195,7 @@ void OpcUaMonitoredItemFbImpl::readProperties()
     configValid = true;
     configMsg.clear();
 
-    config.nodeIdType = NodeIDType::String;    // only string NodeIDs are supported at the moment
+    config.nodeIdType = NodeIDType::String;  // only string NodeIDs are supported at the moment
     config.nodeId = readProperty<std::string, IString>(objPtr, PROPERTY_NAME_OPCUA_NODE_ID, "");
     if (config.nodeId.empty())
     {
@@ -198,12 +208,22 @@ void OpcUaMonitoredItemFbImpl::readProperties()
         readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
     if (config.samplingInterval <= 0)
     {
-        configMsg = fmt::format("Invalid value for the \"{}\" property! Sampling interval must be a positive integer.", PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL);
+        configMsg = fmt::format("Invalid value for the \"{}\" property! Sampling interval must be a positive integer.",
+                                PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL);
         configValid = false;
         config.samplingInterval = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
     }
 
-    config.domainSource = DomainSource::ServerTimestamp;
+    const auto tmpDomainSource =
+        readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::ServerTimestamp));
+    if (tmpDomainSource < static_cast<int>(DomainSource::_count) && tmpDomainSource >= 0)
+    {
+        config.domainSource = static_cast<DomainSource>(tmpDomainSource);
+    }
+    else
+    {
+        config.domainSource = DomainSource::ServerTimestamp;
+    }
 
     updateStatuses();
 }
@@ -243,7 +263,8 @@ void OpcUaMonitoredItemFbImpl::validateNode()
     nodeValidationError = false;
     valueValidationError = false;
     nodeValidationErrorMsg.clear();
-    try {
+    try
+    {
         auto nodeExist = client->nodeExists(nodeId);
         if (!nodeExist)
         {
@@ -347,10 +368,9 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
     while (running)
     {
         {
-            //auto lockProcessing = std::scoped_lock(processingMutex);
+            // auto lockProcessing = std::scoped_lock(processingMutex);
             if (configValid && nodeValidationError == false)
             {
-
                 OpcUaDataValue opcUaVariant;
                 try
                 {

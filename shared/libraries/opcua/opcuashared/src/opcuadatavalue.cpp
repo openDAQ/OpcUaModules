@@ -53,6 +53,13 @@ uint64_t OpcUaDataValue::toUnixTimeUs(UA_DateTime date)
     return static_cast<uint64_t>((date - UA_DATETIME_UNIX_EPOCH) / UA_DATETIME_USEC);
 }
 
+UA_DateTime OpcUaDataValue::fromUnixTimeUs(uint64_t date)
+{
+    if (date == 0)
+        return 0;
+    return static_cast<UA_DateTime>(date * UA_DATETIME_USEC + UA_DATETIME_UNIX_EPOCH);
+}
+
 bool OpcUaDataValue::isInteger() const
 {
     return VariantUtils::IsInteger(this->value.value);

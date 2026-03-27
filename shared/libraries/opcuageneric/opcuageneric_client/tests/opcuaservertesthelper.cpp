@@ -233,10 +233,16 @@ void OpcUaServerTestHelper::publishVariable(std::string identifier,
     CheckStatusCodeException(status);
 }
 
-void OpcUaServerTestHelper::writeNode(const OpcUaNodeId& nodeId, const OpcUaVariant& value)
+void OpcUaServerTestHelper::writeValueNode(const OpcUaNodeId& nodeId, const OpcUaVariant& value)
 {
     CheckStatusCodeException(UA_Server_writeValue(server, *nodeId, *value));
 }
+
+void OpcUaServerTestHelper::writeDataValueNode(const OpcUaNodeId& nodeId, const OpcUaDataValue& value)
+{
+    CheckStatusCodeException(UA_Server_writeDataValue(server, *nodeId, *value));
+}
+
 
 void OpcUaServerTestHelper::publishFolder(const char* identifier, UA_NodeId* parentNodeId, const char* locale, int nodeIndex)
 {

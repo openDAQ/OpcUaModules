@@ -53,7 +53,8 @@ public:
                          uint16_t nodeIndex = 1,
                          size_t dimension = 1);
 
-    void writeNode(const OpcUaNodeId& nodeId, const OpcUaVariant& value);
+    void writeValueNode(const OpcUaNodeId& nodeId, const OpcUaVariant& value);
+    void writeDataValueNode(const OpcUaNodeId& nodeId, const OpcUaDataValue& value);
 
 private:
     void runServer();
