@@ -51,7 +51,8 @@ public:
                          UA_NodeId* parentNodeId,
                          const char* locale = "en_US",
                          uint16_t nodeIndex = 1,
-                         size_t dimension = 1);
+                         size_t dimension = 1,
+                         UA_Byte accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE);
 
     void writeValueNode(const OpcUaNodeId& nodeId, const OpcUaVariant& value);
     void writeDataValueNode(const OpcUaNodeId& nodeId, const OpcUaDataValue& value);

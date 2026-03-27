@@ -436,6 +436,13 @@ UA_NodeClass OpcUaClient::readNodeClass(const OpcUaNodeId& nodeId)
     return nodeClass;
 }
 
+UA_Byte OpcUaClient::readAccessLevel(const OpcUaNodeId& nodeId)
+{
+    UA_Byte accessLevel;
+    CheckStatusCodeException(UA_Client_readUserAccessLevelAttribute(getLockedUaClient(), *nodeId, &accessLevel));
+    return accessLevel;
+}
+
 bool OpcUaClient::nodeExists(const OpcUaNodeId& node)
 {
     UA_NodeClass nodeClass;

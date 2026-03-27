@@ -57,14 +57,12 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
                                                    daq::opcua::OpcUaClientPtr client,
                                                    const PropertyObjectPtr& config)
     : FunctionBlock(type, ctx, parent, generateLocalId())
-    , configValid(false)
-    , nodeValidationError(false)
-    , valueValidationError(false)
     , client(client)
     , nodeId()
     , running(false)
 {
     initComponentStatus();
+    initStatusContainer();
     if (config.assigned())
         initProperties(populateDefaultConfig(type.createDefaultConfig(), config));
     else
@@ -96,6 +94,15 @@ void OpcUaMonitoredItemFbImpl::removed()
         readerThread.join();
     }
     FunctionBlock::removed();
+}
+
+void OpcUaMonitoredItemFbImpl::initStatusContainer()
+{
+    statuses.addStatus("config");
+    statuses.addStatus("nodeValidation");
+    statuses.addStatus("valueValidation");
+    statuses.addStatus("responseValidation");
+    statuses.addStatus("exeption");
 }
 
 FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
@@ -156,7 +163,7 @@ std::string OpcUaMonitoredItemFbImpl::generateLocalId()
 
 void OpcUaMonitoredItemFbImpl::adjustSignalDescriptor()
 {
-    if (nodeValidationError == false && supportedDataTypes.count(nodeDataType) != 0)
+    if (statuses.ok("nodeValidation") && supportedDataTypes.count(nodeDataType) != 0)
     {
         outputSignalDescriptor = DataDescriptorBuilder().setSampleType(supportedDataTypes[nodeDataType]).build();
     }
@@ -192,15 +199,14 @@ void OpcUaMonitoredItemFbImpl::initProperties(const PropertyObjectPtr& config)
 void OpcUaMonitoredItemFbImpl::readProperties()
 {
     auto lock = this->getRecursiveConfigLock();
-    configValid = true;
-    configMsg.clear();
+    statuses.reset("config");
+
 
     config.nodeIdType = NodeIDType::String;  // only string NodeIDs are supported at the moment
     config.nodeId = readProperty<std::string, IString>(objPtr, PROPERTY_NAME_OPCUA_NODE_ID, "");
     if (config.nodeId.empty())
     {
-        configMsg = fmt::format("\"{}\" property is empty!", PROPERTY_NAME_OPCUA_NODE_ID);
-        configValid = false;
+        statuses.addToStatus("config", fmt::format("\"{}\" property is empty!", PROPERTY_NAME_OPCUA_NODE_ID));
     }
 
     config.namespaceIndex = readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 0);
@@ -208,9 +214,8 @@ void OpcUaMonitoredItemFbImpl::readProperties()
         readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
     if (config.samplingInterval <= 0)
     {
-        configMsg = fmt::format("Invalid value for the \"{}\" property! Sampling interval must be a positive integer.",
-                                PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL);
-        configValid = false;
+        statuses.addToStatus("config", fmt::format("Invalid value for the \"{}\" property! Sampling interval must be a positive integer.",
+                                                   PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL));
         config.samplingInterval = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
     }
 
@@ -236,6 +241,7 @@ void OpcUaMonitoredItemFbImpl::propertyChanged()
 
     nodeId = OpcUaNodeId{static_cast<uint16_t>(this->config.namespaceIndex), this->config.nodeId};
 
+    statuses.resetAll();
     validateNode();
     adjustSignalDescriptor();
     reconfigureSignal(prevConfig);
@@ -244,60 +250,96 @@ void OpcUaMonitoredItemFbImpl::propertyChanged()
 
 void OpcUaMonitoredItemFbImpl::updateStatuses()
 {
-    if (configValid == false)
+    if (!statuses.isUpdated())
+        return;
+
+    if (!statuses.ok("config"))
     {
-        setComponentStatusWithMessage(ComponentStatus::Error, "Configuration is invalid! " + configMsg);
+        setComponentStatusWithMessage(ComponentStatus::Error, "Configuration is invalid! " + statuses.getMessage("config"));
     }
-    else if (nodeValidationError)
+    else if (!statuses.ok("nodeValidation"))
     {
-        setComponentStatusWithMessage(ComponentStatus::Error, "Node is invalid! " + nodeValidationErrorMsg);
+        setComponentStatusWithMessage(ComponentStatus::Error, "Node is invalid! " + statuses.getMessage("nodeValidation"));
+    }
+    else if (!statuses.ok("responseValidation"))
+    {
+        setComponentStatusWithMessage(ComponentStatus::Error, "Response error! " + statuses.getMessage("responseValidation"));
+    }
+    else if (!statuses.ok("valueValidation"))
+    {
+        setComponentStatusWithMessage(ComponentStatus::Error, "Value error! " + statuses.getMessage("valueValidation"));
+    }
+    else if (!statuses.ok("exeption"))
+    {
+        setComponentStatusWithMessage(ComponentStatus::Error, statuses.getMessage("exeption"));
     }
     else
     {
-        setComponentStatusWithMessage(ComponentStatus::Ok, "Parsing succeeded");
+        setComponentStatus(ComponentStatus::Ok);
     }
 }
 
 void OpcUaMonitoredItemFbImpl::validateNode()
 {
-    nodeValidationError = false;
-    valueValidationError = false;
-    nodeValidationErrorMsg.clear();
     try
     {
+        statuses.reset("nodeValidation");
         auto nodeExist = client->nodeExists(nodeId);
         if (!nodeExist)
         {
-            nodeValidationError = true;
-            nodeValidationErrorMsg = fmt::format("Node {} does not exist", nodeId.toString());
+            statuses.addToStatus("nodeValidation", fmt::format("Node {} does not exist", nodeId.toString()));
         }
         else if (const auto nodeClass = client->readNodeClass(nodeId); nodeClass != UA_NodeClass::UA_NODECLASS_VARIABLE)
         {
-            nodeValidationError = true;
-            nodeValidationErrorMsg = fmt::format("Node {} is not a variable node", nodeId.toString());
+            statuses.addToStatus("nodeValidation", fmt::format("Node {} is not a variable node", nodeId.toString()));
+        }
+        else if (const auto accessLevel = client->readAccessLevel(nodeId); (accessLevel & UA_ACCESSLEVELMASK_READ) == 0)
+        {
+            statuses.addToStatus("nodeValidation", fmt::format("There is no read permission to node {}", nodeId.toString()));
         }
         else if (nodeDataType = client->readDataType(nodeId); supportedDataTypes.count(nodeDataType) == 0)
         {
-            nodeValidationError = true;
-            nodeValidationErrorMsg = fmt::format("Node {} has unsupported DataType ({})", nodeId.toString(), nodeDataType.toString());
-        }
-        else
-        {
-            nodeValidationError = false;
+            statuses.addToStatus("nodeValidation", fmt::format("Node {} has unsupported DataType ({})", nodeId.toString(), nodeDataType.toString()));
         }
     }
     catch (OpcUaException& ex)
     {
-        nodeValidationError = true;
         if (ex.getStatusCode() == UA_STATUSCODE_BADUSERACCESSDENIED)
         {
-            nodeValidationErrorMsg = fmt::format("Access denied for node {}", nodeId.toString());
+            statuses.addToStatus("nodeValidation", fmt::format("Access denied for node {}", nodeId.toString()));
         }
         else
         {
-            nodeValidationErrorMsg = fmt::format("Exception was thrown while node {} validatiion", nodeId.toString());
+            statuses.addToStatus("nodeValidation", fmt::format("Exception was thrown while node {} validatiion", nodeId.toString()));
         }
     }
+}
+
+bool OpcUaMonitoredItemFbImpl::validateResponse(const OpcUaDataValue& value)
+{
+    if (value.getValue().hasStatus && value.getValue().hasStatus != UA_STATUSCODE_GOOD)
+    {
+        statuses.addToStatus("responseValidation", fmt::format("Reading value error: {}. ", value.getValue().hasStatus));
+        return false;
+    }
+    if (!value.getValue().hasValue)
+    {
+        statuses.addToStatus("responseValidation", std::string("Reading value error: response without a value."));
+        return false;
+    }
+    if (config.domainSource == DomainSource::ServerTimestamp && !value.getValue().hasServerTimestamp)
+    {
+        statuses.addToStatus("responseValidation", std::string("Reading value error: there is no required server timestamp"));
+        return false;
+    }
+    if (config.domainSource == DomainSource::SourceTimestamp && !value.getValue().hasSourceTimestamp)
+    {
+        statuses.addToStatus("responseValidation", std::string("Reading value error: there is no required source timestamp"));
+        return false;
+    }
+
+    statuses.reset("responseValidation");
+    return true;
 }
 
 bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaDataValue& value)
@@ -310,8 +352,13 @@ bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaDataValue& value
         outputSignal.setDescriptor(outputSignalDescriptor);
     }
 
-    valueValidationError = !(value.isNumber() || value.isString());
-    return !valueValidationError;
+    bool valid = (value.isNumber() || value.isString());
+    if (valid)
+        statuses.reset("valueValidation");
+    else
+        statuses.set("valueValidation", "Value has unsupported type.");
+
+    return valid;
 }
 
 void OpcUaMonitoredItemFbImpl::createSignal()
@@ -369,19 +416,17 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
     {
         {
             // auto lockProcessing = std::scoped_lock(processingMutex);
-            if (configValid && nodeValidationError == false)
+            if (statuses.ok("config") && statuses.ok("nodeValidation"))
             {
-                OpcUaDataValue opcUaVariant;
+                OpcUaDataValue dataValue;
                 try
                 {
-                    opcUaVariant = client->readDataValue(nodeId);
-                    if (!validateValueDataType(opcUaVariant))
+                    dataValue = client->readDataValue(nodeId);
+
+                    statuses.reset("exeption");
+                    if (validateResponse(dataValue) && validateValueDataType(dataValue))
                     {
-                        // updateStatuses?
-                    }
-                    else
-                    {
-                        const auto dps = buildDataPacket(opcUaVariant);
+                        const auto dps = buildDataPacket(dataValue);
                         outputSignal.sendPacket(dps.dataPacket);
                         if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
                             outputDomainSignal.sendPacket(dps.domainDataPacket);
@@ -389,10 +434,11 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
                 }
                 catch (OpcUaException&)
                 {
-                    LOG_E("Exeption while reading \"{}\"", nodeId.toString());
+                    statuses.set("exeption", "Exeption while reading.");
                 }
             }
         }
+        updateStatuses();
         std::this_thread::sleep_for(std::chrono::milliseconds(config.samplingInterval));
     }
 }

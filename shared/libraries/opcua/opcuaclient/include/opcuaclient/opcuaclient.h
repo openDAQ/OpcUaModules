@@ -128,6 +128,7 @@ public:
     OpcUaVariant readValue(const OpcUaNodeId& node);
     OpcUaDataValue readDataValue(const OpcUaNodeId& node);
     UA_NodeClass readNodeClass(const OpcUaNodeId& nodeId);
+    UA_Byte readAccessLevel(const OpcUaNodeId& nodeId);
     std::string readBrowseName(const OpcUaNodeId& nodeId);
     std::string readDisplayName(const OpcUaNodeId& nodeId);
     size_t readDimension(const OpcUaNodeId& nodeId);

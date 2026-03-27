@@ -22,6 +22,150 @@
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
+namespace utils
+{
+    class Error
+    {
+    public:
+        Error(std::string name)
+            : name(std::move(name))
+            , present(false)
+            , updated(true)
+        {
+        }
+
+        void set(std::string msg)
+        {
+            updated = true;
+            present = true;
+            message = std::move(msg);
+        }
+
+        void add(const std::string& msg)
+        {
+            if (message.empty())
+            {
+                set(msg);
+            }
+            else
+            {
+                updated = true;
+                present = true;
+                message.reserve(msg.size() + 2);
+                message.append("; ");
+                message.append(msg);
+            }
+        }
+
+        void reset()
+        {
+            if (present)
+                updated = true;
+            present = false;
+            message.clear();
+        }
+        bool ok() const
+        {
+            return !present;
+        }
+
+        const std::string& getMessage() const
+        {
+            return message;
+        }
+
+        bool isUpdated() const
+        {
+            bool tmp = updated;
+            updated = false;
+            return tmp;
+        }
+
+    protected:
+        const std::string name;
+        std::string message;
+        bool present;
+        mutable bool updated;
+    };
+
+    class StatusContainer
+    {
+    public:
+        StatusContainer() = default;
+
+        bool addStatus(const std::string& name)
+        {
+            std::scoped_lock<std::mutex> lock(mtx);
+            if (map.count(name))
+                return false;
+            map.emplace(std::pair<std::string, Error>(name, Error(name)));
+            return true;
+        }
+
+        bool isUpdated()
+        {
+            std::scoped_lock<std::mutex> lock(mtx);
+            bool result = false;
+            for (const auto& e : map)
+            {
+                bool isUpdated = e.second.isUpdated();
+                result |= isUpdated;
+            }
+            return result;
+        }
+        void resetAll()
+        {
+            std::scoped_lock<std::mutex> lock(mtx);
+            for (auto& e : map)
+                e.second.reset();
+        }
+
+        void set(const std::string& name, std::string msg)
+        {
+            std::scoped_lock<std::mutex> lock(mtx);
+            getStatus(name).set(std::move(msg));
+        }
+
+        void addToStatus(const std::string& name, const std::string& msg)
+        {
+            std::scoped_lock<std::mutex> lock(mtx);
+            getStatus(name).add(msg);
+        }
+
+        void reset(const std::string& name)
+        {
+            std::scoped_lock<std::mutex> lock(mtx);
+            getStatus(name).reset();
+        }
+
+        bool ok(const std::string& name) const
+        {
+            std::scoped_lock<std::mutex> lock(mtx);
+            return getStatus(name).ok();
+        }
+
+        std::string getMessage(const std::string& name) const
+        {
+            std::scoped_lock<std::mutex> lock(mtx);
+            return getStatus(name).getMessage();
+        }
+
+    protected:
+        mutable std::mutex mtx;
+        std::unordered_map<std::string, Error> map;
+
+        Error& getStatus(const std::string& name)
+        {
+            return map.at(name);
+        }
+
+        const Error& getStatus(const std::string& name) const
+        {
+            return map.at(name);
+        }
+    };
+}
+
 class OpcUaMonitoredItemFbImpl final : public FunctionBlock
 {
     friend class GenericOpcuaMonitoredItemTest;
@@ -74,11 +218,6 @@ protected:
     DataDescriptorPtr outputSignalDescriptor;
     SignalConfigPtr outputSignal;
     SignalConfigPtr outputDomainSignal;
-    std::atomic<bool> configValid;
-    std::string configMsg;
-    std::atomic<bool> nodeValidationError;
-    std::string nodeValidationErrorMsg;
-    std::atomic<bool> valueValidationError;
 
     FbConfig config;
     daq::opcua::OpcUaClientPtr client;
@@ -88,9 +227,12 @@ protected:
     std::thread readerThread;
     std::atomic<bool> running;
 
+    utils::StatusContainer statuses;
+
     void removed() override;
     static std::string generateLocalId();
 
+    void initStatusContainer();
     void adjustSignalDescriptor();
     void createSignal();
     void reconfigureSignal(const FbConfig& prevConfig);
@@ -103,6 +245,7 @@ protected:
     void updateStatuses();
 
     void validateNode();
+    bool validateResponse(const OpcUaDataValue& value);
     bool validateValueDataType(const OpcUaDataValue& value);
 
     void runReaderThread();

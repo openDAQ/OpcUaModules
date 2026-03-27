@@ -531,3 +531,29 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingTailReade
     // check that the target and read TSes are the same
     EXPECT_EQ(time, domain);
 }
+
+TEST_F(GenericOpcuaMonitoredItemTest, ReadProtectedValue)
+{
+    constexpr uint32_t interval = 50;
+    const OpcUaNodeId nodeId(1, ".pi64");
+    const auto value = int64_t{std::numeric_limits<int64_t>::min()};
+    StartUp();
+
+    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval, DS::ServerTimestamp);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
+
+    OpcUaDataValue dataValue;
+    dataValue.setScalar(value);
+
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    ASSERT_FALSE(prevVal.assigned());
+
+    ASSERT_NO_THROW(testHelper.writeDataValueNode(nodeId, dataValue));
+
+    // after writing
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
+
+    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * 3, prevVal);
+    ASSERT_FALSE(val.assigned());
+}

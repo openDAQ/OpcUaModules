@@ -129,6 +129,14 @@ void OpcUaServerTestHelper::createModel()
         publishVariable(".ui64", &myUInt64, &UA_TYPES[UA_TYPES_UINT64], &uaObjectsFolder);
     }
 
+    {
+        UA_Int64 myInt64 = -64;
+        publishVariable(".pi64", &myInt64, &UA_TYPES[UA_TYPES_INT64], &uaObjectsFolder, "en_US", 1, 1, 0);
+
+        UA_UInt64 myUInt64 = 64;
+        publishVariable(".pui64", &myUInt64, &UA_TYPES[UA_TYPES_UINT64], &uaObjectsFolder, "en_US", 1, 1, 0);
+    }
+
     UA_Boolean myBool = true;
     publishVariable(".b", &myBool, &UA_TYPES[UA_TYPES_BOOLEAN], &uaObjectsFolder);
 
@@ -196,13 +204,14 @@ void OpcUaServerTestHelper::publishVariable(std::string identifier,
                                             UA_NodeId* parentNodeId,
                                             const char* locale,
                                             uint16_t nodeIndex,
-                                            size_t dimension)
+                                            size_t dimension,
+                                            UA_Byte accessLevel)
 {
     OpcUaObject<UA_VariableAttributes> attr = UA_VariableAttributes_default;
     attr->description = UA_LOCALIZEDTEXT_ALLOC(locale, identifier.c_str());
     attr->displayName = UA_LOCALIZEDTEXT_ALLOC(locale, identifier.c_str());
     attr->dataType = type->typeId;
-    attr->accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    attr->accessLevel = accessLevel;
 
     OpcUaNodeId newNodeId(nodeIndex, identifier);
 
