@@ -384,7 +384,7 @@ void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
     auto lock = this->getRecursiveConfigLock();
     auto lockProcessing = std::scoped_lock(processingMutex);
 
-    if (config.domainSource != DomainSource::None)
+    if (config.domainSource == DomainSource::None)
     {
         if (outputDomainSignal.assigned())
         {
@@ -397,6 +397,10 @@ void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
     {
         outputSignal.setDomainSignal(createDomainSignal());
     }
+    if (outputSignal.getDescriptor() != outputSignalDescriptor)
+    {
+        outputSignal.setDescriptor(outputSignalDescriptor);
+    }
 }
 
 SignalConfigPtr OpcUaMonitoredItemFbImpl::createDomainSignal()
@@ -408,7 +412,7 @@ SignalConfigPtr OpcUaMonitoredItemFbImpl::createDomainSignal()
                                      .setRule(ExplicitDataRule())
                                      .setUnit(Unit("s", -1, "seconds", "time"))
                                      .setTickResolution(Ratio(1, 1'000'000))
-                                     .setOrigin("1970-01-01T00:00:00")
+                                     .setOrigin("1970-01-01T00:00:00Z")
                                      .setName("Time")
                                      .build();
     outputDomainSignal = createAndAddSignal(OPCUA_TS_SIGNAL_LOCAL_ID, domainSignalDsc, false);
