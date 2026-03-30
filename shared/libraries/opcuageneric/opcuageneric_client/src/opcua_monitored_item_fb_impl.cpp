@@ -164,6 +164,7 @@ std::string OpcUaMonitoredItemFbImpl::generateLocalId()
 
 void OpcUaMonitoredItemFbImpl::adjustSignalDescriptor()
 {
+    auto lockProcessing = std::scoped_lock(processingMutex);
     if (nodeValidationErr.ok() && supportedDataTypes.count(nodeDataType) != 0)
     {
         outputSignalDescriptor = DataDescriptorBuilder().setSampleType(supportedDataTypes[nodeDataType]).build();
@@ -200,6 +201,8 @@ void OpcUaMonitoredItemFbImpl::initProperties(const PropertyObjectPtr& config)
 void OpcUaMonitoredItemFbImpl::readProperties()
 {
     auto lock = this->getRecursiveConfigLock();
+    auto lockProcessing = std::scoped_lock(processingMutex);
+
     configErr.reset();
 
     config.nodeIdType = NodeIDType::String;  // only string NodeIDs are supported at the moment
@@ -236,6 +239,8 @@ void OpcUaMonitoredItemFbImpl::readProperties()
 void OpcUaMonitoredItemFbImpl::propertyChanged()
 {
     auto lock = this->getRecursiveConfigLock();
+    auto lockProcessing = std::scoped_lock(processingMutex);
+
     auto prevConfig = config;
     readProperties();
 
@@ -281,6 +286,7 @@ void OpcUaMonitoredItemFbImpl::updateStatuses()
 
 void OpcUaMonitoredItemFbImpl::validateNode()
 {
+    auto lockProcessing = std::scoped_lock(processingMutex);
     try
     {
         nodeValidationErr.reset();
@@ -317,6 +323,7 @@ void OpcUaMonitoredItemFbImpl::validateNode()
 
 bool OpcUaMonitoredItemFbImpl::validateResponse(const OpcUaDataValue& value)
 {
+    auto lockProcessing = std::scoped_lock(processingMutex);
     if (value.getValue().hasStatus && value.getValue().hasStatus != UA_STATUSCODE_GOOD)
     {
         responseValidationErr.add(fmt::format("Reading value error: {}. ", value.getValue().hasStatus));
@@ -344,6 +351,7 @@ bool OpcUaMonitoredItemFbImpl::validateResponse(const OpcUaDataValue& value)
 
 bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaDataValue& value)
 {
+    auto lockProcessing = std::scoped_lock(processingMutex);
     OpcUaNodeId valueDataType(value.getValue().value.type->typeId);
     if (valueDataType != nodeDataType)
     {
@@ -374,6 +382,7 @@ void OpcUaMonitoredItemFbImpl::createSignal()
 void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
 {
     auto lock = this->getRecursiveConfigLock();
+    auto lockProcessing = std::scoped_lock(processingMutex);
 
     if (config.domainSource != DomainSource::None)
     {
@@ -392,6 +401,8 @@ void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
 
 SignalConfigPtr OpcUaMonitoredItemFbImpl::createDomainSignal()
 {
+    auto lock = this->getRecursiveConfigLock();
+
     const auto domainSignalDsc = DataDescriptorBuilder()
                                      .setSampleType(SampleType::UInt64)
                                      .setRule(ExplicitDataRule())
@@ -414,8 +425,10 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
 {
     while (running)
     {
+        uint32_t samplingInterval = 1;
         {
-            // auto lockProcessing = std::scoped_lock(processingMutex);
+            auto lockProcessing = std::scoped_lock(processingMutex);
+            samplingInterval = config.samplingInterval;
             if (configErr.ok() && nodeValidationErr.ok())
             {
                 OpcUaDataValue dataValue;
@@ -439,7 +452,7 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
             }
         }
         updateStatuses();
-        std::this_thread::sleep_for(std::chrono::milliseconds(config.samplingInterval));
+        std::this_thread::sleep_for(std::chrono::milliseconds(samplingInterval));
     }
 }
 

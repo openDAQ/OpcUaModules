@@ -84,6 +84,7 @@ protected:
 
     std::thread readerThread;
     std::atomic<bool> running;
+    std::recursive_mutex processingMutex;
 
     std::shared_ptr<utils::StatusContainer> statuses;
     utils::Error configErr;

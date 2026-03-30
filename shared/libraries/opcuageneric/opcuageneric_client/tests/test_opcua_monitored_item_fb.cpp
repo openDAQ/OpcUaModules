@@ -7,7 +7,6 @@
 #include "opcuageneric_client/constants.h"
 #include "opcuaservertesthelper.h"
 #include "opendaq/reader_factory.h"
-#include "opendaq/sample_type_traits.h"
 #include "test_daq_test_helper.h"
 #include "timer.h"
 
