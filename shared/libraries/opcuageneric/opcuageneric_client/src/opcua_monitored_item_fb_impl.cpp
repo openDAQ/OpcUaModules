@@ -427,12 +427,13 @@ void OpcUaMonitoredItemFbImpl::runReaderThread()
 
 void OpcUaMonitoredItemFbImpl::readerLoop()
 {
+    auto start = std::chrono::high_resolution_clock::now();
     while (running)
     {
-        uint32_t samplingInterval = 1;
+        auto nextTP = start;
         {
             auto lockProcessing = std::scoped_lock(processingMutex);
-            samplingInterval = config.samplingInterval;
+            nextTP += std::chrono::milliseconds(config.samplingInterval);
             if (configErr.ok() && nodeValidationErr.ok())
             {
                 OpcUaDataValue dataValue;
@@ -456,7 +457,10 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
             }
         }
         updateStatuses();
-        std::this_thread::sleep_for(std::chrono::milliseconds(samplingInterval));
+        auto sleepTime = std::chrono::duration_cast<std::chrono::microseconds>(nextTP - std::chrono::high_resolution_clock::now());
+        start = nextTP;
+        sleepTime = (sleepTime.count() > 0) ? sleepTime : std::chrono::microseconds(0);
+        std::this_thread::sleep_for(sleepTime);
     }
 }
 
