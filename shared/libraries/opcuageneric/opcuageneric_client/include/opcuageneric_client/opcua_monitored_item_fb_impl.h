@@ -16,168 +16,25 @@
 
 #pragma once
 #include <opcuageneric_client/opcuageneric.h>
-#include <opendaq/function_block_impl.h>
+#include <opcuageneric_client/status_container.h>
 #include <opendaq/data_packet_ptr.h>
+#include <opendaq/function_block_impl.h>
 #include "opcuaclient/opcuaclient.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
-namespace utils
-{
-    class Error
-    {
-    public:
-        Error(std::string name)
-            : name(std::move(name))
-            , present(false)
-            , updated(true)
-        {
-        }
-
-        void set(std::string msg)
-        {
-            updated = true;
-            present = true;
-            message = std::move(msg);
-        }
-
-        void add(const std::string& msg)
-        {
-            if (message.empty())
-            {
-                set(msg);
-            }
-            else
-            {
-                updated = true;
-                present = true;
-                message.reserve(msg.size() + 2);
-                message.append("; ");
-                message.append(msg);
-            }
-        }
-
-        void reset()
-        {
-            if (present)
-                updated = true;
-            present = false;
-            message.clear();
-        }
-        bool ok() const
-        {
-            return !present;
-        }
-
-        const std::string& getMessage() const
-        {
-            return message;
-        }
-
-        bool isUpdated() const
-        {
-            bool tmp = updated;
-            updated = false;
-            return tmp;
-        }
-
-    protected:
-        const std::string name;
-        std::string message;
-        bool present;
-        mutable bool updated;
-    };
-
-    class StatusContainer
-    {
-    public:
-        StatusContainer() = default;
-
-        bool addStatus(const std::string& name)
-        {
-            std::scoped_lock<std::mutex> lock(mtx);
-            if (map.count(name))
-                return false;
-            map.emplace(std::pair<std::string, Error>(name, Error(name)));
-            return true;
-        }
-
-        bool isUpdated()
-        {
-            std::scoped_lock<std::mutex> lock(mtx);
-            bool result = false;
-            for (const auto& e : map)
-            {
-                bool isUpdated = e.second.isUpdated();
-                result |= isUpdated;
-            }
-            return result;
-        }
-        void resetAll()
-        {
-            std::scoped_lock<std::mutex> lock(mtx);
-            for (auto& e : map)
-                e.second.reset();
-        }
-
-        void set(const std::string& name, std::string msg)
-        {
-            std::scoped_lock<std::mutex> lock(mtx);
-            getStatus(name).set(std::move(msg));
-        }
-
-        void addToStatus(const std::string& name, const std::string& msg)
-        {
-            std::scoped_lock<std::mutex> lock(mtx);
-            getStatus(name).add(msg);
-        }
-
-        void reset(const std::string& name)
-        {
-            std::scoped_lock<std::mutex> lock(mtx);
-            getStatus(name).reset();
-        }
-
-        bool ok(const std::string& name) const
-        {
-            std::scoped_lock<std::mutex> lock(mtx);
-            return getStatus(name).ok();
-        }
-
-        std::string getMessage(const std::string& name) const
-        {
-            std::scoped_lock<std::mutex> lock(mtx);
-            return getStatus(name).getMessage();
-        }
-
-    protected:
-        mutable std::mutex mtx;
-        std::unordered_map<std::string, Error> map;
-
-        Error& getStatus(const std::string& name)
-        {
-            return map.at(name);
-        }
-
-        const Error& getStatus(const std::string& name) const
-        {
-            return map.at(name);
-        }
-    };
-}
-
 class OpcUaMonitoredItemFbImpl final : public FunctionBlock
 {
     friend class GenericOpcuaMonitoredItemTest;
-public:
 
+public:
     // only string NodeIDs are supported at the moment
     enum class NodeIDType : int
     {
-        //Numeric = 0,
+        // Numeric = 0,
         String = 0,
-        //Guid,
-        //Opaque,
+        // Guid,
+        // Opaque,
         _count
     };
 
@@ -196,15 +53,16 @@ public:
                                       const PropertyObjectPtr& config = nullptr);
     ~OpcUaMonitoredItemFbImpl();
     /*DAQ_OPCUA_MODULE_API*/ static FunctionBlockTypePtr CreateType();
-protected:
 
+protected:
     struct DataPackets
     {
         daq::DataPacketPtr dataPacket;
         daq::DataPacketPtr domainDataPacket;
     };
 
-    struct FbConfig {
+    struct FbConfig
+    {
         NodeIDType nodeIdType;
         std::string nodeId;
         uint32_t namespaceIndex;
@@ -227,7 +85,12 @@ protected:
     std::thread readerThread;
     std::atomic<bool> running;
 
-    utils::StatusContainer statuses;
+    std::shared_ptr<utils::StatusContainer> statuses;
+    utils::Error configErr;
+    utils::Error nodeValidationErr;
+    utils::Error responseValidationErr;
+    utils::Error valueValidationErr;
+    utils::Error exceptionErr;
 
     void removed() override;
     static std::string generateLocalId();
