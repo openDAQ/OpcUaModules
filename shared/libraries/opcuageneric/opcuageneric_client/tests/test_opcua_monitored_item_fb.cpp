@@ -422,6 +422,50 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingLastValue
     EXPECT_EQ(time, domainVal.asPtr<INumber>().getValue<uint64_t>(uint64_t(0)));
 }
 
+TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingLastValue)
+{
+    constexpr uint32_t interval = 50;
+    const OpcUaNodeId nodeId(1, ".i64");
+    const auto value = int64_t{std::numeric_limits<int64_t>::min()};
+    StartUp();
+
+    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval, DS::LocalSystemTimestamp);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    auto domainSig = fb.getSignals()[0].getDomainSignal();
+    ASSERT_TRUE(domainSig.assigned());
+
+    const OpcUaVariant variant(value);
+
+    // before writing
+    // waiting to be sure that FB has read initial value
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    ASSERT_TRUE(prevVal.assigned());
+
+    const auto timeBefore = getTime();
+
+    ASSERT_NO_THROW(testHelper.writeValueNode(nodeId, variant));
+
+    // after writing
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    // the FB needs time to read the new value from the node
+    // read the last value until it becomes different from the initial or until the timer expires
+    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * 3, prevVal);
+
+    auto domainVal = domainSig.getLastValue();
+    const auto timeAfter = getTime();
+
+    // check that the target and read values are the same
+    ASSERT_EQ(val.asPtr<INumber>().getValue<int64_t>(int64_t(0)), value);
+
+    // check the ts is between start and stop points
+    ASSERT_TRUE(domainVal.assigned());
+    EXPECT_GE(timeAfter, domainVal.asPtr<INumber>().getValue<uint64_t>(uint64_t(0)));
+    EXPECT_LE(timeBefore, domainVal.asPtr<INumber>().getValue<uint64_t>(uint64_t(0)));
+}
+
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReader)
 {
     constexpr uint32_t interval = 50;

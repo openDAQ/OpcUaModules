@@ -43,6 +43,7 @@ public:
         None = 0,
         ServerTimestamp,
         SourceTimestamp,
+        LocalSystemTimestamp,
         _count
     };
 

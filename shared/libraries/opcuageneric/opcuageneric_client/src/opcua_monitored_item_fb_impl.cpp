@@ -2,6 +2,7 @@
 #include <opcuageneric_client/opcua_monitored_item_fb_impl.h>
 #include "opendaq/binary_data_packet_factory.h"
 #include "opendaq/packet_factory.h"
+#include <chrono>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
@@ -144,7 +145,7 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
 
     {
         auto builder = SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_TS_MODE,
-                                                List<IString>("None", "ServerTimestamp", "SourceTimestamp"),
+                                                List<IString>("None", "ServerTimestamp", "SourceTimestamp", "LocalSystemTimestamp"),
                                                 static_cast<int>(DomainSource::ServerTimestamp))
                            .setDescription("Defines what to use as a domain signal. By default it is set to ServerTimestamp.");
         defaultConfig.addProperty(builder.build());
@@ -542,6 +543,11 @@ DataPacketPtr OpcUaMonitoredItemFbImpl::buildDomainDataPacket(const OpcUaDataVal
     else if (config.domainSource == DomainSource::SourceTimestamp && value.hasSourceTimestamp())
     {
         domainDp = fillDmainPacket(value.getSourceTimestampUnixEpoch());
+    }
+    else if (config.domainSource == DomainSource::LocalSystemTimestamp)
+    {
+        const uint64_t epochTime = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        domainDp = fillDmainPacket(epochTime);
     }
 
     return domainDp;
