@@ -242,12 +242,13 @@ void OpcUaMonitoredItemFbImpl::propertyChanged()
     auto lock = this->getRecursiveConfigLock();
     auto lockProcessing = std::scoped_lock(processingMutex);
 
+    statuses->resetAll();
+
     auto prevConfig = config;
     readProperties();
 
     nodeId = OpcUaNodeId{static_cast<uint16_t>(this->config.namespaceIndex), this->config.nodeId};
 
-    statuses->resetAll();
     validateNode();
     adjustSignalDescriptor();
     reconfigureSignal(prevConfig);
@@ -325,7 +326,7 @@ void OpcUaMonitoredItemFbImpl::validateNode()
 bool OpcUaMonitoredItemFbImpl::validateResponse(const OpcUaDataValue& value)
 {
     auto lockProcessing = std::scoped_lock(processingMutex);
-    if (value.getValue().hasStatus && value.getValue().hasStatus != UA_STATUSCODE_GOOD)
+    if (value.getValue().hasStatus && value.getValue().status != UA_STATUSCODE_GOOD)
     {
         responseValidationErr.add(fmt::format("Reading value error: {}. ", value.getValue().hasStatus));
         return false;
