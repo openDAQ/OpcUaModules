@@ -99,8 +99,8 @@ TEST_F(OpcUaGenericClientModuleTest, GetAvailableComponentTypes)
     DictPtr<IString, IDeviceType> deviceTypes;
     ASSERT_NO_THROW(deviceTypes = module.getAvailableDeviceTypes());
     ASSERT_EQ(deviceTypes.getCount(), 1u);
-    ASSERT_TRUE(deviceTypes.hasKey("OpenDAQOPCUAGenericStreaming"));
-    ASSERT_EQ(deviceTypes.get("OpenDAQOPCUAGenericStreaming").getId(), "OpenDAQOPCUAGenericStreaming");
+    ASSERT_TRUE(deviceTypes.hasKey("OPCUAGeneric"));
+    ASSERT_EQ(deviceTypes.get("OPCUAGeneric").getId(), "OPCUAGeneric");
 
     DictPtr<IString, IServerType> serverTypes;
     ASSERT_NO_THROW(serverTypes = module.getAvailableServerTypes());
@@ -146,8 +146,8 @@ TEST_F(OpcUaGenericClientModuleTest, DefaultDeviceConfig)
     DictPtr<IString, IDeviceType> deviceTypes;
     ASSERT_NO_THROW(deviceTypes = module.getAvailableDeviceTypes());
     ASSERT_EQ(deviceTypes.getCount(), 1u);
-    ASSERT_TRUE(deviceTypes.hasKey("OpenDAQOPCUAGenericStreaming"));
-    auto config = deviceTypes.get("OpenDAQOPCUAGenericStreaming").createDefaultConfig();
+    ASSERT_TRUE(deviceTypes.hasKey("OPCUAGeneric"));
+    auto config = deviceTypes.get("OPCUAGeneric").createDefaultConfig();
     ASSERT_TRUE(config.assigned());
     ASSERT_EQ(config.getAllProperties().getCount(), 5u);
 }

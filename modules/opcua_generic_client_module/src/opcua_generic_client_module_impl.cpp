@@ -33,7 +33,7 @@ OpcUaGenericClientModule::OpcUaGenericClientModule(ContextPtr context)
              MODULE_ID)
     , discoveryClient()
 {
-    loggerComponent = this->context.getLogger().getOrAddComponent(DaqOpcUaGenericProtocolId);
+    loggerComponent = this->context.getLogger().getOrAddComponent(DaqOpcUaGenericComponentName);
     discoveryClient.initMdnsClient(List<IString>("_opcua-tcp._tcp.local."));
 }
 
@@ -93,8 +93,8 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
                                                  .setConnectionString(connectionString)
                                                  .build();
 
-    connectionInfo.setProtocolId(DaqOpcUaGenericDeviceTypeId)
-                  .setProtocolName(DaqOpcUaGenericProtocolId)
+    connectionInfo.setProtocolId(DaqOpcUaGenericProtocolId)
+                  .setProtocolName(DaqOpcUaGenericProtocolName)
                   .setProtocolType(ProtocolType::Unknown)
                   .setConnectionType("TCP/IP")
                   .addAddress(host)
@@ -122,7 +122,7 @@ PropertyObjectPtr OpcUaGenericClientModule::populateDefaultConfig(const Property
 
 DeviceInfoPtr OpcUaGenericClientModule::populateDiscoveredDevice(const MdnsDiscoveredDevice& discoveredDevice)
 {
-    auto cap = ServerCapability(DaqOpcUaGenericDeviceTypeId, DaqOpcUaGenericProtocolId, ProtocolType::Unknown);
+    auto cap = ServerCapability(DaqOpcUaGenericProtocolId, DaqOpcUaGenericProtocolName, ProtocolType::Unknown);
 
     for (const auto& ipAddress : discoveredDevice.ipv4Addresses)
     {
@@ -238,7 +238,7 @@ bool OpcUaGenericClientModule::acceptsConnectionParameters(const StringPtr& conn
 
 Bool OpcUaGenericClientModule::onCompleteServerCapability(const ServerCapabilityPtr& source, const ServerCapabilityConfigPtr& target)
 {
-    if (target.getProtocolId() != DaqOpcUaGenericDeviceTypeId)
+    if (target.getProtocolId() != DaqOpcUaGenericProtocolId)
         return false;
 
     if (source.getConnectionType() != "TCP/IP")
@@ -298,7 +298,7 @@ Bool OpcUaGenericClientModule::onCompleteServerCapability(const ServerCapability
 DeviceTypePtr OpcUaGenericClientModule::createDeviceType()
 {
     return DeviceTypeBuilder()
-        .setId(DaqOpcUaGenericDeviceTypeId)
+        .setId(DaqOpcUaGenericProtocolId)
         .setName("OpcUa enabled device")
         .setDescription("Network device connected over OpcUa protocol")
         .setConnectionStringPrefix(DaqOpcUaGenericDevicePrefix)

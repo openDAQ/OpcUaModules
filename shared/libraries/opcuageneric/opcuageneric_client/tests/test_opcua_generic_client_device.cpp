@@ -39,8 +39,8 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     ASSERT_NO_THROW(deviceTypes = module.getAvailableDeviceTypes());
     ASSERT_EQ(deviceTypes.getCount(), 1u);
 
-    ASSERT_TRUE(deviceTypes.hasKey("OpenDAQOPCUAGenericStreaming"));
-    auto defaultConfig = deviceTypes.get("OpenDAQOPCUAGenericStreaming").createDefaultConfig();
+    ASSERT_TRUE(deviceTypes.hasKey("OPCUAGeneric"));
+    auto defaultConfig = deviceTypes.get("OPCUAGeneric").createDefaultConfig();
     ASSERT_TRUE(defaultConfig.assigned());
 
     ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 5u);

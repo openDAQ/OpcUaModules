@@ -20,10 +20,11 @@
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC_CLIENT_MODULE
 
-static const char* DaqOpcUaGenericDeviceTypeId = "OpenDAQOPCUAGenericStreaming";
+static const char* DaqOpcUaGenericProtocolId = "OPCUAGeneric";
+static const char* DaqOpcUaGenericProtocolName = "OPCUAGeneric";
+static const char* DaqOpcUaGenericComponentName = "OPCUAGenericClient";
 static const char* DaqOpcUaGenericDevicePrefix = "daq.opcua.generic";
 static const char* OpcUaGenericScheme = "opc.tcp";
-static const char* DaqOpcUaGenericProtocolId = "OPCUAGenericClient";
 
 static const char* MODULE_NAME = "OpenDAQOPCUAGenericClientModule";
 static const char* MODULE_ID = "OpenDAQOPCUAGenericClientModule";
