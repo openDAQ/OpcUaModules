@@ -713,7 +713,6 @@ TEST_F(TmsNestedPropertyObjectTest, TestNestedObjectClientFunctionCall)
     ASSERT_EQ(func2(5), 5);
 }
 
-// NOTE: OPC UA does not propagate error codes.
 TEST_F(TmsNestedPropertyObjectTest, TestNestedObjectClientProcedureCall)
 {
     const PropertyObjectPtr child = clientObj.getPropertyValue("child1.child1_2.child1_2_1");
@@ -721,7 +720,7 @@ TEST_F(TmsNestedPropertyObjectTest, TestNestedObjectClientProcedureCall)
     ProcedurePtr proc2 = child.getPropertyValue("Procedure");
 
     ASSERT_NO_THROW(proc1(5));
-    ASSERT_NO_THROW(proc1(0)); // Outputs warning
+    ASSERT_ANY_THROW(proc1(0));
     ASSERT_NO_THROW(proc2(5));
-    ASSERT_NO_THROW(proc2(0)); // Outputs warning
+    ASSERT_ANY_THROW(proc2(0));
 }

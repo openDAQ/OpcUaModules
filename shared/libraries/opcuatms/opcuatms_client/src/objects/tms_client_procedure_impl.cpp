@@ -48,19 +48,16 @@ ErrCode TmsClientProcedureImpl::dispatch(IBaseObject* args)
         lastProccessDescription = "Calling procedure";
         OpcUaObject<UA_CallMethodResult> callResult = ctx->getClient()->callMethod(callRequest);
         if (OPCUA_STATUSCODE_FAILED(callResult->statusCode) || (callResult->outputArgumentsSize != 0))
-            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_CALLFAILED);
+        {
+            if (callResult->statusCode == UA_STATUSCODE_BADUSERACCESSDENIED)
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ACCESSDENIED);
+            else
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_CALLFAILED);
+        }
         
         return OPENDAQ_SUCCESS;
     });
-    if (OPENDAQ_FAILED(errCode))
-    {
-        daqClearErrorInfo();
-        if (this->daqContext.getLogger().assigned())
-        {
-            auto loggerComponent = this->daqContext.getLogger().getOrAddComponent("OpcUaClientProcudure");
-            LOG_W("Failed to call procedure on OpcUA client. Error: \"{}\"", lastProccessDescription);
-        }
-    }
+    OPENDAQ_RETURN_IF_FAILED(errCode, fmt::format("Failed to call procedure on OpcUA client. Error: \"{}\"", lastProccessDescription));
     return OPENDAQ_SUCCESS;
 }
 
