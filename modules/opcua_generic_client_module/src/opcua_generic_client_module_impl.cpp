@@ -31,7 +31,7 @@ OpcUaGenericClientModule::OpcUaGenericClientModule(ContextPtr context)
                               OPCUA_GENERIC_CLIENT_MODULE_PATCH_VERSION),
              std::move(context),
              MODULE_ID)
-    , discoveryClient({"OPENDAQ"})
+    , discoveryClient()
 {
     loggerComponent = this->context.getLogger().getOrAddComponent(DaqOpcUaGenericProtocolId);
     discoveryClient.initMdnsClient(List<IString>("_opcua-tcp._tcp.local."));
@@ -82,10 +82,6 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
 
     DevicePtr device(createWithImplementation<IDevice, OpcuaGenericClientDeviceImpl>(context, parent, configPtr));
 
-    // auto deviceType = createDeviceType();
-    // checkErrorInfo(deviceType.asPtr<IComponentTypePrivate>()->setModuleInfo(moduleInfo));
-    // device.asPtr<IMirroredDeviceConfig>().setMirroredDeviceType(deviceType);
-
     // Set the connection info for the device
     DeviceInfoPtr deviceInfo = device.getInfo();
     deviceInfo.asPtr<IPropertyObjectProtected>().setProtectedPropertyValue("connectionString", connectionString);
@@ -99,7 +95,7 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
 
     connectionInfo.setProtocolId(DaqOpcUaGenericDeviceTypeId)
                   .setProtocolName(DaqOpcUaGenericProtocolId)
-                  .setProtocolType(ProtocolType::Streaming)
+                  .setProtocolType(ProtocolType::Unknown)
                   .setConnectionType("TCP/IP")
                   .addAddress(host)
                   .setPort(port)
@@ -126,7 +122,7 @@ PropertyObjectPtr OpcUaGenericClientModule::populateDefaultConfig(const Property
 
 DeviceInfoPtr OpcUaGenericClientModule::populateDiscoveredDevice(const MdnsDiscoveredDevice& discoveredDevice)
 {
-    auto cap = ServerCapability(DaqOpcUaGenericDeviceTypeId, DaqOpcUaGenericProtocolId, ProtocolType::Configuration);
+    auto cap = ServerCapability(DaqOpcUaGenericDeviceTypeId, DaqOpcUaGenericProtocolId, ProtocolType::Unknown);
 
     for (const auto& ipAddress : discoveredDevice.ipv4Addresses)
     {
