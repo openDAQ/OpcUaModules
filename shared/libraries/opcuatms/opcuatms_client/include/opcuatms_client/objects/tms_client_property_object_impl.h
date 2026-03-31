@@ -154,6 +154,7 @@ protected:
                              std::unordered_map<std::string, BaseObjectPtr>& functionPropValues);
     PropertyPtr addVariableBlockProperty(const StringPtr& propName, const OpcUaNodeId& propNodeId);
     void browseRawProperties();
+    void setLocksForAttributes();
     bool isIgnoredMethodProperty(const std::string& browseName);
     PropertyObjectPtr cloneChildPropertyObject(const PropertyPtr& prop) override;
 

@@ -66,6 +66,7 @@ protected:
     void removed() override;
     bool isAddedToLocalComponentTree() override;
     StringPtr onGetRemoteId() const override;
+    ErrCode setOperationModeImpl(OperationModeType modeType, bool recursiveCall);
 
 private:
     void fetchTimeDomain();

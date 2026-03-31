@@ -8,6 +8,7 @@
 #include "tms_object_integration_test.h"
 #include <coreobjects/argument_info_factory.h>
 #include <opendaq/context_factory.h>
+#include <testutils/testutils.h>
 
 using namespace daq;
 using namespace opcua::tms;
@@ -211,8 +212,7 @@ TEST_F(TmsFunctionTest, InvalidArgTypes)
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     ProcedurePtr clientProc = clientObj.getPropertyValue("Proc");
 
-    ASSERT_NO_THROW(clientProc("foo"));
-    ASSERT_EQ(getLastMessage(), "Failed to call procedure on OpcUA client. Error: \"Calling procedure\""); 
+    ASSERT_THROW_MSG(clientProc(), CallFailedException, "Failed to call procedure on OpcUA client. Error: \"Calling procedure\"");
 }
 
 // NOTE: Should this throw an error?
@@ -240,11 +240,8 @@ TEST_F(TmsFunctionTest, InvalidArgCount)
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     ProcedurePtr clientProc = clientObj.getPropertyValue("Proc");
 
-    ASSERT_NO_THROW(clientProc());
-    ASSERT_EQ(getLastMessage(), "Failed to call procedure on OpcUA client. Error: \"Calling procedure\""); 
-
-    ASSERT_NO_THROW(clientProc(1, 2));
-    ASSERT_EQ(getLastMessage(), "Failed to call procedure on OpcUA client. Error: \"Calling procedure\""); 
+    ASSERT_THROW_MSG(clientProc(), CallFailedException, "Failed to call procedure on OpcUA client. Error: \"Calling procedure\"");
+    ASSERT_THROW_MSG(clientProc(1, 2), CallFailedException, "Failed to call procedure on OpcUA client. Error: \"Calling procedure\"");
 }
 
 TEST_F(TmsFunctionTest, ProcedureArgumentInfo)
@@ -322,6 +319,6 @@ TEST_F(TmsFunctionTest, ServerThrow)
 
     auto [serverObj, clientObj] = registerPropertyObject(obj);
     FunctionPtr clientFunc = clientObj.getPropertyValue("Func");
-    ASSERT_NO_THROW(clientFunc());
-    ASSERT_EQ(getLastMessage(), "Failed to call function on OpcUA client. Error in \"Calling function\""); 
+    ASSERT_ANY_THROW(clientFunc());
+    ASSERT_THROW_MSG(clientFunc(), CallFailedException, "Failed to call function on OpcUA client. Error in \"Calling function\"");
 }

@@ -129,6 +129,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::init()
     }
     clientContext->readObjectAttributes(nodeId);
     browseRawProperties();
+    setLocksForAttributes();
 }
 
 template <typename Impl>
@@ -287,7 +288,14 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::beginUpdate()
     request->inputArgumentsSize = 0;
     request->objectId = nodeId.copyAndGetDetachedValue();
     request->methodId = beginUpdateId.copyAndGetDetachedValue();
-    client->callMethod(request);
+    OpcUaObject<UA_CallMethodResult> callResult = client->callMethod(request);
+    if (callResult->statusCode != UA_STATUSCODE_GOOD)
+    {
+        if (callResult->statusCode == UA_STATUSCODE_BADUSERACCESSDENIED)
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ACCESSDENIED);
+        else
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_CALLFAILED);
+    }
     return OPENDAQ_SUCCESS;
 }
 
@@ -302,7 +310,14 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::endUpdate()
     request->inputArgumentsSize = 0;
     request->objectId = nodeId.copyAndGetDetachedValue();
     request->methodId = endUpdateId.copyAndGetDetachedValue();
-    client->callMethod(request);
+    OpcUaObject<UA_CallMethodResult> callResult = client->callMethod(request);
+    if (callResult->statusCode != UA_STATUSCODE_GOOD)
+    {
+        if (callResult->statusCode == UA_STATUSCODE_BADUSERACCESSDENIED)
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ACCESSDENIED);
+        else
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_CALLFAILED);
+    }
     return OPENDAQ_SUCCESS;
 }
 
@@ -430,6 +445,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::addMethodProperties(const OpcUaNodeI
                 ListPtr<IArgumentInfo> inputArgs;
                 ListPtr<IArgumentInfo> outputArgs;
                 uint32_t numberInList = std::numeric_limits<uint32_t>::max();
+                bool commonExecutable = true;
 
                 try
                 {
@@ -450,6 +466,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::addMethodProperties(const OpcUaNodeI
                         const auto numberInListId = browser->getChildNodeId(childNodeId, "NumberInList");
                         numberInList = VariantConverter<IInteger>::ToDaqObject(reader->getValue(numberInListId, UA_ATTRIBUTEID_VALUE));
                     }
+                    commonExecutable = getExecutePermission(childNodeId);
                 }
                 catch(const std::exception& e)
                 {
@@ -462,13 +479,13 @@ void TmsClientPropertyObjectBaseImpl<Impl>::addMethodProperties(const OpcUaNodeI
                 if (outputArgs.assigned() && outputArgs.getCount() == 1)
                 {
                     auto callableInfo = FunctionInfo(outputArgs[0].getType(), inputArgs);
-                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).build();
+                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).setVisible(commonExecutable).build();
                     func = TmsClientFunction(clientContext, daqContext, parentNodeId, childNodeId);
                 }
                 else
                 {
                     auto callableInfo = ProcedureInfo(inputArgs);
-                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).build();
+                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).setVisible(commonExecutable).build();
                     func = TmsClientProcedure(clientContext, daqContext, parentNodeId, childNodeId);
                 }
 
@@ -562,6 +579,22 @@ void TmsClientPropertyObjectBaseImpl<Impl>::browseRawProperties()
     for (const auto& val : functionPropValues)
         daq::checkErrorInfo(Impl::setProtectedPropertyValue(String(val.first), val.second));
 
+}
+
+template <typename Impl>
+void TmsClientPropertyObjectBaseImpl<Impl>::setLocksForAttributes()
+{
+    if (!getAttributeWritePermission(nodeId))
+    {
+        if (this->objPtr.template supportsInterface<IComponentPrivate>())
+        {
+            this->objPtr.template asPtrOrNull<IComponentPrivate>(true).lockAllAttributes();
+        }
+        else
+        {
+            LOG_W("Object does not support IComponentPrivate, cannot lock attributes for write protection");
+        }
+    }
 }
 
 template <class Impl>

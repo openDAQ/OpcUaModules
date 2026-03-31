@@ -85,7 +85,21 @@ void TmsClientPropertyImpl::configurePropertyFields()
     const auto& references = clientContext->getReferenceBrowser()->browse(nodeId);
     const auto reader = clientContext->getAttributeReader();
 
-    for (auto [browseName, ref] : references.byBrowseName)
+    int64_t userAccessLevel = reader->getValue(nodeId, UA_ATTRIBUTEID_USERACCESSLEVEL).toInteger();
+    int64_t accessLevel = reader->getValue(nodeId, UA_ATTRIBUTEID_ACCESSLEVEL).toInteger();
+    int64_t commonAccessLevel = userAccessLevel & accessLevel;
+
+    this->readOnly = ((commonAccessLevel & UA_ACCESSLEVELMASK_WRITE) == 0);
+
+    bool isExecutableProperty = (valueType == CoreType::ctFunc || valueType == CoreType::ctProc);
+    bool commonExecutable = true;
+    if (isExecutableProperty)
+    {
+        commonExecutable = getExecutePermission(nodeId);
+        this->visible = commonExecutable;
+    }
+
+    for (const auto& [browseName, ref] : references.byBrowseName)
     {
         const auto childNodeId = OpcUaNodeId(ref->nodeId.nodeId);
 
@@ -120,11 +134,17 @@ void TmsClientPropertyImpl::configurePropertyFields()
                             break;
 
                         case details::PropertyField::IsReadOnly:
-                            this->readOnly = EvalValue(evalStr).asPtr<IBoolean>();
+                            if ((commonAccessLevel & UA_ACCESSLEVELMASK_WRITE) != 0)
+                                this->readOnly = EvalValue(evalStr).asPtr<IBoolean>();
+                            else
+                                this->readOnly = true;
                             break;
 
                         case details::PropertyField::IsVisible:
-                            this->visible = EvalValue(evalStr).asPtr<IBoolean>();
+                            if (!isExecutableProperty || commonExecutable)
+                                this->visible = EvalValue(evalStr).asPtr<IBoolean>();
+                            else
+                                this->visible = false;
                             break;
 
                         case details::PropertyField::Unit:
@@ -207,10 +227,16 @@ void TmsClientPropertyImpl::configurePropertyFields()
                             break;
                         }
                         case details::PropertyField::IsReadOnly:
-                            this->readOnly = VariantConverter<IBoolean>::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
+                            if ((commonAccessLevel & UA_ACCESSLEVELMASK_WRITE) != 0)
+                                this->readOnly = VariantConverter<IBoolean>::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
+                            else
+                                this->readOnly = true;
                             break;
                         case details::PropertyField::IsVisible:
-                            this->visible = VariantConverter<IBoolean>::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
+                            if (!isExecutableProperty || commonExecutable)
+                                this->visible = VariantConverter<IBoolean>::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
+                            else
+                                this->visible = false;
                             break;
                         case details::PropertyField::Unit:
                             this->unit = VariantConverter<IUnit>::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
