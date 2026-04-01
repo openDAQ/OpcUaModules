@@ -27,7 +27,6 @@ endif()
 
 target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_test_utils gtest
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuageneric_client
-                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME}
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua_generic_client_module
 )
 
