@@ -76,11 +76,39 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
     std::string host;
     std::string hostType;
     int port;
-    formConnectionString(connectionString, configPtr, host, port, hostType);
+    const auto opcuaConnStr = formConnectionString(connectionString, configPtr, host, port, hostType);
 
     std::scoped_lock lock(sync);
 
-    DevicePtr device(createWithImplementation<IDevice, OpcuaGenericClientDeviceImpl>(context, parent, configPtr));
+    std::shared_ptr<OpcUaClient> client;
+    std::string deviceName;
+    std::string deviceLocalId;
+
+    try
+    {
+        client = std::make_shared<OpcUaClient>(OpcUaEndpoint(opcuaConnStr,
+                                                             configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME),
+                                                             configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD)));
+        const auto desc = client->readApplicationDescription();
+
+        deviceName = desc.name.empty() ? GENERIC_OPCUA_CLIENT_DEVICE_NAME : desc.name;
+        deviceLocalId = desc.uri.empty() ? "" : desc.uri;
+        std::replace(deviceLocalId.begin(), deviceLocalId.end(), '/', '-');
+    }
+
+    catch (const OpcUaException& e)
+    {
+        switch (e.getStatusCode())
+        {
+            case UA_STATUSCODE_BADUSERACCESSDENIED:
+            case UA_STATUSCODE_BADIDENTITYTOKENINVALID:
+                DAQ_THROW_EXCEPTION(AuthenticationFailedException, e.what());
+            default:
+                DAQ_THROW_EXCEPTION(NotFoundException, e.what());
+        }
+    }
+
+    DevicePtr device(createWithImplementation<IDevice, OpcuaGenericClientDeviceImpl>(context, parent, configPtr, client, deviceLocalId, deviceName));
 
     // Set the connection info for the device
     DeviceInfoPtr deviceInfo = device.getInfo();
@@ -162,11 +190,13 @@ DeviceInfoPtr OpcUaGenericClientModule::populateDiscoveredDevice(const MdnsDisco
 
     cap.setConnectionType("TCP/IP");
     cap.setPrefix(DaqOpcUaGenericDevicePrefix);
-    cap.setProtocolVersion(discoveredDevice.getPropertyOrDefault("protocolVersion", ""));
+    cap.setProtocolVersion("");
     if (discoveredDevice.servicePort > 0)
         cap.setPort(discoveredDevice.servicePort);
 
-    return populateDiscoveredDeviceInfo(DiscoveryClient::populateDiscoveredInfoProperties, discoveredDevice, cap, createDeviceType());
+    auto devInfo = populateDiscoveredDeviceInfo(DiscoveryClient::populateDiscoveredInfoProperties, discoveredDevice, cap, createDeviceType());
+    devInfo.asPtr<IDeviceInfoConfig>().setName(discoveredDevice.serviceInstance);
+    return devInfo;
 }
 
 StringPtr OpcUaGenericClientModule::formConnectionString(const StringPtr& connectionString, const PropertyObjectPtr& config, std::string& host, int& port, std::string& hostType)

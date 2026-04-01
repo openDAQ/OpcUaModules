@@ -67,17 +67,18 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
 TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
 {
     const auto instance = Instance();
+    const std::string deviceName("open62541-based OPC UA Application");
     daq::GenericDevicePtr<daq::IDevice> device;
     ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842"));
     ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
               Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
-    ASSERT_EQ(device.getInfo().getName(), GENERIC_OPCUA_CLIENT_DEVICE_NAME);
+    ASSERT_EQ(device.getInfo().getName(), deviceName);
     auto devices = instance.getDevices();
     bool contain = false;
     daq::GenericDevicePtr<daq::IDevice> deviceFromList;
     for (const auto& d : devices)
     {
-        contain = (d.getName() == GENERIC_OPCUA_CLIENT_DEVICE_NAME);
+        contain = (d.getName() == deviceName);
         if (contain)
         {
             deviceFromList = d;
@@ -116,4 +117,11 @@ TEST_F(GenericOpcuaClientDeviceTest, CheckDeviceFunctionalBlocks)
     ASSERT_NO_THROW(fbTypes = device.getAvailableFunctionBlockTypes());
     ASSERT_GE(fbTypes.getCount(), 1);
     ASSERT_TRUE(fbTypes.hasKey(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME));
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, CheckDeviceNameLocalId)
+{
+    StartUp();
+    EXPECT_EQ(device.getLocalId().toStdString(), std::string("urn:open62541.server.application"));
+    EXPECT_EQ(device.getName().toStdString(), std::string("open62541-based OPC UA Application"));
 }

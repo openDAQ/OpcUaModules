@@ -25,7 +25,12 @@ BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 class OpcuaGenericClientDeviceImpl : public Device
 {
 public:
-    explicit OpcuaGenericClientDeviceImpl(const ContextPtr& ctx, const ComponentPtr& parent, const PropertyObjectPtr& config);
+    explicit OpcuaGenericClientDeviceImpl(const ContextPtr& ctx,
+                                          const ComponentPtr& parent,
+                                          const PropertyObjectPtr& config,
+                                          std::shared_ptr<OpcUaClient> client,
+                                          const std::string& localId,
+                                          const std::string& name);
     static PropertyObjectPtr createDefaultConfig();
 protected:
     static std::atomic<int> localIndex;
@@ -42,10 +47,11 @@ protected:
     FunctionBlockPtr onAddFunctionBlock(const StringPtr& typeId, const PropertyObjectPtr& config) override;
 
     void initNestedFbTypes();
+    void initProperties(const PropertyObjectPtr& config);
+    std::string getConnectionString() const;
 
     DictObjectPtr<IDict, IString, IFunctionBlockType> nestedFbTypes;
 
-    StringPtr connectionString;
     EnumerationPtr connectionStatus;
 
     std::atomic<bool> connectedDone{false};

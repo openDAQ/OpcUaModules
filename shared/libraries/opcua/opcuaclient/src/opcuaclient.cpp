@@ -195,6 +195,42 @@ UA_Client* UaClientFactory::build()
     return client;
 }
 
+OpcUaClient::ApplicationDescription OpcUaClient::readApplicationDescription()
+{
+    std::lock_guard guard(getLock());
+    ApplicationDescription desc;
+    if (!uaclient)
+        initialize();
+
+    UA_StatusCode status = UA_STATUSCODE_GOOD;
+
+    size_t endpointCount = 0;
+    UA_EndpointDescription *endpointArray = NULL;
+
+    status = UA_Client_getEndpoints(
+        uaclient,
+        endpoint.getUrl().c_str(),
+        &endpointCount,
+        &endpointArray
+        );
+    const auto url = endpoint.getUrl();
+    if (OPCUA_STATUSCODE_SUCCEEDED(status))
+    {
+        for (size_t i = 0; i < endpointCount; ++i) {
+            const std::string_view endpointUrl(reinterpret_cast<char*>(endpointArray[i].endpointUrl.data), endpointArray[i].endpointUrl.length);
+            if (url == endpointUrl)
+            {
+                const UA_ApplicationDescription& app = endpointArray[i].server;
+                desc.uri = std::string(reinterpret_cast<char*>(app.applicationUri.data), (int)app.applicationUri.length);
+                desc.name = utils::ToStdString(app.applicationName.text);
+            }
+        }
+    }
+
+    UA_Array_delete(endpointArray, endpointCount, &UA_TYPES[UA_TYPES_ENDPOINTDESCRIPTION]);
+    return desc;
+}
+
 void OpcUaClient::connect()
 {
     std::lock_guard guard(getLock());

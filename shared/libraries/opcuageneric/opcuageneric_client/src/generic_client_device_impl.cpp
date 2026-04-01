@@ -10,28 +10,45 @@ BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
 std::atomic<int> OpcuaGenericClientDeviceImpl::localIndex = 0;
 
-OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx, const ComponentPtr& parent, const PropertyObjectPtr& config)
-    : Device(ctx, parent, generateLocalId()),
-    connectionStatus(Enumeration("ConnectionStatusType", "Connected", this->context.getTypeManager()))
+namespace
 {
-    this->name = GENERIC_OPCUA_CLIENT_DEVICE_NAME;
+    PropertyObjectPtr populateDefaultConfig(const PropertyObjectPtr& defaultConfig, const PropertyObjectPtr& config)
+    {
+        auto newConfig = PropertyObject();
+        for (const auto& prop : defaultConfig.getAllProperties())
+        {
+            newConfig.addProperty(prop.asPtr<IPropertyInternal>(true).clone());
+            const auto propName = prop.getName();
+            newConfig.setPropertyValue(propName, config.hasProperty(propName) ? config.getPropertyValue(propName) : prop.getValue());
+        }
+        return newConfig;
+    }
+}
 
-    const auto host = config.getPropertyValue(PROPERTY_NAME_OPCUA_HOST).asPtr<IString>().toStdString();
-    const auto port = config.getPropertyValue(PROPERTY_NAME_OPCUA_PORT).asPtr<IInteger>().getValue(DEFAULT_OPCUA_PORT);
-    const auto path = config.getPropertyValue(PROPERTY_NAME_OPCUA_PATH).asPtr<IString>().toStdString();
+OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx,
+                                                           const ComponentPtr& parent,
+                                                           const PropertyObjectPtr& config,
+                                                           std::shared_ptr<OpcUaClient> client,
+                                                           const std::string& localId,
+                                                           const std::string& name)
+    : Device(ctx, parent, localId.empty() ? generateLocalId() : localId)
+    , connectionStatus(Enumeration("ConnectionStatusType", "Connected", this->context.getTypeManager()))
+    , client(client)
+{
+    if (this->client == nullptr)
+        DAQ_THROW_EXCEPTION(UninitializedException, "OpcUaClient is not initialized");
 
-    connectionString = std::string(OpcUaGenericScheme) + "://" + host + ":" + std::to_string(port) + path;
+    this->name = name.empty() ? GENERIC_OPCUA_CLIENT_DEVICE_NAME : name;
 
-    auto endpoint = OpcUaEndpoint(connectionString);
-
-    endpoint.setUsername(config.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME));
-    endpoint.setPassword(config.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD));
+    if (config.assigned())
+        initProperties(populateDefaultConfig(createDefaultConfig(), config));
+    else
+        initProperties(createDefaultConfig());
 
     try
     {
-        client = std::make_shared<OpcUaClient>(endpoint);
-        client->connect();
-        client->runIterate();
+        this->client->connect();
+        this->client->runIterate();
     }
     catch (const OpcUaException& e)
     {
@@ -41,10 +58,9 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
             case UA_STATUSCODE_BADIDENTITYTOKENINVALID:
                 DAQ_THROW_EXCEPTION(AuthenticationFailedException, e.what());
             default:
-                DAQ_THROW_EXCEPTION(NotFoundException, e.what());
+                DAQ_THROW_EXCEPTION(GeneralErrorException, e.what());
         }
     }
-
 
     initComponentStatus();
     initNestedFbTypes();
@@ -63,6 +79,30 @@ PropertyObjectPtr OpcuaGenericClientDeviceImpl::createDefaultConfig()
     return defaultConfig;
 }
 
+void OpcuaGenericClientDeviceImpl::initProperties(const PropertyObjectPtr& config)
+{
+    for (const auto& prop : config.getAllProperties())
+    {
+        const auto propName = prop.getName();
+        if (!objPtr.hasProperty(propName))
+        {
+            auto propClone = PropertyBuilder(prop.getName())
+            .setValueType(prop.getValueType())
+                .setDescription(prop.getDescription())
+                .setDefaultValue(prop.getValue())
+                .setVisible(prop.getVisible())
+                .setReadOnly(true)
+                .build();
+            objPtr.addProperty(propClone);
+        }
+    }
+}
+
+std::string OpcuaGenericClientDeviceImpl::getConnectionString() const
+{
+    return client->getEndpoint().getUrl();
+}
+
 void OpcuaGenericClientDeviceImpl::removed()
 {
     Device::removed();
@@ -70,7 +110,7 @@ void OpcuaGenericClientDeviceImpl::removed()
 
 DeviceInfoPtr OpcuaGenericClientDeviceImpl::onGetInfo()
 {
-    return DeviceInfo(connectionString, GENERIC_OPCUA_CLIENT_DEVICE_NAME);
+    return DeviceInfo(getConnectionString(), GENERIC_OPCUA_CLIENT_DEVICE_NAME);
 }
 
 

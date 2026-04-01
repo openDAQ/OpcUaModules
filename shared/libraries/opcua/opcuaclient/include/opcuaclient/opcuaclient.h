@@ -95,6 +95,11 @@ private:
 class OpcUaClient
 {
 public:
+    struct ApplicationDescription{
+        std::string name;
+        std::string uri;
+    };
+
     explicit OpcUaClient(const std::string& url);
     explicit OpcUaClient(const OpcUaEndpoint& endpoint);
     ~OpcUaClient();
@@ -102,6 +107,7 @@ public:
     static constexpr size_t CONNECTION_TIMEOUT_SECONDS = 10;
 
     void initialize();
+    ApplicationDescription readApplicationDescription();
     void connect();
     void disconnect(bool doClear = true);
     void clear();
