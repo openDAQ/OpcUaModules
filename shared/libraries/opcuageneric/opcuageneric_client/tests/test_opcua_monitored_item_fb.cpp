@@ -384,6 +384,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingLastValue
     ASSERT_TRUE(prevVal.assigned());
 
     const auto timeBefore = getTime();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
 
     ASSERT_NO_THROW(testHelper.writeValueNode(nodeId, variant));
 
@@ -396,6 +397,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingLastValue
 
     auto domainVal = domainSig.getLastValue();
     const auto timeAfter = getTime();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
 
     // check that the target and read values are the same
     ASSERT_EQ(val.asPtr<INumber>().getValue<int64_t>(int64_t(0)), value);
@@ -517,6 +519,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReade
     ASSERT_TRUE(prevVal.assigned());
 
     const auto timeBefore = getTime();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
 
     auto reader = TailReaderBuilder()
                       .setSignal(fb.getSignals()[0])
@@ -651,6 +654,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingTail
     ASSERT_TRUE(prevVal.assigned());
 
     const auto timeBefore = getTime();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
 
     auto reader = TailReaderBuilder()
                       .setSignal(fb.getSignals()[0])
@@ -770,7 +774,6 @@ TEST_F(GenericOpcuaMonitoredItemTest, SignalDescriptorSampleTypeMatchesOpcUaData
 
     for (const auto& [nodeId, expectedType] : cases)
     {
-        SCOPED_TRACE("Node: " + nodeId.getIdentifier());
         CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), 100);
         ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
         EXPECT_EQ(fb.getSignals()[0].getDescriptor().getSampleType(), expectedType);
