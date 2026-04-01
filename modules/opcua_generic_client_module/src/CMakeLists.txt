@@ -32,6 +32,7 @@ if (MSVC)
 endif()
 
 target_link_libraries(${LIB_NAME} PUBLIC  ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq
+                                          Boost::uuid
                                   PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::discovery
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuageneric_client
 )
