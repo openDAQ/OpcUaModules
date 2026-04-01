@@ -459,9 +459,11 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
             }
         }
         updateStatuses();
-        auto sleepTime = std::chrono::duration_cast<std::chrono::microseconds>(nextTP - std::chrono::high_resolution_clock::now());
+        auto now = std::chrono::high_resolution_clock::now();
+        std::chrono::microseconds sleepTime(0);
+        if (now < nextTP)
+            sleepTime = std::chrono::duration_cast<std::chrono::microseconds>(nextTP - now);
         start = nextTP;
-        sleepTime = (sleepTime.count() > 0) ? sleepTime : std::chrono::microseconds(0);
         std::this_thread::sleep_for(sleepTime);
     }
 }
