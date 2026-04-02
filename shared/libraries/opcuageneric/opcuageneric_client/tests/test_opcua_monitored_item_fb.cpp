@@ -774,8 +774,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, SignalDescriptorSampleTypeMatchesOpcUaData
 
     for (const auto& [nodeId, expectedType] : cases)
     {
-        CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), 100);
+        CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), 50);
         ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+        readValueWithTout(fb.getSignals()[0], 150);
         EXPECT_EQ(fb.getSignals()[0].getDescriptor().getSampleType(), expectedType);
         device.removeFunctionBlock(fb);
         fb = nullptr;
@@ -787,8 +788,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, UnsupportedDataTypeNode)
     StartUp();
 
     // .b is a BOOLEAN node — not in supportedDataTypes
-    CreateMonitoredItemFB(".b", 1, 100, DS::ServerTimestamp);
+    CreateMonitoredItemFB(".b", 1, 10, DS::ServerTimestamp);
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
 
     daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], 300);

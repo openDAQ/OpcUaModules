@@ -4,11 +4,13 @@
 #include "opendaq/packet_factory.h"
 #include <chrono>
 
+#define DISABLE_NODE_DATATYPE_VALIDATION
+
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
 std::atomic<int> OpcUaMonitoredItemFbImpl::localIndex = 0;
 
-std::unordered_map<OpcUaNodeId, daq::SampleType> OpcUaMonitoredItemFbImpl::supportedDataTypes = {
+std::unordered_map<OpcUaNodeId, daq::SampleType> OpcUaMonitoredItemFbImpl::supportedDataTypeNodeIds = {
     {OpcUaNodeId(), daq::SampleType::Undefined},
     {OpcUaNodeId(0, UA_NS0ID_FLOAT), daq::SampleType::Float32},
     {OpcUaNodeId(0, UA_NS0ID_DOUBLE), daq::SampleType::Float64},
@@ -20,7 +22,42 @@ std::unordered_map<OpcUaNodeId, daq::SampleType> OpcUaMonitoredItemFbImpl::suppo
     {OpcUaNodeId(0, UA_NS0ID_UINT32), daq::SampleType::UInt32},
     {OpcUaNodeId(0, UA_NS0ID_INT64), daq::SampleType::Int64},
     {OpcUaNodeId(0, UA_NS0ID_UINT64), daq::SampleType::UInt64},
-    {OpcUaNodeId(0, UA_NS0ID_STRING), daq::SampleType::String}};
+    {OpcUaNodeId(0, UA_NS0ID_STRING), daq::SampleType::String},
+    {OpcUaNodeId(0, UA_NS0ID_LOCALIZEDTEXT), daq::SampleType::String},
+    {OpcUaNodeId(0, UA_NS0ID_QUALIFIEDNAME), daq::SampleType::String},
+    {OpcUaNodeId(0, UA_NS0ID_DATETIME), daq::SampleType::Int64}};
+
+std::unordered_map<UA_DataTypeKind, daq::SampleType> OpcUaMonitoredItemFbImpl::supportedDataTypeKinds = {
+    {UA_DATATYPEKIND_FLOAT, daq::SampleType::Float32},
+    {UA_DATATYPEKIND_DOUBLE, daq::SampleType::Float64},
+    {UA_DATATYPEKIND_SBYTE, daq::SampleType::Int8},
+    {UA_DATATYPEKIND_BYTE, daq::SampleType::UInt8},
+    {UA_DATATYPEKIND_INT16, daq::SampleType::Int16},
+    {UA_DATATYPEKIND_UINT16, daq::SampleType::UInt16},
+    {UA_DATATYPEKIND_INT32, daq::SampleType::Int32},
+    {UA_DATATYPEKIND_UINT32, daq::SampleType::UInt32},
+    {UA_DATATYPEKIND_INT64, daq::SampleType::Int64},
+    {UA_DATATYPEKIND_UINT64, daq::SampleType::UInt64},
+    {UA_DATATYPEKIND_STRING, daq::SampleType::String},
+    {UA_DATATYPEKIND_LOCALIZEDTEXT, daq::SampleType::String},
+    {UA_DATATYPEKIND_QUALIFIEDNAME, daq::SampleType::String},
+    {UA_DATATYPEKIND_DATETIME, daq::SampleType::Int64}};
+
+std::unordered_map<UA_DataTypeKind, OpcUaNodeId> OpcUaMonitoredItemFbImpl::dataTypeKindToDataTypeNodeId = {
+    {UA_DATATYPEKIND_FLOAT, OpcUaNodeId(0, UA_NS0ID_FLOAT)},
+    {UA_DATATYPEKIND_DOUBLE, OpcUaNodeId(0, UA_NS0ID_DOUBLE)},
+    {UA_DATATYPEKIND_SBYTE, OpcUaNodeId(0, UA_NS0ID_SBYTE)},
+    {UA_DATATYPEKIND_BYTE, OpcUaNodeId(0, UA_NS0ID_BYTE)},
+    {UA_DATATYPEKIND_INT16, OpcUaNodeId(0, UA_NS0ID_INT16)},
+    {UA_DATATYPEKIND_UINT16, OpcUaNodeId(0, UA_NS0ID_UINT16)},
+    {UA_DATATYPEKIND_INT32, OpcUaNodeId(0, UA_NS0ID_INT32)},
+    {UA_DATATYPEKIND_UINT32, OpcUaNodeId(0, UA_NS0ID_UINT32)},
+    {UA_DATATYPEKIND_INT64, OpcUaNodeId(0, UA_NS0ID_INT64)},
+    {UA_DATATYPEKIND_UINT64, OpcUaNodeId(0, UA_NS0ID_UINT64)},
+    {UA_DATATYPEKIND_STRING, OpcUaNodeId(0, UA_NS0ID_STRING)},
+    {UA_DATATYPEKIND_LOCALIZEDTEXT, OpcUaNodeId(0, UA_NS0ID_LOCALIZEDTEXT)},
+    {UA_DATATYPEKIND_QUALIFIEDNAME, OpcUaNodeId(0, UA_NS0ID_QUALIFIEDNAME)},
+    {UA_DATATYPEKIND_DATETIME, OpcUaNodeId(0, UA_NS0ID_DATETIME)}};
 
 namespace
 {
@@ -166,9 +203,9 @@ std::string OpcUaMonitoredItemFbImpl::generateLocalId()
 void OpcUaMonitoredItemFbImpl::adjustSignalDescriptor()
 {
     auto lockProcessing = std::scoped_lock(processingMutex);
-    if (nodeValidationErr.ok() && supportedDataTypes.count(nodeDataType) != 0)
+    if (nodeValidationErr.ok() && supportedDataTypeNodeIds.count(nodeDataType) != 0)
     {
-        outputSignalDescriptor = DataDescriptorBuilder().setSampleType(supportedDataTypes[nodeDataType]).build();
+        outputSignalDescriptor = DataDescriptorBuilder().setSampleType(supportedDataTypeNodeIds[nodeDataType]).build();
     }
     else
     {
@@ -305,10 +342,12 @@ void OpcUaMonitoredItemFbImpl::validateNode()
         {
             nodeValidationErr.add(fmt::format("There is no read permission to node {}", nodeId.toString()));
         }
+#ifndef DISABLE_NODE_DATATYPE_VALIDATION
         else if (nodeDataType = client->readDataType(nodeId); supportedDataTypes.count(nodeDataType) == 0)
         {
             nodeValidationErr.add(fmt::format("Node {} has unsupported DataType ({})", nodeId.toString(), nodeDataType.toString()));
         }
+#endif
     }
     catch (OpcUaException& ex)
     {
@@ -354,7 +393,11 @@ bool OpcUaMonitoredItemFbImpl::validateResponse(const OpcUaDataValue& value)
 bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaDataValue& value)
 {
     auto lockProcessing = std::scoped_lock(processingMutex);
-    OpcUaNodeId valueDataType(value.getValue().value.type->typeId);
+    OpcUaNodeId valueDataType;
+    const UA_DataTypeKind typeKind = static_cast<UA_DataTypeKind>(value.getValue().value.type->typeKind);
+    if (dataTypeKindToDataTypeNodeId.count(typeKind))
+        valueDataType = dataTypeKindToDataTypeNodeId.at(typeKind);
+
     if (valueDataType != nodeDataType)
     {
         nodeDataType = std::move(valueDataType);
@@ -362,11 +405,11 @@ bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaDataValue& value
         outputSignal.setDescriptor(outputSignalDescriptor);
     }
 
-    bool valid = (value.isNumber() || value.isString());
+    bool valid = (supportedDataTypeKinds.count(typeKind) != 0);
     if (valid)
         valueValidationErr.reset();
     else
-        valueValidationErr.set("Value has unsupported type.");
+        valueValidationErr.set(fmt::format("Value has unsupported type ({}).", static_cast<int>(typeKind)));
 
     return valid;
 }
@@ -488,34 +531,37 @@ OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(
 
         switch (value.getValue().value.type->typeKind)
         {
-            case UA_TYPES_SBYTE:
+            case UA_DATATYPEKIND_SBYTE:
                 *(static_cast<int8_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_SByte>();
                 break;
-            case UA_TYPES_BYTE:
+            case UA_DATATYPEKIND_BYTE:
                 *(static_cast<uint8_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Byte>();
                 break;
-            case UA_TYPES_INT16:
+            case UA_DATATYPEKIND_INT16:
                 *(static_cast<int16_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Int16>();
                 break;
-            case UA_TYPES_UINT16:
+            case UA_DATATYPEKIND_UINT16:
                 *(static_cast<uint16_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_UInt16>();
                 break;
-            case UA_TYPES_INT32:
+            case UA_DATATYPEKIND_INT32:
                 *(static_cast<int32_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Int32>();
                 break;
-            case UA_TYPES_UINT32:
+            case UA_DATATYPEKIND_UINT32:
                 *(static_cast<uint32_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_UInt32>();
                 break;
-            case UA_TYPES_INT64:
+            case UA_DATATYPEKIND_INT64:
                 *(static_cast<int64_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Int64>();
                 break;
-            case UA_TYPES_UINT64:
+            case UA_DATATYPEKIND_UINT64:
                 *(static_cast<uint64_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_UInt64>();
                 break;
-            case UA_TYPES_FLOAT:
+            case UA_DATATYPEKIND_DATETIME:
+                *(static_cast<int64_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Int64>();
+                break;
+            case UA_DATATYPEKIND_FLOAT:
                 *(static_cast<float*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Float>();
                 break;
-            case UA_TYPES_DOUBLE:
+            case UA_DATATYPEKIND_DOUBLE:
                 *(static_cast<double*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Double>();
                 break;
             default:

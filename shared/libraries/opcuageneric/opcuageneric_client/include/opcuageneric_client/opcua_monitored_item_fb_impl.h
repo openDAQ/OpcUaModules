@@ -72,7 +72,9 @@ protected:
     };
 
     static std::atomic<int> localIndex;
-    static std::unordered_map<OpcUaNodeId, daq::SampleType> supportedDataTypes;
+    static std::unordered_map<OpcUaNodeId, daq::SampleType> supportedDataTypeNodeIds;
+    static std::unordered_map<UA_DataTypeKind, daq::SampleType> supportedDataTypeKinds;
+    static std::unordered_map<UA_DataTypeKind, OpcUaNodeId> dataTypeKindToDataTypeNodeId;
 
     DataDescriptorPtr outputSignalDescriptor;
     SignalConfigPtr outputSignal;

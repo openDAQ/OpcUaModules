@@ -68,6 +68,7 @@ bool OpcUaDataValue::isInteger() const
 bool OpcUaDataValue::isString() const
 {
     return VariantUtils::HasScalarType<UA_String>(value.value) ||
+           VariantUtils::HasScalarType<UA_QualifiedName>(value.value) ||
            VariantUtils::HasScalarType<UA_LocalizedText>(value.value);
 }
 
