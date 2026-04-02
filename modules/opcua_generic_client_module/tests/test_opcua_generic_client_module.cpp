@@ -149,7 +149,7 @@ TEST_F(OpcUaGenericClientModuleTest, DefaultDeviceConfig)
     ASSERT_TRUE(deviceTypes.hasKey("OPCUAGeneric"));
     auto config = deviceTypes.get("OPCUAGeneric").createDefaultConfig();
     ASSERT_TRUE(config.assigned());
-    ASSERT_EQ(config.getAllProperties().getCount(), 5u);
+    ASSERT_EQ(config.getAllProperties().getCount(), 6u);
 }
 
 TEST_F(OpcUaGenericClientModuleTest, CreateFunctionBlockIdNull)

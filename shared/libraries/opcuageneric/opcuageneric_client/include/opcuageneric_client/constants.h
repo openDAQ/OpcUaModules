@@ -26,6 +26,7 @@ static constexpr const char* PROPERTY_NAME_OPCUA_PORT = "Port";
 static constexpr const char* PROPERTY_NAME_OPCUA_PATH = "Path";
 static constexpr const char* PROPERTY_NAME_OPCUA_USERNAME = "Username";
 static constexpr const char* PROPERTY_NAME_OPCUA_PASSWORD = "Password";
+static constexpr const char* PROPERTY_NAME_OPCUA_MI_LOCAL_ID = "LocalId";
 
 // MonitoredItem FB
 static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_TYPE = "NodeIDType";

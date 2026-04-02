@@ -82,7 +82,11 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
 
     std::shared_ptr<OpcUaClient> client;
     std::string deviceName;
-    std::string deviceLocalId;
+    // we let a user to set device local id in the config, but if it's not set, we will try to get it from the server's
+    // ApplicationDescription. If that's also not set, we will generate a local id for the device.
+    // A user need to have this opportunity to set local id in the config when they want to have a stable local id for the device across
+    // different runs of the application, and they don't want to rely on the server to provide it (especially it the server uses default values).
+    std::string deviceLocalId = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID);
 
     try
     {
@@ -92,8 +96,11 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
         const auto desc = client->readApplicationDescription();
 
         deviceName = desc.name.empty() ? GENERIC_OPCUA_CLIENT_DEVICE_NAME : desc.name;
-        deviceLocalId = desc.uri.empty() ? "" : desc.uri;
-        std::replace(deviceLocalId.begin(), deviceLocalId.end(), '/', '-');
+        if (deviceLocalId.empty())
+        {
+            deviceLocalId = desc.uri.empty() ? "" : desc.uri;
+            std::replace(deviceLocalId.begin(), deviceLocalId.end(), '/', '-');
+        }
     }
 
     catch (const OpcUaException& e)

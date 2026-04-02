@@ -43,25 +43,28 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     auto defaultConfig = deviceTypes.get("OPCUAGeneric").createDefaultConfig();
     ASSERT_TRUE(defaultConfig.assigned());
 
-    ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 5u);
+    ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 6u);
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_HOST));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PORT));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PATH));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_USERNAME));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PASSWORD));
+    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID));
 
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_HOST).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PORT).getValueType(), CoreType::ctInt);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PATH).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_USERNAME).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PASSWORD).getValueType(), CoreType::ctString);
+    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID).getValueType(), CoreType::ctString);
 
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_HOST), DEFAULT_OPCUA_HOST);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_PORT), DEFAULT_OPCUA_PORT);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_PATH), DEFAULT_OPCUA_PATH);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME), DEFAULT_OPCUA_USERNAME);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD), DEFAULT_OPCUA_PASSWORD);
+    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID), "");
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
@@ -89,6 +92,45 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
     ASSERT_TRUE(deviceFromList.assigned());
     ASSERT_EQ(deviceFromList.getInfo().getName(), device.getInfo().getName());
     ASSERT_TRUE(deviceFromList == device);
+
+    ASSERT_EQ(device.getAllProperties().getCount(), 5u);
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_HOST));
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_PORT));
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_PATH));
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_USERNAME));
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_PASSWORD));
+    ASSERT_FALSE(device.hasProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID));
+}
+
+
+TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithLocalId)
+{
+    const auto module = CreateModule();
+    const auto instance = Instance();
+    const std::string deviceLocalId("myCustomLocalId");
+    daq::GenericDevicePtr<daq::IDevice> device;
+    auto defaultConfig = module.getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
+    defaultConfig.setPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID, deviceLocalId);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", defaultConfig));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+    ASSERT_EQ(device.getLocalId(), deviceLocalId);
+    ASSERT_NE(device.getGlobalId().toStdString().find(deviceLocalId), std::string::npos);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithoutLocalId)
+{
+    const auto module = CreateModule();
+    const auto instance = Instance();
+    const std::string deviceLocalId("urn:open62541.server.application");
+    daq::GenericDevicePtr<daq::IDevice> device;
+    auto defaultConfig = module.getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", defaultConfig));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+    ASSERT_EQ(device.getLocalId(), deviceLocalId);
+    ASSERT_NE(device.getGlobalId().toStdString().find(deviceLocalId), std::string::npos);
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, RemovingDevice)

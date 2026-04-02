@@ -17,6 +17,8 @@ namespace
         auto newConfig = PropertyObject();
         for (const auto& prop : defaultConfig.getAllProperties())
         {
+            if (prop.getName() == PROPERTY_NAME_OPCUA_MI_LOCAL_ID)
+                continue;
             newConfig.addProperty(prop.asPtr<IPropertyInternal>(true).clone());
             const auto propName = prop.getName();
             newConfig.setPropertyValue(propName, config.hasProperty(propName) ? config.getPropertyValue(propName) : prop.getValue());
@@ -75,6 +77,8 @@ PropertyObjectPtr OpcuaGenericClientDeviceImpl::createDefaultConfig()
     defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_PATH, DEFAULT_OPCUA_PATH));
     defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_USERNAME, DEFAULT_OPCUA_USERNAME));
     defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_PASSWORD, DEFAULT_OPCUA_PASSWORD));
+    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID, ""));
+
 
     return defaultConfig;
 }
@@ -84,6 +88,8 @@ void OpcuaGenericClientDeviceImpl::initProperties(const PropertyObjectPtr& confi
     for (const auto& prop : config.getAllProperties())
     {
         const auto propName = prop.getName();
+        if (propName == PROPERTY_NAME_OPCUA_MI_LOCAL_ID)
+            continue;
         if (!objPtr.hasProperty(propName))
         {
             auto propClone = PropertyBuilder(prop.getName())
