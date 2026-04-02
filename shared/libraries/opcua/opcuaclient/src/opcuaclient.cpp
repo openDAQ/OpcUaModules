@@ -62,7 +62,7 @@ OpcUaClient::OpcUaClient(const std::string& url)
 
 OpcUaClient::~OpcUaClient()
 {
-    disconnect();
+    disconnect(true);
 }
 
 void OpcUaClient::initialize()
