@@ -367,22 +367,22 @@ bool OpcUaMonitoredItemFbImpl::validateResponse(const OpcUaDataValue& value)
     auto lockProcessing = std::scoped_lock(processingMutex);
     if (value.getValue().hasStatus && value.getValue().status != UA_STATUSCODE_GOOD)
     {
-        responseValidationErr.add(fmt::format("Reading value error: {}. ", value.getValue().hasStatus));
+        responseValidationErr.set(fmt::format("Reading value error: {} - {}. ", value.getValue().status, UA_StatusCode_name(value.getValue().status)));
         return false;
     }
     if (!value.getValue().hasValue)
     {
-        responseValidationErr.add(std::string("Reading value error: response without a value."));
+        responseValidationErr.set(std::string("Reading value error: response without a value."));
         return false;
     }
     if (config.domainSource == DomainSource::ServerTimestamp && !value.getValue().hasServerTimestamp)
     {
-        responseValidationErr.add(std::string("Reading value error: there is no required server timestamp"));
+        responseValidationErr.set(std::string("Reading value error: there is no required server timestamp"));
         return false;
     }
     if (config.domainSource == DomainSource::SourceTimestamp && !value.getValue().hasSourceTimestamp)
     {
-        responseValidationErr.add(std::string("Reading value error: there is no required source timestamp"));
+        responseValidationErr.set(std::string("Reading value error: there is no required source timestamp"));
         return false;
     }
 
