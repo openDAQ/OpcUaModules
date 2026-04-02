@@ -16,9 +16,14 @@
 
 #pragma once
 #include <opcuageneric_client/opcuageneric.h>
+#include <opcuageneric_client/constants.h>
+#include <opcuageneric_client/status_adaptor.h>
 #include <opendaq/device_impl.h>
 #include <opendaq/streaming_ptr.h>
 #include "opcuaclient/opcuaclient.h"
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
@@ -30,7 +35,9 @@ public:
                                           const PropertyObjectPtr& config,
                                           std::shared_ptr<OpcUaClient> client,
                                           const std::string& localId,
-                                          const std::string& name);
+                                          const std::string& name,
+                                          uint32_t reconnectIntervalMs = DEFAULT_RECONNECT_INTERVAL);
+    ~OpcuaGenericClientDeviceImpl();
     static PropertyObjectPtr createDefaultConfig();
 protected:
     static std::atomic<int> localIndex;
@@ -52,12 +59,23 @@ protected:
 
     DictObjectPtr<IDict, IString, IFunctionBlockType> nestedFbTypes;
 
-    EnumerationPtr connectionStatus;
+    StatusAdaptor connectionStatus;
 
     std::atomic<bool> connectedDone{false};
     std::unordered_map<std::string, std::string> deviceMap;  // device name -> signal list JSON
 
     daq::opcua::OpcUaClientPtr client;
+
+    // Reconnect monitor
+    const uint32_t reconnectIntervalMs;
+    std::thread reconnectThread;
+    std::atomic<bool> reconnectRunning{false};
+    std::condition_variable reconnectCv;
+    std::mutex reconnectMutex;
+
+    void startReconnectMonitor();
+    void stopReconnectMonitor();
+    void reconnectMonitorLoop();
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_GENERIC

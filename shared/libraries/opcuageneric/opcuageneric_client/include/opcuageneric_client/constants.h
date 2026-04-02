@@ -45,7 +45,8 @@ static constexpr const char* DEFAULT_OPCUA_USERNAME = "";
 static constexpr const char* DEFAULT_OPCUA_PASSWORD = "";
 static constexpr const char* DEFAULT_OPCUA_PATH = "";
 
-static constexpr const uint32_t DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL = 100;     // in milliseconds
+static constexpr uint32_t DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL = 100;     // in milliseconds
+static constexpr uint32_t DEFAULT_RECONNECT_INTERVAL = 5000;           // in milliseconds
 // ----------
 
 END_NAMESPACE_OPENDAQ_OPCUA_GENERIC

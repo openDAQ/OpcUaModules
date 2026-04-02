@@ -7,6 +7,7 @@ set(SRC_PublicHeaders   constants.h
                         generic_client_device_impl.h
                         opcua_monitored_item_fb_impl.h
                         status_container.h
+                        status_adaptor.h
 )
 set(SRC_Cpp generic_client_device_impl.cpp
             opcua_monitored_item_fb_impl.cpp

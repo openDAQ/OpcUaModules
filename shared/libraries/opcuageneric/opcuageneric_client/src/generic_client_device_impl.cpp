@@ -32,10 +32,12 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
                                                            const PropertyObjectPtr& config,
                                                            std::shared_ptr<OpcUaClient> client,
                                                            const std::string& localId,
-                                                           const std::string& name)
+                                                           const std::string& name,
+                                                           uint32_t reconnectIntervalMs)
     : Device(ctx, parent, localId.empty() ? generateLocalId() : localId)
-    , connectionStatus(Enumeration("ConnectionStatusType", "Connected", this->context.getTypeManager()))
+    , connectionStatus("ConnectionStatusType", "ConnectionStatus", statusContainer, "Connected", context.getTypeManager())
     , client(client)
+    , reconnectIntervalMs(reconnectIntervalMs)
 {
     if (this->client == nullptr)
         DAQ_THROW_EXCEPTION(UninitializedException, "OpcUaClient is not initialized");
@@ -46,6 +48,8 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
         initProperties(populateDefaultConfig(createDefaultConfig(), config));
     else
         initProperties(createDefaultConfig());
+
+    initComponentStatus();
 
     try
     {
@@ -64,8 +68,13 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
         }
     }
 
-    initComponentStatus();
     initNestedFbTypes();
+    startReconnectMonitor();
+}
+
+OpcuaGenericClientDeviceImpl::~OpcuaGenericClientDeviceImpl()
+{
+    stopReconnectMonitor();
 }
 
 PropertyObjectPtr OpcuaGenericClientDeviceImpl::createDefaultConfig()
@@ -111,7 +120,60 @@ std::string OpcuaGenericClientDeviceImpl::getConnectionString() const
 
 void OpcuaGenericClientDeviceImpl::removed()
 {
+    stopReconnectMonitor();
+    client->disconnect(true);
     Device::removed();
+}
+
+void OpcuaGenericClientDeviceImpl::startReconnectMonitor()
+{
+    reconnectRunning = true;
+    reconnectThread = std::thread([this] { reconnectMonitorLoop(); });
+}
+
+void OpcuaGenericClientDeviceImpl::stopReconnectMonitor()
+{
+    {
+        std::lock_guard<std::mutex> lock(reconnectMutex);
+        reconnectRunning = false;
+    }
+    reconnectCv.notify_all();
+    if (reconnectThread.joinable())
+        reconnectThread.join();
+}
+
+void OpcuaGenericClientDeviceImpl::reconnectMonitorLoop()
+{
+    auto interruptibleSleep = [&]()
+    {
+        std::unique_lock<std::mutex> lock(reconnectMutex);
+        reconnectCv.wait_for(lock, std::chrono::milliseconds(reconnectIntervalMs), [this]() { return !reconnectRunning.load(); });
+    };
+
+    while (reconnectRunning)
+    {
+        if (client->isConnected() == false)
+        {
+            connectionStatus.setStatus("Reconnecting");
+            try
+            {
+                client->disconnect();
+                client->connect();
+                client->runIterate();
+                connectionStatus.setStatus("Connected");
+            }
+            catch (const OpcUaException& e)
+            {
+                if (e.getStatusCode() == UA_STATUSCODE_BADUSERACCESSDENIED ||
+                    e.getStatusCode() == UA_STATUSCODE_BADIDENTITYTOKENINVALID)
+                {
+                    connectionStatus.setStatus("Unrecoverable");
+                    reconnectRunning = false;
+                }
+            }
+        }
+        interruptibleSleep();
+    }
 }
 
 DeviceInfoPtr OpcuaGenericClientDeviceImpl::onGetInfo()
