@@ -121,8 +121,8 @@ std::string OpcuaGenericClientDeviceImpl::getConnectionString() const
 void OpcuaGenericClientDeviceImpl::removed()
 {
     stopReconnectMonitor();
-    client->disconnect(true);
     Device::removed();
+    client->disconnect(false);
 }
 
 void OpcuaGenericClientDeviceImpl::startReconnectMonitor()
@@ -157,7 +157,7 @@ void OpcuaGenericClientDeviceImpl::reconnectMonitorLoop()
             connectionStatus.setStatus("Reconnecting");
             try
             {
-                client->disconnect();
+                client->disconnect(false);
                 client->connect();
                 client->runIterate();
                 connectionStatus.setStatus("Connected");
