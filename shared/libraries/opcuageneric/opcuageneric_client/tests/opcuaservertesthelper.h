@@ -17,13 +17,13 @@
 #pragma once
 
 #include <gtest/gtest.h>
+#include <open62541/server_config_default.h>
+#include <chrono>
 #include <future>
+#include <thread>
 #include "opcuaclient/opcuaclient.h"
 #include "opcuashared/opcua.h"
 #include "opcuashared/opcuacommon.h"
-#include <open62541/server_config_default.h>
-#include <chrono>
-#include <thread>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
@@ -54,6 +54,15 @@ public:
                          size_t dimension = 1,
                          UA_Byte accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE);
 
+    void publishVariable(uint32_t numericId,
+                         const void* value,
+                         const UA_DataType* type,
+                         UA_NodeId* parentNodeId,
+                         const char* locale = "en_US",
+                         uint16_t nodeIndex = 1,
+                         size_t dimension = 1,
+                         UA_Byte accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE);
+
     void writeValueNode(const OpcUaNodeId& nodeId, const OpcUaVariant& value);
     void writeDataValueNode(const OpcUaNodeId& nodeId, const OpcUaDataValue& value);
 
@@ -62,6 +71,16 @@ private:
     void createModel();
     void publishFolder(const char* identifier, UA_NodeId* parentNodeId, const char* locale = "en_US", int nodeIndex = 1);
     void publishMethod(std::string identifier, UA_NodeId* parentNodeId, const char* locale = "en_US", int nodeIndex = 1);
+
+    void publishVariableImpl(OpcUaNodeId nodeId,
+                             const std::string& name,
+                             const void* value,
+                             const UA_DataType* type,
+                             UA_NodeId* parentNodeId,
+                             const char* locale,
+                             uint16_t nodeIndex,
+                             size_t dimension,
+                             UA_Byte accessLevel);
 
     static UA_StatusCode helloMethodCallback(UA_Server* server,
                                              const UA_NodeId* sessionId,
@@ -96,8 +115,7 @@ protected:
     static void IterateAndWaitForPromise(OpcUaClient& client, const std::future<void>& future)
     {
         using namespace std::chrono;
-        while (client.iterate(milliseconds(10)) == UA_STATUSCODE_GOOD &&
-               future.wait_for(milliseconds(1)) != std::future_status::ready)
+        while (client.iterate(milliseconds(10)) == UA_STATUSCODE_GOOD && future.wait_for(milliseconds(1)) != std::future_status::ready)
         {
         };
     }

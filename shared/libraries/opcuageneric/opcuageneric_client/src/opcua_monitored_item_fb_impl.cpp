@@ -96,7 +96,6 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
                                                    const PropertyObjectPtr& config)
     : FunctionBlock(type, ctx, parent, generateLocalId())
     , client(client)
-    , nodeId()
     , running(false)
     , statuses(std::make_shared<utils::StatusContainer>())
 {
@@ -106,8 +105,6 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
         initProperties(populateDefaultConfig(type.createDefaultConfig(), config));
     else
         initProperties(type.createDefaultConfig());
-
-    nodeId = OpcUaNodeId{static_cast<uint16_t>(this->config.namespaceIndex), this->config.nodeId};
 
     validateNode();
     adjustSignalDescriptor();
@@ -149,18 +146,26 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
     auto defaultConfig = PropertyObject();
     {
         auto builder =
-            SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, List<IString>("String"), static_cast<int>(NodeIDType::String))
-                .setDescription("Defines the type of the NodeID of the OPCUA node to monitor. By default it is set to String. Other "
-                                "formats are not supported at the moment.");
+            SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, List<IString>("Numeric", "String"), static_cast<int>(NodeIDType::String))
+                .setDescription("Defines the type of the NodeID of the OPCUA node to monitor. By default it is set to String.");
         defaultConfig.addProperty(builder.build());
     }
 
     {
         auto builder =
-            StringPropertyBuilder(PROPERTY_NAME_OPCUA_NODE_ID, String(""))
-                .setDescription(fmt::format("Specifies the NodeID of the OPCUA node to monitor. The format of the NodeID should correspond "
-                                            "to the type specified in the \"{}\" property.",
-                                            PROPERTY_NAME_OPCUA_NODE_ID_TYPE));
+            StringPropertyBuilder(PROPERTY_NAME_OPCUA_NODE_ID_STRING, String(""))
+                .setDescription(fmt::format("Specifies the NodeID of the OPCUA node to monitor. Used when \"{}\" is set to String.",
+                                            PROPERTY_NAME_OPCUA_NODE_ID_TYPE))
+                .setVisible(EvalValue("$NodeIDType == 1"));
+        defaultConfig.addProperty(builder.build());
+    }
+
+    {
+        auto builder =
+            IntPropertyBuilder(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC, Integer(0))
+                .setDescription(fmt::format("Specifies the numeric NodeID of the OPCUA node to monitor. Used when \"{}\" is set to Numeric.",
+                                            PROPERTY_NAME_OPCUA_NODE_ID_TYPE))
+                .setVisible(EvalValue("$NodeIDType == 0"));
         defaultConfig.addProperty(builder.build());
     }
 
@@ -243,14 +248,24 @@ void OpcUaMonitoredItemFbImpl::readProperties()
 
     configErr.reset();
 
-    config.nodeIdType = NodeIDType::String;  // only string NodeIDs are supported at the moment
-    config.nodeId = readProperty<std::string, IString>(objPtr, PROPERTY_NAME_OPCUA_NODE_ID, "");
-    if (config.nodeId.empty())
+    const auto tmpNodeIdType = readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_NODE_ID_TYPE, 0);
+    const auto nodeIdType = (tmpNodeIdType == static_cast<int>(NodeIDType::Numeric)) ? NodeIDType::Numeric : NodeIDType::String;
+    const auto namespaceIndex = readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 0);
+
+    if (nodeIdType == NodeIDType::String)
     {
-        configErr.add(fmt::format("\"{}\" property is empty!", PROPERTY_NAME_OPCUA_NODE_ID));
+        const auto nodeIdString = readProperty<std::string, IString>(objPtr, PROPERTY_NAME_OPCUA_NODE_ID_STRING, "");
+        if (nodeIdString.empty())
+            configErr.add(fmt::format("\"{}\" property is empty!", PROPERTY_NAME_OPCUA_NODE_ID_STRING));
+        else
+            config.nodeId = OpcUaNodeId{static_cast<uint16_t>(namespaceIndex), nodeIdString};
+    }
+    else
+    {
+        const auto nodeIdNumeric = static_cast<uint32_t>(readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC, 0));
+        config.nodeId = OpcUaNodeId{static_cast<uint16_t>(namespaceIndex), nodeIdNumeric};
     }
 
-    config.namespaceIndex = readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 0);
     config.samplingInterval =
         readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
     if (config.samplingInterval <= 0)
@@ -283,9 +298,6 @@ void OpcUaMonitoredItemFbImpl::propertyChanged()
 
     auto prevConfig = config;
     readProperties();
-
-    nodeId = OpcUaNodeId{static_cast<uint16_t>(this->config.namespaceIndex), this->config.nodeId};
-
     validateNode();
     adjustSignalDescriptor();
     reconfigureSignal(prevConfig);
@@ -329,18 +341,18 @@ void OpcUaMonitoredItemFbImpl::validateNode()
     try
     {
         nodeValidationErr.reset();
-        auto nodeExist = client->nodeExists(nodeId);
+        auto nodeExist = client->nodeExists(config.nodeId);
         if (!nodeExist)
         {
-            nodeValidationErr.add(fmt::format("Node {} does not exist", nodeId.toString()));
+            nodeValidationErr.add(fmt::format("Node {} does not exist", config.nodeId.toString()));
         }
-        else if (const auto nodeClass = client->readNodeClass(nodeId); nodeClass != UA_NodeClass::UA_NODECLASS_VARIABLE)
+        else if (const auto nodeClass = client->readNodeClass(config.nodeId); nodeClass != UA_NodeClass::UA_NODECLASS_VARIABLE)
         {
-            nodeValidationErr.add(fmt::format("Node {} is not a variable node", nodeId.toString()));
+            nodeValidationErr.add(fmt::format("Node {} is not a variable node", config.nodeId.toString()));
         }
-        else if (const auto accessLevel = client->readAccessLevel(nodeId); (accessLevel & UA_ACCESSLEVELMASK_READ) == 0)
+        else if (const auto accessLevel = client->readAccessLevel(config.nodeId); (accessLevel & UA_ACCESSLEVELMASK_READ) == 0)
         {
-            nodeValidationErr.add(fmt::format("There is no read permission to node {}", nodeId.toString()));
+            nodeValidationErr.add(fmt::format("There is no read permission to node {}", config.nodeId.toString()));
         }
 #ifndef DISABLE_NODE_DATATYPE_VALIDATION
         else if (nodeDataType = client->readDataType(nodeId); supportedDataTypes.count(nodeDataType) == 0)
@@ -353,11 +365,11 @@ void OpcUaMonitoredItemFbImpl::validateNode()
     {
         if (ex.getStatusCode() == UA_STATUSCODE_BADUSERACCESSDENIED)
         {
-            nodeValidationErr.add(fmt::format("Access denied for node {}", nodeId.toString()));
+            nodeValidationErr.add(fmt::format("Access denied for node {}", config.nodeId.toString()));
         }
         else
         {
-            nodeValidationErr.add(fmt::format("Exception was thrown while node {} validatiion", nodeId.toString()));
+            nodeValidationErr.add(fmt::format("Exception was thrown while node {} validatiion", config.nodeId.toString()));
         }
     }
 }
@@ -484,7 +496,7 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
                 OpcUaDataValue dataValue;
                 try
                 {
-                    dataValue = client->readDataValue(nodeId);
+                    dataValue = client->readDataValue(config.nodeId);
 
                     exceptionErr.reset();
                     if (validateResponse(dataValue) && validateValueDataType(dataValue))

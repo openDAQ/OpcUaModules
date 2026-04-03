@@ -25,9 +25,24 @@ namespace daq::opcua::generic
 
         void CreateMonitoredItemFB(std::string nodeId, uint32_t index, uint32_t interval = 100, DS ds = DS::ServerTimestamp)
         {
+            using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
             auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
-            config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID, nodeId);
+            config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::String));
+            config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, nodeId);
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, index);
+            config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, interval);
+            config.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(ds));
+
+            ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
+        }
+
+        void CreateMonitoredItemFB(uint32_t numericNodeId, uint32_t nsIndex, uint32_t interval = 100, DS ds = DS::ServerTimestamp)
+        {
+            using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+            auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+            config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::Numeric));
+            config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC, numericNodeId);
+            config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, nsIndex);
             config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, interval);
             config.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(ds));
 
@@ -157,7 +172,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, DefaultConfig)
 
     ASSERT_TRUE(defaultConfig.assigned());
 
-    EXPECT_EQ(defaultConfig.getAllProperties().getCount(), 5u);
+    EXPECT_EQ(defaultConfig.getAllProperties().getCount(), 6u);
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE));
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE).getValueType(), CoreType::ctInt);
@@ -165,10 +180,15 @@ TEST_F(GenericOpcuaMonitoredItemTest, DefaultConfig)
               static_cast<int>(OpcUaMonitoredItemFbImpl::NodeIDType::String));
     EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE).getVisible());
 
-    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_NODE_ID));
-    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID).getValueType(), CoreType::ctString);
-    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID).asPtr<IString>().getLength(), 0u);
-    EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID).getVisible());
+    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING));
+    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING).getValueType(), CoreType::ctString);
+    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING).asPtr<IString>().getLength(), 0u);
+    EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING).getVisible());
+
+    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC));
+    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC).getValueType(), CoreType::ctInt);
+    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC).asPtr<IInteger>(), 0);
+    EXPECT_FALSE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC).getVisible());
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX));
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX).getValueType(), CoreType::ctInt);
@@ -203,7 +223,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, CreationWithPartialConfig)
     StartUp();
     {
         auto config = PropertyObject();
-        config.addProperty(StringProperty(PROPERTY_NAME_OPCUA_NODE_ID, String("unknownNodeId")));
+        config.addProperty(StringProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING, String("unknownNodeId")));
         ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
         EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 2u);
         ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
@@ -212,7 +232,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, CreationWithPartialConfig)
 
     {
         auto config = PropertyObject();
-        config.addProperty(StringProperty(PROPERTY_NAME_OPCUA_NODE_ID, String(".i32")));
+        config.addProperty(StringProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING, String(".i32")));
         config.addProperty(IntProperty(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1));
         ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
         EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 2u);
@@ -226,7 +246,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, CreationWithCustomConfig)
 {
     StartUp();
     auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
-    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID, ".i32");
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32");
     config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
     config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 100);
     ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
@@ -241,7 +261,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, TwoFbCreation)
         daq::FunctionBlockPtr fb;
 
         auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
-        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID, ".i32");
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32");
         config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
         config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 100);
         ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
@@ -252,7 +272,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, TwoFbCreation)
         daq::FunctionBlockPtr fb;
 
         auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
-        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID, ".i64");
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i64");
         config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
         config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 100);
         ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
@@ -722,7 +742,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdFromInvalidToValid)
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
 
-    fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID, std::string(".i32"));
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
@@ -738,7 +758,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdFromValidToInvalid)
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
-    fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID, std::string("nonExistent"));
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string("nonExistent"));
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
 }
@@ -812,7 +832,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ZeroSamplingInterval)
     StartUp();
 
     auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
-    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID, std::string(".i32"));
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
     config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
     config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 0);
 
@@ -827,4 +847,88 @@ TEST_F(GenericOpcuaMonitoredItemTest, ZeroSamplingInterval)
     fb.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 0);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, PropertyVisibilityTogglesWithNodeIdType)
+{
+    using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+    daq::PropertyObjectPtr defaultConfig = OpcUaMonitoredItemFbImpl::CreateType().createDefaultConfig();
+
+    EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING).getVisible());
+    EXPECT_FALSE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC).getVisible());
+
+    defaultConfig.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::Numeric));
+    EXPECT_FALSE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING).getVisible());
+    EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC).getVisible());
+
+    defaultConfig.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::String));
+    EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING).getVisible());
+    EXPECT_FALSE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC).getVisible());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, NumericNodeIdCreation)
+{
+    StartUp();
+
+    CreateMonitoredItemFB(1001, 1);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, NumericNodeIdCreationInvalidNode)
+{
+    StartUp();
+
+    CreateMonitoredItemFB(9999, 1);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, NumericNodeIdReadValue)
+{
+    constexpr uint32_t interval = 50;
+    const OpcUaNodeId nodeId(1, uint32_t{1001});
+    StartUp();
+
+    CreateMonitoredItemFB(1001, 1, interval);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    ASSERT_TRUE(prevVal.assigned());
+
+    const OpcUaVariant variant(int32_t{42});
+    ASSERT_NO_THROW(testHelper.writeValueNode(nodeId, variant));
+
+    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * 3, prevVal);
+    ASSERT_NE(val, prevVal);
+    EXPECT_EQ(val.asPtr<INumber>().getValue<int32_t>(0), 42);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdTypeStringToNumeric)
+{
+    using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+    StartUp();
+
+    CreateMonitoredItemFB(".i32", 1, 100, DS::ServerTimestamp);
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::Numeric));
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC, 1001);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdTypeNumericToString)
+{
+    using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+    StartUp();
+
+    CreateMonitoredItemFB(1001, 1, 100, DS::ServerTimestamp);
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::String));
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 }

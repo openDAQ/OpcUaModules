@@ -1,7 +1,7 @@
 #include "opcuaservertesthelper.h"
-#include <open62541/server_config_default.h>
-#include <open62541/server.h>
 #include <opcuashared/opcuanodeid.h>
+#include <open62541/server.h>
+#include <open62541/server_config_default.h>
 #include <cstring>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
@@ -137,6 +137,15 @@ void OpcUaServerTestHelper::createModel()
         publishVariable(".pui64", &myUInt64, &UA_TYPES[UA_TYPES_UINT64], &uaObjectsFolder, "en_US", 1, 1, 0);
     }
 
+    {
+        UA_Int32 val = -32;
+        publishVariable(1001, &val, &UA_TYPES[UA_TYPES_INT32], &uaObjectsFolder);
+    }
+    {
+        UA_Int64 val = -64;
+        publishVariable(1002, &val, &UA_TYPES[UA_TYPES_INT64], &uaObjectsFolder);
+    }
+
     UA_Boolean myBool = true;
     publishVariable(".b", &myBool, &UA_TYPES[UA_TYPES_BOOLEAN], &uaObjectsFolder);
 
@@ -207,15 +216,40 @@ void OpcUaServerTestHelper::publishVariable(std::string identifier,
                                             size_t dimension,
                                             UA_Byte accessLevel)
 {
+    publishVariableImpl(
+        OpcUaNodeId(nodeIndex, identifier), identifier, value, type, parentNodeId, locale, nodeIndex, dimension, accessLevel);
+}
+
+void OpcUaServerTestHelper::publishVariable(uint32_t numericId,
+                                            const void* value,
+                                            const UA_DataType* type,
+                                            UA_NodeId* parentNodeId,
+                                            const char* locale,
+                                            uint16_t nodeIndex,
+                                            size_t dimension,
+                                            UA_Byte accessLevel)
+{
+    publishVariableImpl(
+        OpcUaNodeId(nodeIndex, numericId), std::to_string(numericId), value, type, parentNodeId, locale, nodeIndex, dimension, accessLevel);
+}
+
+void OpcUaServerTestHelper::publishVariableImpl(OpcUaNodeId nodeId,
+                                                const std::string& name,
+                                                const void* value,
+                                                const UA_DataType* type,
+                                                UA_NodeId* parentNodeId,
+                                                const char* locale,
+                                                uint16_t nodeIndex,
+                                                size_t dimension,
+                                                UA_Byte accessLevel)
+{
     OpcUaObject<UA_VariableAttributes> attr = UA_VariableAttributes_default;
-    attr->description = UA_LOCALIZEDTEXT_ALLOC(locale, identifier.c_str());
-    attr->displayName = UA_LOCALIZEDTEXT_ALLOC(locale, identifier.c_str());
+    attr->description = UA_LOCALIZEDTEXT_ALLOC(locale, name.c_str());
+    attr->displayName = UA_LOCALIZEDTEXT_ALLOC(locale, name.c_str());
     attr->dataType = type->typeId;
     attr->accessLevel = accessLevel;
 
-    OpcUaNodeId newNodeId(nodeIndex, identifier);
-
-    OpcUaObject<UA_QualifiedName> qualifiedName = UA_QUALIFIEDNAME_ALLOC(UA_UInt16(nodeIndex), identifier.c_str());
+    OpcUaObject<UA_QualifiedName> qualifiedName = UA_QUALIFIEDNAME_ALLOC(UA_UInt16(nodeIndex), name.c_str());
 
     if (dimension > 1)
     {
@@ -230,14 +264,14 @@ void OpcUaServerTestHelper::publishVariable(std::string identifier,
         UA_Variant_setScalarCopy(&attr->value, value, type);
     }
     auto status = UA_Server_addVariableNode(server,
-                              *newNodeId,
-                              *parentNodeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
-                              *qualifiedName,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-                              *attr,
-                              NULL,
-                              NULL);
+                                            *nodeId,
+                                            *parentNodeId,
+                                            UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
+                                            *qualifiedName,
+                                            UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+                                            *attr,
+                                            NULL,
+                                            NULL);
 
     CheckStatusCodeException(status);
 }
@@ -252,7 +286,6 @@ void OpcUaServerTestHelper::writeDataValueNode(const OpcUaNodeId& nodeId, const 
     CheckStatusCodeException(UA_Server_writeDataValue(server, *nodeId, *value));
 }
 
-
 void OpcUaServerTestHelper::publishFolder(const char* identifier, UA_NodeId* parentNodeId, const char* locale, int nodeIndex)
 {
     OpcUaObject<UA_ObjectAttributes> attr = UA_ObjectAttributes_default;
@@ -264,14 +297,14 @@ void OpcUaServerTestHelper::publishFolder(const char* identifier, UA_NodeId* par
     OpcUaObject<UA_QualifiedName> qualifiedName = UA_QUALIFIEDNAME_ALLOC(UA_UInt16(nodeIndex), identifier);
 
     auto status = UA_Server_addObjectNode(server,
-                            *newNodeId,
-                            *parentNodeId,
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
-                            *qualifiedName,
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
-                            *attr,
-                            NULL,
-                            NULL);
+                                          *newNodeId,
+                                          *parentNodeId,
+                                          UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
+                                          *qualifiedName,
+                                          UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
+                                          *attr,
+                                          NULL,
+                                          NULL);
 
     CheckStatusCodeException(status);
 }

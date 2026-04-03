@@ -28,11 +28,10 @@ class OpcUaMonitoredItemFbImpl final : public FunctionBlock
     friend class GenericOpcuaMonitoredItemTest;
 
 public:
-    // only string NodeIDs are supported at the moment
     enum class NodeIDType : int
     {
-        // Numeric = 0,
-        String = 0,
+        Numeric = 0,
+        String = 1,
         // Guid,
         // Opaque,
         _count
@@ -64,9 +63,7 @@ protected:
 
     struct FbConfig
     {
-        NodeIDType nodeIdType;
-        std::string nodeId;
-        uint32_t namespaceIndex;
+        OpcUaNodeId nodeId;
         uint32_t samplingInterval;
         DomainSource domainSource;
     };
@@ -82,7 +79,6 @@ protected:
 
     FbConfig config;
     daq::opcua::OpcUaClientPtr client;
-    OpcUaNodeId nodeId;
     OpcUaNodeId nodeDataType;
 
     std::thread readerThread;
