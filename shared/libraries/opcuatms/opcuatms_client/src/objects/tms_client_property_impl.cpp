@@ -129,7 +129,6 @@ void TmsClientPropertyImpl::configurePropertyFields()
                     switch (propertyField)
                     {
                         case details::PropertyField::DefaultValue:
-
                             this->defaultValue = EvalValue(evalStr);
                             break;
 
@@ -259,6 +258,7 @@ void TmsClientPropertyImpl::configurePropertyFields()
                         {
                             this->selectionValues =
                                 SelectionVariantConverter::ToDaqObject(reader->getValue(childNodeId, UA_ATTRIBUTEID_VALUE));
+
                             if (this->selectionValues.supportsInterface<IFreezable>())
                                 this->selectionValues.freeze();
                             break;
