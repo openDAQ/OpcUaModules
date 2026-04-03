@@ -75,6 +75,7 @@ public:
 		obj.addProperty(StringPropertyBuilder("StringSelection", "foo").setSelectionValues(List<IString>("foo", "bar")).build());
 		obj.addProperty(IntPropertyBuilder("IntSelection", 10).setSelectionValues(List<IInteger>(0, 6, 15, 10)).setIsIntegerValueSelection(true).build());
 		obj.addProperty(FloatPropertyBuilder("FloatSelection", 5.12).setSelectionValues(List<IFloat>(0.12, -5.2, 5.12, 10.2)).build());
+        obj.addProperty(IntPropertyBuilder("IndexSelection", 3).setSelectionValues(List<IInteger>(0, 6, 15, 10)).build());
 
         return obj;
     }
@@ -447,11 +448,13 @@ TEST_F(TmsPropertyObjectTest, SelectionPropertyValues)
     ASSERT_FALSE(clientObj.getProperty("StringSelection").getSelectionValues().assigned());
     ASSERT_FALSE(clientObj.getProperty("IntSelection").getSelectionValues().assigned());
     ASSERT_FALSE(clientObj.getProperty("FloatSelection").getSelectionValues().assigned());
+    ASSERT_TRUE(clientObj.getProperty("IndexSelection").getSelectionValues().assigned());
 
     // check default values
     ASSERT_EQ(clientObj.getPropertyValue("StringSelection"), "foo");
     ASSERT_EQ(clientObj.getPropertyValue("IntSelection"), 10);
     ASSERT_EQ(clientObj.getPropertyValue("FloatSelection"), 5.12);
+    ASSERT_EQ(clientObj.getPropertyValue("IndexSelection"), 3);
 
     ASSERT_NO_THROW(clientObj.setPropertyValue("StringSelection", "Invalid")); // will print a warning but should not throw
     ASSERT_EQ(clientObj.getPropertyValue("StringSelection"), "foo");
@@ -459,18 +462,27 @@ TEST_F(TmsPropertyObjectTest, SelectionPropertyValues)
     ASSERT_EQ(clientObj.getPropertyValue("IntSelection"), 10);
     ASSERT_NO_THROW(clientObj.setPropertyValue("FloatSelection", 3.14)); // will print a warning but should not throw
     ASSERT_EQ(clientObj.getPropertyValue("FloatSelection"), 5.12);
+    ASSERT_NO_THROW(clientObj.setPropertyValue("IndexSelection", 5)); // will print a warning but should not throw
+    ASSERT_EQ(clientObj.getPropertyValue("IndexSelection"), 3);
 
     ASSERT_NO_THROW(clientObj.setPropertyValue("StringSelection", "bar"));
     ASSERT_NO_THROW(clientObj.setPropertyValue("IntSelection", 0));
     ASSERT_NO_THROW(clientObj.setPropertyValue("FloatSelection", 0.12));
-    
+    ASSERT_NO_THROW(clientObj.setPropertyValue("IndexSelection", 0));
+
     ASSERT_EQ(obj.getPropertyValue("StringSelection"), "bar");
     ASSERT_EQ(obj.getPropertyValue("IntSelection"), 0);
     ASSERT_DOUBLE_EQ(obj.getPropertyValue("FloatSelection"), 0.12);
+    ASSERT_EQ(obj.getPropertyValue("IndexSelection"), 0);
 
     ASSERT_EQ(clientObj.getPropertyValue("StringSelection"), "bar");
     ASSERT_EQ(clientObj.getPropertyValue("IntSelection"), 0);
     ASSERT_DOUBLE_EQ(clientObj.getPropertyValue("FloatSelection"), 0.12);
+    ASSERT_EQ(clientObj.getPropertyValue("IndexSelection"), 0);
+
+    ASSERT_NO_THROW(clientObj.setPropertySelectionValue("IndexSelection", 10));
+    ASSERT_EQ(clientObj.getPropertyValue("IndexSelection"), 3);
+    ASSERT_EQ(clientObj.getPropertySelectionValue("IndexSelection"), 10);
 }
 
 class TmsNestedPropertyObjectTest : public TmsObjectIntegrationTest, public testing::Test

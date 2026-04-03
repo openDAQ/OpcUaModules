@@ -192,6 +192,79 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::getPropertyValue(I
 }
 
 template <typename Impl>
+ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::setPropertySelectionValue(IString* propertyName, IBaseObject* value)
+{
+    if (propertyName == nullptr)
+        return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ARGUMENT_NULL, "Property name must not be null");
+    if (value == nullptr)
+        return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ARGUMENT_NULL, "Value must not be null");
+
+    return daqTry([&]
+    {
+        const auto propNamePtr = StringPtr::Borrow(propertyName);
+        const auto valuePtr = BaseObjectPtr::Borrow(value);
+
+        PropertyPtr prop;
+        const ErrCode err = getProperty(propertyName, &prop);
+        OPENDAQ_RETURN_IF_FAILED(err);
+
+        if (!prop.assigned())
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND, fmt::format(R"(Property "{}" not found)", propNamePtr));
+
+        const PropertyType propType = prop.getPropertyType();
+        BaseObjectPtr indexOrKey;
+
+        if (propType == PropertyType::IndexSelection)
+        {
+            const ListPtr<IBaseObject> selectionList = prop.getSelectionValues();
+            if (!selectionList.assigned())
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_INVALIDPROPERTY,
+                                           fmt::format(R"(Index selection property "{}" has no selection values assigned)", propNamePtr));
+
+            for (SizeT i = 0; i < selectionList.getCount(); ++i)
+            {
+                if (selectionList.getItemAt(i) == valuePtr)
+                {
+                    indexOrKey = Int(i);
+                    break;
+                }
+            }
+
+            if (!indexOrKey.assigned())
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND,
+                                           fmt::format(R"(Value not found in selection values of property "{}")", propNamePtr));
+        }
+        else if (propType == PropertyType::SparseSelection)
+        {
+            const DictPtr<IBaseObject, IBaseObject> selectionDict = prop.getSelectionValues();
+            if (!selectionDict.assigned())
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_INVALIDPROPERTY,
+                                           fmt::format(R"(Sparse selection property "{}" has no selection values assigned)", propNamePtr));
+
+            for (const auto& [key, val] : selectionDict)
+            {
+                if (val == valuePtr)
+                {
+                    indexOrKey = key;
+                    break;
+                }
+            }
+
+            if (!indexOrKey.assigned())
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND,
+                                           fmt::format(R"(Value not found in sparse selection values of property "{}")", propNamePtr));
+        }
+        else
+        {
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_INVALIDPROPERTY,
+                                       fmt::format(R"(Property "{}" is not a selection property)", propNamePtr));
+        }
+
+        return TmsClientPropertyObjectBaseImpl::setPropertyValue(propertyName, indexOrKey);
+    });
+}
+
+template <typename Impl>
 ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::getPropertySelectionValue(IString* propertyName, IBaseObject** value)
 {
     BaseObjectPtr object;
