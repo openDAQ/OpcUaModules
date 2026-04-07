@@ -65,7 +65,7 @@ ErrCode TmsClientInputPortImpl::acceptsSignal(ISignal* signal, Bool* accepts)
     //return errCode;
 }
 
-ErrCode TmsClientInputPortImpl::acceptsSignals(IList* signals, IList* accepts)
+ErrCode TmsClientInputPortImpl::acceptsSignals(IList* signals, IList** accepts)
 {
     // NOTE: Not fully supported
     OPENDAQ_PARAM_NOT_NULL(signals);
