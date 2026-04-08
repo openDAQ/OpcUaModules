@@ -75,7 +75,7 @@ ErrCode TmsClientInputPortImpl::acceptsSignals(IList* signals, IList** accepts)
     auto acceptanceList = List<IBoolean>();
 
     auto signalList = ListPtr<ISignal>::Borrow(signals);
-    for (const auto& signal : signalList)
+    for (SizeT i; i < signalList.getCount(); ++i)
     {
         acceptanceList.pushBack(acceptSignals);
     }
