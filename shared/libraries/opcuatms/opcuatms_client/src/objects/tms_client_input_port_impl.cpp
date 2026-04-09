@@ -37,7 +37,12 @@ ErrCode TmsClientInputPortImpl::setRequiresSignal(Bool value)
 
 ErrCode TmsClientInputPortImpl::acceptsSignal(ISignal* signal, Bool* accepts)
 {
-    return getAttributeWritePermission(nodeId);
+    // NOTE: Not fully supported
+    OPENDAQ_PARAM_NOT_NULL(signal);
+    OPENDAQ_PARAM_NOT_NULL(accepts);
+
+    *accepts = getAttributeWritePermission(nodeId);
+    return OPENDAQ_SUCCESS;
     //const ErrCode errCode = daqTry([&]()
     //{
     //    OpcUaNodeId methodId(NAMESPACE_DAQBSP, UA_DAQBSPID_INPUTPORTTYPE_ACCEPTSSIGNAL);
@@ -58,6 +63,24 @@ ErrCode TmsClientInputPortImpl::acceptsSignal(ISignal* signal, Bool* accepts)
     //});
     //OPENDAQ_RETURN_IF_FAILED(errCode);
     //return errCode;
+}
+
+ErrCode TmsClientInputPortImpl::acceptsSignals(IList* signals, IList** accepts)
+{
+    // NOTE: Not fully supported
+    OPENDAQ_PARAM_NOT_NULL(signals);
+    OPENDAQ_PARAM_NOT_NULL(accepts);
+
+    const Bool acceptSignals = getAttributeWritePermission(nodeId);
+    auto acceptanceList = List<IBoolean>();
+
+    auto signalList = ListPtr<ISignal>::Borrow(signals);
+    for (SizeT i = 0; i < signalList.getCount(); ++i)
+    {
+        acceptanceList.pushBack(acceptSignals);
+    }
+    *accepts = acceptanceList.detach();
+    return OPENDAQ_SUCCESS;
 }
 
 ErrCode TmsClientInputPortImpl::connect(ISignal* signal)

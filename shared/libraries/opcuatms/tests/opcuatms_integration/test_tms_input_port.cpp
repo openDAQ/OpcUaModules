@@ -127,6 +127,28 @@ TEST_F(TmsInputPortTest, MethodAcceptsSignal)
     EXPECT_TRUE(ok);
 }
 
+TEST_F(TmsInputPortTest, MethodAcceptsSignals)
+{
+    InputPortPtr daqServerInputPort = createInputPort("The Name", true);
+    auto serverInputPort = TmsServerInputPort(daqServerInputPort, this->getServer(), ctx, serverContext);
+    auto nodeId = serverInputPort.registerOpcUaNode();
+
+    InputPortPtr clientInputPort = TmsClientInputPort(NullContext(), nullptr, "inputPort", clientContext, nodeId);
+
+    SignalPtr signal = Signal(NullContext(), nullptr, "sig");
+    SignalPtr signal1 = Signal(NullContext(), nullptr, "sig1");
+    auto signalList = List<ISignal>();
+    signalList.pushBack(signal);
+    signalList.pushBack(signal1);
+
+    //TODO: More testing when the server in fact really checks the signal if the signal is ok
+    ListPtr<IBoolean> acceptanceList = nullptr;
+    ASSERT_NO_THROW(acceptanceList = clientInputPort.acceptsSignals(signalList));
+    EXPECT_TRUE(acceptanceList.assigned());
+    EXPECT_TRUE(acceptanceList[0]);
+    EXPECT_TRUE(acceptanceList[1]);
+}
+
 TEST_F(TmsInputPortTest, ConnectedToReference)
 {
     const auto logger = Logger();
