@@ -16,7 +16,7 @@ const OpcUaNodeId TmsAttributeCollector::NodeIdSignalType = OpcUaNodeId(NAMESPAC
 const OpcUaNodeId TmsAttributeCollector::NodeIdInputPortType = OpcUaNodeId(NAMESPACE_DAQBSP, UA_DAQBSPID_INPUTPORTTYPE);
 const OpcUaNodeId TmsAttributeCollector::NodeIdEvaluationVariableType = OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_EVALUATIONVARIABLETYPE);
 const OpcUaNodeId TmsAttributeCollector::NodeIdVariableBlockType = OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_VARIABLEBLOCKTYPE);
-const OpcUaNodeId TmsAttributeCollector::NodeIdServerType = OpcUaNodeId(NAMESPACE_DAQDEVICE, UA_DAQDEVICEID_DAQCOMPONENTTYPE);
+const OpcUaNodeId TmsAttributeCollector::NodeIdDaqServerComonentType = OpcUaNodeId(NAMESPACE_DAQDEVICE, UA_DAQDEVICEID_DAQCOMPONENTTYPE);
 
 // TmsAttributeCollector
 
@@ -89,7 +89,7 @@ void TmsAttributeCollector::collectDeviceAttributes(const OpcUaNodeId& nodeId)
     collectComponentAttributes(synchronizationNoded);
 
     const auto serversNodeId = browser->getChildNodeId(nodeId, "Srv");
-    collectServersNode(serversNodeId);
+    collectDaqServerComponentsNode(serversNodeId);
 }
 
 void TmsAttributeCollector::collectFunctionBlockAttributes(const OpcUaNodeId& nodeId)
@@ -328,7 +328,7 @@ bool TmsAttributeCollector::typeEquals(const OpcUaNodeId& typeId, const OpcUaNod
     return typeId == baseType;
 }
 
-void TmsAttributeCollector::collectServersNode(const OpcUaNodeId& nodeId)
+void TmsAttributeCollector::collectDaqServerComponentsNode(const OpcUaNodeId& nodeId)
 {
     attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
     attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
@@ -337,7 +337,7 @@ void TmsAttributeCollector::collectServersNode(const OpcUaNodeId& nodeId)
 
     for (const auto& [refNodeId, ref] : serverReferences.byNodeId)
     {
-        if (isSubtypeOf(ref->typeDefinition.nodeId, NodeIdServerType))
+        if (isSubtypeOf(ref->typeDefinition.nodeId, NodeIdDaqServerComonentType))
             collectServerAttributes(refNodeId);
     }
 }
