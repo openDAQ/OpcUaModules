@@ -23,6 +23,7 @@
 #include <opcuatms_server/objects/tms_server_property_object.h>
 #include <opcuatms_server/objects/tms_server_function_block_type.h>
 #include <opcuatms_server/objects/tms_server_sync_component.h>
+#include <opcuatms_server/objects/tms_server_daqserver_component.h>
 
 #include <list>
 
@@ -76,6 +77,7 @@ protected:
     std::list<TmsServerFunctionBlockTypePtr> functionBlockTypes;
     std::list<TmsServerSyncComponentPtr> syncComponents;
     std::list<TmsServerPropertyPtr> deviceInfoProperties;
+    std::list<TmsServerDaqServerComponentPtr> daqServerComponents;
 
     opcua::OpcUaNodeId addFbNodeId;
     opcua::OpcUaNodeId removeFbNodeId;

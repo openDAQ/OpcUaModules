@@ -8,6 +8,7 @@
 #include <opcuatms/type_mappings.h>
 #include <opcuatms_server/objects/tms_server_device.h>
 #include <opcuatms_server/objects/tms_server_function_block_type.h>
+#include <opcuatms_server/objects/tms_server_daqserver_component.h>
 #include <open62541/daqdevice_nodeids.h>
 #include <open62541/types_daqesp_generated.h>
 #include <opendaq/component_factory.h>
@@ -93,6 +94,8 @@ bool TmsServerDevice::createOptionalNode(const OpcUaNodeId& nodeId)
     if (name == "ProductInstanceUri" && object.getInfo().getProductInstanceUri() != "")
         return true;
     if (name == "Synchronization" && object.getSyncComponent().assigned())
+        return true;
+    if (name == "Srv")
         return true;
 
     return Super::createOptionalNode(nodeId);
@@ -560,10 +563,26 @@ void TmsServerDevice::addChildNodes()
     syncComponentNode->registerToExistingOpcUaNode(syncComponentNodeId);
     syncComponents.push_back(std::move(syncComponentNode));
 
+    auto serversNodeId = getChildNodeId("Srv");
+    if (serversNodeId.isNull())
+    {
+        OpcUaNodeId nodeIdOut;
+        AddObjectNodeParams params(nodeIdOut, nodeId);
+        params.referenceTypeId = OpcUaNodeId(UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT));
+        params.typeDefinition = OpcUaNodeId(UA_NS0ID_FOLDERTYPE);
+        params.setBrowseName("Srv");
+        serversNodeId = server->addObjectNode(params);
+    }
+    assert(!serversNodeId.isNull());
+    numberInList = 0;
+    for (const auto& server : object.getServers())
+    {
+        auto tmsServerComponent = registerTmsObjectOrAddReference<TmsServerDaqServerComponent>(serversNodeId, server, numberInList++);
+        daqServerComponents.push_back(std::move(tmsServerComponent));
+    }
+
     tmsPropertyObject->ignoredProps.emplace("userName");
     tmsPropertyObject->ignoredProps.emplace("location");
-
-    // TODO add "Srv" as a default node
 
     numberInList = 0;
     for (auto component : object.getItems(search::Any()))
@@ -596,6 +615,7 @@ void TmsServerDevice::createNonhierarchicalReferences()
     createChildNonhierarchicalReferences(functionBlocks);
     createChildNonhierarchicalReferences(folders);
     createChildNonhierarchicalReferences(components);
+    createChildNonhierarchicalReferences(daqServerComponents);
 }
 
 bool TmsServerDevice::checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext)

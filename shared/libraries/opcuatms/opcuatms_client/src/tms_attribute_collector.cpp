@@ -16,6 +16,7 @@ const OpcUaNodeId TmsAttributeCollector::NodeIdSignalType = OpcUaNodeId(NAMESPAC
 const OpcUaNodeId TmsAttributeCollector::NodeIdInputPortType = OpcUaNodeId(NAMESPACE_DAQBSP, UA_DAQBSPID_INPUTPORTTYPE);
 const OpcUaNodeId TmsAttributeCollector::NodeIdEvaluationVariableType = OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_EVALUATIONVARIABLETYPE);
 const OpcUaNodeId TmsAttributeCollector::NodeIdVariableBlockType = OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_VARIABLEBLOCKTYPE);
+const OpcUaNodeId TmsAttributeCollector::NodeIdServerType = OpcUaNodeId(NAMESPACE_DAQDEVICE, UA_DAQDEVICEID_DAQCOMPONENTTYPE);
 
 // TmsAttributeCollector
 
@@ -86,6 +87,9 @@ void TmsAttributeCollector::collectDeviceAttributes(const OpcUaNodeId& nodeId)
 
     const auto synchronizationNoded = browser->getChildNodeId(nodeId, "Synchronization");
     collectComponentAttributes(synchronizationNoded);
+
+    const auto serversNodeId = browser->getChildNodeId(nodeId, "Srv");
+    collectServersNode(serversNodeId);
 }
 
 void TmsAttributeCollector::collectFunctionBlockAttributes(const OpcUaNodeId& nodeId)
@@ -141,6 +145,11 @@ void TmsAttributeCollector::collectComponentAttributes(const OpcUaNodeId& nodeId
         else if (isSubtypeOf(ref->typeDefinition.nodeId, NodeIdComponentType))
             collectComponentAttributes(refNodeId);
     }
+}
+
+void TmsAttributeCollector::collectServerAttributes(const OpcUaNodeId& nodeId)
+{
+    collectComponentAttributes(nodeId);
 }
 
 void TmsAttributeCollector::collectPropertyObjectAttributes(const OpcUaNodeId& nodeId)
@@ -317,6 +326,20 @@ bool TmsAttributeCollector::isSubtypeOf(const OpcUaNodeId& typeId, const OpcUaNo
 bool TmsAttributeCollector::typeEquals(const OpcUaNodeId& typeId, const OpcUaNodeId& baseType)
 {
     return typeId == baseType;
+}
+
+void TmsAttributeCollector::collectServersNode(const OpcUaNodeId& nodeId)
+{
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
+
+    const auto& serverReferences = browser->browse(nodeId);
+
+    for (const auto& [refNodeId, ref] : serverReferences.byNodeId)
+    {
+        if (isSubtypeOf(ref->typeDefinition.nodeId, NodeIdServerType))
+            collectServerAttributes(refNodeId);
+    }
 }
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

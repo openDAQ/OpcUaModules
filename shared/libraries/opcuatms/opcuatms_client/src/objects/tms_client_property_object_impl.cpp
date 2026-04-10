@@ -16,6 +16,7 @@
 #include <opendaq/io_folder_impl.h>
 #include <opendaq/sync_component_impl.h>
 #include <opcuatms/errors.h>
+#include <opendaq/server_impl.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
@@ -722,6 +723,7 @@ template class TmsClientPropertyObjectBaseImpl<MirroredSignalBase<ITmsClientComp
 template class TmsClientPropertyObjectBaseImpl<MirroredInputPortBase<ITmsClientComponent>>;
 template class TmsClientPropertyObjectBaseImpl<ServerCapabilityConfigImpl>;
 template class TmsClientPropertyObjectBaseImpl<GenericSyncComponentImpl<ISyncComponent, ITmsClientComponent>>;
+template class TmsClientPropertyObjectBaseImpl<ServerImpl<IServer, ITmsClientComponent>>;
 
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

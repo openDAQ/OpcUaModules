@@ -11,6 +11,7 @@
 #include <opcuatms_server/objects/tms_server_device.h>
 #include <opcuatms_client/objects/tms_client_device_factory.h>
 #include <opendaq/search_filter_factory.h>
+#include <opendaq/mock/advanced_components_setup_utils.h>
 #include "tms_object_integration_test.h"
 #include <opendaq/device_info_internal_ptr.h>
 
@@ -139,6 +140,20 @@ TEST_F(TmsDeviceTest, GetChannels)
 
     ASSERT_NO_THROW(channels = clientDevice.getChannels(search::Recursive(search::Visible())));
     ASSERT_EQ(channels.getCount(), serverDevice.getChannels(search::Recursive(search::Visible())).getCount());
+}
+
+TEST_F(TmsDeviceTest, GetDaqServers)
+{
+    DevicePtr serverDevice = test_utils::createTestDevice();
+
+    auto tmsPropertyObject = TmsServerDevice(serverDevice, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsPropertyObject.registerOpcUaNode();
+
+    auto ctx = NullContext();
+    auto clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId);
+    ListPtr<IServer> servers;
+    ASSERT_NO_THROW(servers = clientDevice.getServers());
+    ASSERT_EQ(servers.getCount(), serverDevice.getServers().getCount());
 }
 
 // TODO: Enable once name and description are no longer props

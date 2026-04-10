@@ -27,13 +27,14 @@
 #include <opcuatms_client/objects/tms_client_function_block_type_factory.h>
 #include <opendaq/device_domain_factory.h>
 #include <opendaq/address_info_factory.h>
+#include <opcuatms_client/objects/tms_client_daqserver_component_factory.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 using namespace daq::opcua;
 
 namespace detail
 {
-    static std::unordered_set<std::string> defaultComponents = {"Sig", "FB", "IO", "ServerCapabilities", "Synchronization"};
+    static std::unordered_set<std::string> defaultComponents = {"Sig", "FB", "IO", "ServerCapabilities", "Synchronization", "Srv"};
 
     static std::unordered_map<std::string, std::string> deviceInfoFieldMap = 
     {
@@ -118,6 +119,7 @@ TmsClientDeviceImpl::TmsClientDeviceImpl(const ContextPtr& ctx,
     findAndCreateInputsOutputs();
     findAndCreateCustomComponents();
     findAndCreateSyncComponent();
+    findAndCreateServers();
 
     // for the root device the client side local config object is used
     if (!isRootDevice)
@@ -675,6 +677,39 @@ void TmsClientDeviceImpl::findAndCreateServerCapabilities(const DeviceInfoPtr& d
         deviceInfoInternal.addServerCapability(val);
     for (const auto& val : unorderedCaps)
         deviceInfoInternal.addServerCapability(val);
+}
+
+void TmsClientDeviceImpl::findAndCreateServers()
+{
+    std::map<uint32_t, ServerPtr> orderedDaqServers;
+    std::vector<ServerPtr> unorderedDaqServers;
+
+    auto daqServersNodeId = getNodeId("Srv");
+    const auto& references = getChildReferencesOfType(daqServersNodeId, OpcUaNodeId(NAMESPACE_DAQDEVICE, UA_DAQDEVICEID_DAQCOMPONENTTYPE));
+
+    for (const auto& [browseName, ref] : references.byBrowseName)
+    {
+        const auto daqServerNodeId = OpcUaNodeId(ref->nodeId.nodeId);
+
+        try
+        {
+            auto clientDaqServer = TmsClientDaqServerComponent(context, this->servers, browseName, clientContext, daqServerNodeId, this->thisPtr<DevicePtr>());
+            const auto numberInList = this->tryReadChildNumberInList(daqServerNodeId);
+            if (numberInList != std::numeric_limits<uint32_t>::max() && !orderedDaqServers.count(numberInList))
+                orderedDaqServers.emplace(numberInList, clientDaqServer);
+            else
+                unorderedDaqServers.emplace_back(clientDaqServer);
+        }
+        catch(...)
+        {
+            LOG_W("Failed to create daq server component \"{}\" to OpcUA client device \"{}\"", browseName, this->globalId);
+        }
+    }
+
+    for (const auto& [_, srv] : orderedDaqServers)
+        this->servers.addItem(srv);
+    for (const auto& srv : unorderedDaqServers)
+        this->servers.addItem(srv);
 }
 
 void TmsClientDeviceImpl::removed()

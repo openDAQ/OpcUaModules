@@ -7,6 +7,7 @@
 #include <opendaq/search_filter_factory.h>
 #include <chrono>
 #include <thread>
+#include <opendaq/mock/advanced_components_setup_utils.h>
 #include <testutils/test_comparators.h>
 #include <coreobjects/permissions_builder_factory.h>
 #include <coreobjects/property_object_factory.h>
@@ -617,4 +618,19 @@ TEST_F(TmsIntegrationTest, SyncComponentCustomModeOptions)
     auto modeProperty = interfaceClockSync.getProperty("Mode");
     ASSERT_EQ(modeProperty.getSelectionValues(), modeOptions);
     ASSERT_EQ(interfaceClockSync.getPropertySelectionValue("Mode"), "Off");
+}
+
+TEST_F(TmsIntegrationTest, GetDaqServers)
+{
+    DevicePtr device = test_utils::createTestDevice();
+
+    TmsServer tmsServer(device, device.getContext());
+    tmsServer.start();
+
+    TmsClient tmsClient(NullContext(), nullptr, OPC_URL);
+    DevicePtr clientDevice = tmsClient.connect();
+
+    ListPtr<IServer> servers;
+    ASSERT_NO_THROW(servers = clientDevice.getServers());
+    ASSERT_EQ(servers.getCount(), device.getServers().getCount());
 }
