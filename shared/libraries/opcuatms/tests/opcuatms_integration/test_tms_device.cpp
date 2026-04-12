@@ -145,6 +145,7 @@ TEST_F(TmsDeviceTest, GetChannels)
 TEST_F(TmsDeviceTest, GetDaqServers)
 {
     DevicePtr serverDevice = test_utils::createTestDevice();
+    ASSERT_GT(serverDevice.getServers().getCount(), 0u);
 
     auto tmsPropertyObject = TmsServerDevice(serverDevice, this->getServer(), ctx, serverContext);
     auto nodeId = tmsPropertyObject.registerOpcUaNode();

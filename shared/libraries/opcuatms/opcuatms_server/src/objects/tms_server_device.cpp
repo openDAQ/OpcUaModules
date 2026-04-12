@@ -8,7 +8,6 @@
 #include <opcuatms/type_mappings.h>
 #include <opcuatms_server/objects/tms_server_device.h>
 #include <opcuatms_server/objects/tms_server_function_block_type.h>
-#include <opcuatms_server/objects/tms_server_daqserver_component.h>
 #include <open62541/daqdevice_nodeids.h>
 #include <open62541/types_daqesp_generated.h>
 #include <opendaq/component_factory.h>
@@ -552,14 +551,14 @@ void TmsServerDevice::addChildNodes()
     assert(!inputsOutputsNodeId.isNull());
 
     auto topFolder = object.getInputsOutputsFolder();
-    auto inputsOutputsNode = std::make_unique<TmsServerFolder>(topFolder, server, daqContext, tmsContext);
+    auto inputsOutputsNode = std::make_shared<TmsServerFolder>(topFolder, server, daqContext, tmsContext);
     inputsOutputsNode->registerToExistingOpcUaNode(inputsOutputsNodeId);
     folders.push_back(std::move(inputsOutputsNode));
 
     auto syncComponentNodeId = getChildNodeId("Synchronization");
     assert(!syncComponentNodeId.isNull());
     auto syncComponent = object.getSyncComponent();
-    auto syncComponentNode = std::make_unique<TmsServerSyncComponent>(syncComponent, server, daqContext, tmsContext);
+    auto syncComponentNode = std::make_shared<TmsServerSyncComponent>(syncComponent, server, daqContext, tmsContext);
     syncComponentNode->registerToExistingOpcUaNode(syncComponentNodeId);
     syncComponents.push_back(std::move(syncComponentNode));
 
@@ -574,12 +573,10 @@ void TmsServerDevice::addChildNodes()
         serversNodeId = server->addObjectNode(params);
     }
     assert(!serversNodeId.isNull());
-    numberInList = 0;
-    for (const auto& server : object.getServers())
-    {
-        auto tmsServerComponent = registerTmsObjectOrAddReference<TmsServerDaqServerComponent>(serversNodeId, server, numberInList++);
-        daqServerComponents.push_back(std::move(tmsServerComponent));
-    }
+    auto srvFolder = object.getItem("Srv");
+    auto srvFolderNode = std::make_shared<TmsServerFolder>(srvFolder, server, daqContext, tmsContext);
+    srvFolderNode->registerToExistingOpcUaNode(serversNodeId);
+    folders.push_back(std::move(srvFolderNode));
 
     tmsPropertyObject->ignoredProps.emplace("userName");
     tmsPropertyObject->ignoredProps.emplace("location");
@@ -615,7 +612,6 @@ void TmsServerDevice::createNonhierarchicalReferences()
     createChildNonhierarchicalReferences(functionBlocks);
     createChildNonhierarchicalReferences(folders);
     createChildNonhierarchicalReferences(components);
-    createChildNonhierarchicalReferences(daqServerComponents);
 }
 
 bool TmsServerDevice::checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext)

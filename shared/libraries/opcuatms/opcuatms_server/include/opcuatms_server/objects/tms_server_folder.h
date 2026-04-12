@@ -17,6 +17,7 @@
 #pragma once
 #include <opendaq/folder_ptr.h>
 #include <opcuatms_server/objects/tms_server_channel.h>
+#include <opcuatms_server/objects/tms_server_daqserver_component.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
@@ -33,10 +34,13 @@ public:
     void createNonhierarchicalReferences() override;
     void addChildNodes() override;
 
+    void onCoreEvent(const CoreEventArgsPtr& args) override;
+
 protected:
     opcua::OpcUaNodeId getTmsTypeId() override;
 
     std::list<TmsServerChannelPtr> channels;
+    std::list<TmsServerDaqServerComponentPtr> daqServerComponents;
     std::list<TmsServerFolderPtr> folders;
     std::list<TmsServerComponentPtr> components;
 };

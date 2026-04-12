@@ -630,6 +630,7 @@ TEST_F(TmsIntegrationTest, GetDaqServers)
     TmsClient tmsClient(NullContext(), nullptr, OPC_URL);
     DevicePtr clientDevice = tmsClient.connect();
 
+    ASSERT_GT(device.getServers().getCount(), 0u);
     ListPtr<IServer> servers;
     ASSERT_NO_THROW(servers = clientDevice.getServers());
     ASSERT_EQ(servers.getCount(), device.getServers().getCount());
