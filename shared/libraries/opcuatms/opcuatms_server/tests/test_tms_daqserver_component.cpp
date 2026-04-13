@@ -49,19 +49,33 @@ TEST_F(TmsDaqServerComponentTest, Permissions)
     serverDaqServerComponent.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
     auto tmsObj = TmsServerDaqServerComponent(serverDaqServerComponent, this->getServer(), ctx, tmsCtx);
     auto nodeId = tmsObj.registerOpcUaNode();
+    const auto enableDiscoveryNodeID = tmsObj.getEnableDiscoveryNodeId();
+    const auto disableDiscoveryNodeID = tmsObj.getDisableDiscoveryNodeId();
 
     ASSERT_TRUE(this->getClient()->nodeExists(nodeId));
 
-    auto lambdaMain = [&](const OpcUaSession& session, bool read, bool write, bool execute)
+    auto lambdaTemplate = [&](const UA_NodeId* id, const OpcUaSession& session, bool read, bool write, bool execute)
     {
-        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, nodeId.getPtr(), &session), read);
-        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, nodeId.getPtr(), &session), write);
-        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, nodeId.getPtr(), &session), execute);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Read, id, &session), read);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Write, id, &session), write);
+        EXPECT_EQ(tmsObj.checkPermission(Permission::Execute, id, &session), execute);
     };
 
-    lambdaMain(test_helpers::createSessionCommon("common"), false, false, false);
-    lambdaMain(test_helpers::createSessionReader("reader"), true, false, false);
-    lambdaMain(test_helpers::createSessionWriter("writer"), true, true, false);
-    lambdaMain(test_helpers::createSessionExecutor("executor"), true, false, true);
-    lambdaMain(test_helpers::createSessionAdmin("admin"), true, true, true);
+    lambdaTemplate(nodeId.getPtr(), test_helpers::createSessionCommon("common"), false, false, false);
+    lambdaTemplate(nodeId.getPtr(), test_helpers::createSessionReader("reader"), true, false, false);
+    lambdaTemplate(nodeId.getPtr(), test_helpers::createSessionWriter("writer"), true, true, false);
+    lambdaTemplate(nodeId.getPtr(), test_helpers::createSessionExecutor("executor"), true, false, true);
+    lambdaTemplate(nodeId.getPtr(), test_helpers::createSessionAdmin("admin"), true, true, true);
+
+    lambdaTemplate(enableDiscoveryNodeID.getPtr(), test_helpers::createSessionCommon("common"), false, false, false);
+    lambdaTemplate(enableDiscoveryNodeID.getPtr(), test_helpers::createSessionReader("reader"), true, false, false);
+    lambdaTemplate(enableDiscoveryNodeID.getPtr(), test_helpers::createSessionWriter("writer"), true, true, false);
+    lambdaTemplate(enableDiscoveryNodeID.getPtr(), test_helpers::createSessionExecutor("executor"), true, false, false);
+    lambdaTemplate(enableDiscoveryNodeID.getPtr(), test_helpers::createSessionAdmin("admin"), true, true, true);
+
+    lambdaTemplate(disableDiscoveryNodeID.getPtr(), test_helpers::createSessionCommon("common"), false, false, false);
+    lambdaTemplate(disableDiscoveryNodeID.getPtr(), test_helpers::createSessionReader("reader"), true, false, false);
+    lambdaTemplate(disableDiscoveryNodeID.getPtr(), test_helpers::createSessionWriter("writer"), true, true, false);
+    lambdaTemplate(disableDiscoveryNodeID.getPtr(), test_helpers::createSessionExecutor("executor"), true, false, false);
+    lambdaTemplate(disableDiscoveryNodeID.getPtr(), test_helpers::createSessionAdmin("admin"), true, true, true);
 }

@@ -29,9 +29,22 @@ public:
     using Super = TmsServerComponent<ServerPtr>;
 
     TmsServerDaqServerComponent(const ServerPtr& object, const opcua::OpcUaServerPtr& server, const ContextPtr& context, const TmsServerContextPtr& tmsContext);
+    void addChildNodes() override;
+    bool checkPermission(const Permission permission,
+                         const UA_NodeId* const nodeId,
+                         const OpcUaSession* const sessionContext) override;
+    OpcUaNodeId getEnableDiscoveryNodeId() const { return enableDiscoveryNodeId; }
+    OpcUaNodeId getDisableDiscoveryNodeId() const { return disableDiscoveryNodeId; }
 
 protected:
     opcua::OpcUaNodeId getTmsTypeId() override;
+    void createEnableDiscoveryNode();
+    void createDisableDiscoveryNode();
+    void onEnableDiscovery(const NodeEventManager::MethodArgs& args);
+    void onDisableDiscovery(const NodeEventManager::MethodArgs& args);
+
+    OpcUaNodeId enableDiscoveryNodeId;
+    OpcUaNodeId disableDiscoveryNodeId;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

@@ -35,6 +35,7 @@ public:
 
     // IServer
     ErrCode INTERFACE_FUNC enableDiscovery() override;
+    ErrCode INTERFACE_FUNC disableDiscovery() override;
     ErrCode INTERFACE_FUNC stop() override;
 };
 
