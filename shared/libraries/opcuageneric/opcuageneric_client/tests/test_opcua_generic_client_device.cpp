@@ -1,7 +1,9 @@
 #include <coreobjects/property_factory.h>
 #include <coreobjects/property_object_factory.h>
 #include <coretypes/common.h>
+#include <coretypes/search_filter_factory.h>
 #include <opcuageneric_client/opcuageneric.h>
+#include <opcuageneric_client/opcua_monitored_item_fb_impl.h>
 #include <opendaq/device_info_factory.h>
 #include <opendaq/instance_factory.h>
 #include <testutils/testutils.h>
@@ -45,6 +47,17 @@ public:
         return device;
     }
 
+    daq::FunctionBlockPtr addMonitoredItemFB(const std::string& nodeId, uint32_t nsIndex, uint32_t interval = 100)
+    {
+        using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+        auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::String));
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, nodeId);
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, nsIndex);
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, interval);
+        return device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config);
+    }
+
 protected:
     void SetUp() override
     {
@@ -75,7 +88,7 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     auto defaultConfig = deviceTypes.get("OPCUAGeneric").createDefaultConfig();
     ASSERT_TRUE(defaultConfig.assigned());
 
-    ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 6u);
+    ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 7u);
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_HOST));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PORT));
@@ -83,6 +96,7 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_USERNAME));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PASSWORD));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID));
+    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
 
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_HOST).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PORT).getValueType(), CoreType::ctInt);
@@ -90,6 +104,7 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_USERNAME).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PASSWORD).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID).getValueType(), CoreType::ctString);
+    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_TS_MODE).getValueType(), CoreType::ctInt);
 
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_HOST), DEFAULT_OPCUA_HOST);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_PORT), DEFAULT_OPCUA_PORT);
@@ -97,6 +112,8 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME), DEFAULT_OPCUA_USERNAME);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD), DEFAULT_OPCUA_PASSWORD);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID), "");
+    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::SourceTimestamp));
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
@@ -125,15 +142,9 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
     ASSERT_EQ(deviceFromList.getInfo().getName(), device.getInfo().getName());
     ASSERT_TRUE(deviceFromList == device);
 
-    ASSERT_EQ(device.getAllProperties().getCount(), 5u);
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_HOST));
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_PORT));
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_PATH));
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_USERNAME));
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_PASSWORD));
-    ASSERT_FALSE(device.hasProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID));
+    ASSERT_EQ(device.getAllProperties().getCount(), 1u);
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
 }
-
 
 TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithLocalId)
 {
@@ -237,4 +248,57 @@ TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_StopsCleanlyOnDeviceRemova
 
     // stopReconnectMonitor() uses cv.notify_all() so join should be near-instant
     ASSERT_LT(elapsedMs, 1000);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, TimestampModeFromConfigIsAppliedToDevice)
+{
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
+
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::ServerTimestamp));
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, TimestampModeChangePropagatesToMultipleFBs)
+{
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
+
+    auto fb1 = addMonitoredItemFB(".i32", 1);
+    auto fb2 = addMonitoredItemFB(".i64", 1);
+
+    ASSERT_EQ(fb1.getSignals(daq::search::Any()).getCount(), 2u);
+    ASSERT_EQ(fb2.getSignals(daq::search::Any()).getCount(), 2u);
+
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::None));
+
+    EXPECT_EQ(fb1.getSignals(daq::search::Any()).getCount(), 1u);
+    EXPECT_FALSE(fb1.getSignals()[0].getDomainSignal().assigned());
+    EXPECT_EQ(fb2.getSignals(daq::search::Any()).getCount(), 1u);
+    EXPECT_FALSE(fb2.getSignals()[0].getDomainSignal().assigned());
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, TimestampModeNewFBInheritsCurrentDeviceMode)
+{
+    StartUp(buildDeviceConfig(DomainSource::SourceTimestamp));
+
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::None));
+
+    auto fb = addMonitoredItemFB(".i32", 1);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", daqInstance.getContext().getTypeManager()));
+    EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 1u);
+    EXPECT_FALSE(fb.getSignals()[0].getDomainSignal().assigned());
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, RemovedFBIsIgnoredOnSubsequentTimestampModeChange)
+{
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
+
+    auto fb = addMonitoredItemFB(".i32", 1);
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", daqInstance.getContext().getTypeManager()));
+
+    ASSERT_NO_THROW(device.removeFunctionBlock(fb));
+    ASSERT_NO_THROW(device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::None)));    
 }

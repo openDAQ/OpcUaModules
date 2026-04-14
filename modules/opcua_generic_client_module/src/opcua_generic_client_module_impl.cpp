@@ -345,7 +345,25 @@ DeviceTypePtr OpcUaGenericClientModule::createDeviceType()
 
 PropertyObjectPtr OpcUaGenericClientModule::createDefaultConfig()
 {
-    return OpcuaGenericClientDeviceImpl::createDefaultConfig();
+    auto defaultConfig = PropertyObject();
+    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_HOST, DEFAULT_OPCUA_HOST));
+    defaultConfig.addProperty(IntProperty(PROPERTY_NAME_OPCUA_PORT, DEFAULT_OPCUA_PORT));
+    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_PATH, DEFAULT_OPCUA_PATH));
+    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_USERNAME, DEFAULT_OPCUA_USERNAME));
+    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_PASSWORD, DEFAULT_OPCUA_PASSWORD));
+    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID, ""));
+
+    auto deviceDefaultConfig = OpcuaGenericClientDeviceImpl::createDefaultConfig();
+    for (const auto& prop : deviceDefaultConfig.getAllProperties())
+    {
+        const auto propName = prop.getName();
+        if (const auto internalProp = prop.asPtrOrNull<IPropertyInternal>(true); internalProp.assigned())
+        {
+            defaultConfig.addProperty(internalProp.clone());
+            defaultConfig.setPropertyValue(propName, prop.getValue());
+        }
+    }
+    return defaultConfig;
 }
 
 END_NAMESPACE_OPENDAQ_OPCUA_GENERIC_CLIENT_MODULE

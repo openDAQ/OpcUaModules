@@ -17,6 +17,7 @@
 #pragma once
 #include <opcuageneric_client/opcuageneric.h>
 #include <opcuageneric_client/status_container.h>
+#include <opcuageneric_client/common.h>
 #include <opendaq/data_packet_ptr.h>
 #include <opendaq/function_block_impl.h>
 #include "opcuaclient/opcuaclient.h"
@@ -37,22 +38,16 @@ public:
         _count
     };
 
-    enum class DomainSource : int
-    {
-        None = 0,
-        ServerTimestamp,
-        SourceTimestamp,
-        LocalSystemTimestamp,
-        _count
-    };
-
     explicit OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
                                       const ComponentPtr& parent,
                                       const FunctionBlockTypePtr& type,
                                       daq::opcua::OpcUaClientPtr client,
+                                      DomainSource defaultDomainSource,
                                       const PropertyObjectPtr& config = nullptr);
     ~OpcUaMonitoredItemFbImpl();
-    /*DAQ_OPCUA_MODULE_API*/ static FunctionBlockTypePtr CreateType();
+    DAQ_OPCUA_GENERIC_MODULE_API static FunctionBlockTypePtr CreateType();
+
+    void setDomainSource(DomainSource domainSource);
 
 protected:
     struct DataPackets
