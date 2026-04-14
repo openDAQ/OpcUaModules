@@ -1,4 +1,5 @@
 ## Features
+- [#22](https://github.com/openDAQ/OpcUaModules/pull/22) Ignore calls to `updateOperationMode` on OPC UA client side.
 
 ## Bug fixes
 
