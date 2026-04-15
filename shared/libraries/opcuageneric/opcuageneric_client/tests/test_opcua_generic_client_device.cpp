@@ -88,27 +88,18 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     auto defaultConfig = deviceTypes.get("OPCUAGeneric").createDefaultConfig();
     ASSERT_TRUE(defaultConfig.assigned());
 
-    ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 7u);
+    ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 4u);
 
-    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_HOST));
-    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PORT));
-    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PATH));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_USERNAME));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PASSWORD));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
 
-    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_HOST).getValueType(), CoreType::ctString);
-    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PORT).getValueType(), CoreType::ctInt);
-    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PATH).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_USERNAME).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PASSWORD).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_TS_MODE).getValueType(), CoreType::ctInt);
 
-    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_HOST), DEFAULT_OPCUA_HOST);
-    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_PORT), DEFAULT_OPCUA_PORT);
-    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_PATH), DEFAULT_OPCUA_PATH);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME), DEFAULT_OPCUA_USERNAME);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD), DEFAULT_OPCUA_PASSWORD);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID), "");

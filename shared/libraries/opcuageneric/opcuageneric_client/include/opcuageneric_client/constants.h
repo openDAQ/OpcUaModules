@@ -21,9 +21,6 @@ static constexpr const char* GENERIC_OPCUA_MONITORED_ITEM_FB_NAME = "MonitoredIt
 // Property names
 // ----------
 // Device and module
-static constexpr const char* PROPERTY_NAME_OPCUA_HOST = "Host";
-static constexpr const char* PROPERTY_NAME_OPCUA_PORT = "Port";
-static constexpr const char* PROPERTY_NAME_OPCUA_PATH = "Path";
 static constexpr const char* PROPERTY_NAME_OPCUA_USERNAME = "Username";
 static constexpr const char* PROPERTY_NAME_OPCUA_PASSWORD = "Password";
 static constexpr const char* PROPERTY_NAME_OPCUA_MI_LOCAL_ID = "LocalId";

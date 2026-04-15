@@ -61,83 +61,39 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
     if (!connectionString.assigned())
         DAQ_THROW_EXCEPTION(ArgumentNullException);
 
-    PropertyObjectPtr configPtr = config;
-    if (!configPtr.assigned())
-        configPtr = createDefaultConfig();
-    else
-        configPtr = populateDefaultConfig(configPtr);
+    auto configPtr = config.assigned() ? populateDefaultConfig(config) : createDefaultConfig();
 
-    if (!acceptsConnectionParameters(connectionString, configPtr))
+    if (!acceptsConnectionParameters(connectionString))
         DAQ_THROW_EXCEPTION(InvalidParameterException);
 
     if (!context.assigned())
         DAQ_THROW_EXCEPTION(InvalidParameterException, "Context is not available.");
 
-    std::string host;
-    std::string hostType;
-    int port;
-    const auto opcuaConnStr = formConnectionString(connectionString, configPtr, host, port, hostType);
+    const auto parsedConnectionInfo = formConnectionString(connectionString);
+    const auto opcuaConnStr = buildOpcuaUrl(parsedConnectionInfo);
 
     std::scoped_lock lock(sync);
 
-    std::shared_ptr<OpcUaClient> client;
-    std::string deviceName;
     // we let a user to set device local id in the config, but if it's not set, we will try to get it from the server's
     // ApplicationDescription. If that's also not set, we will generate a local id for the device.
     // A user need to have this opportunity to set local id in the config when they want to have a stable local id for the device across
     // different runs of the application, and they don't want to rely on the server to provide it (especially it the server uses default values).
     std::string deviceLocalId = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID);
 
-    try
-    {
-        client = std::make_shared<OpcUaClient>(OpcUaEndpoint(opcuaConnStr,
-                                                             configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME),
-                                                             configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD)));
-        const auto desc = client->readApplicationDescription();
+    const auto username = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME);
+    const auto password = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD);
+    auto client = initOpcuaClient(opcuaConnStr, username, password);
 
-        deviceName = desc.name.empty() ? GENERIC_OPCUA_CLIENT_DEVICE_NAME : desc.name;
-        if (deviceLocalId.empty())
-        {
-            deviceLocalId = desc.uri.empty() ? "" : desc.uri;
-            std::replace(deviceLocalId.begin(), deviceLocalId.end(), '/', '-');
-        }
-    }
+    const auto desc = readApplicationDescription(client);
+    const auto deviceName = buildDeviceName(desc);
 
-    catch (const OpcUaException& e)
-    {
-        switch (e.getStatusCode())
-        {
-            case UA_STATUSCODE_BADUSERACCESSDENIED:
-            case UA_STATUSCODE_BADIDENTITYTOKENINVALID:
-                DAQ_THROW_EXCEPTION(AuthenticationFailedException, e.what());
-            default:
-                DAQ_THROW_EXCEPTION(NotFoundException, e.what());
-        }
-    }
+    if (deviceLocalId.empty())
+        deviceLocalId = buildDeviceLocalId(desc);
 
     DevicePtr device(createWithImplementation<IDevice, OpcuaGenericClientDeviceImpl>(context, parent, configPtr, client, deviceLocalId, deviceName));
 
-    // Set the connection info for the device
     DeviceInfoPtr deviceInfo = device.getInfo();
-    deviceInfo.asPtr<IPropertyObjectProtected>().setProtectedPropertyValue("connectionString", connectionString);
-    ServerCapabilityConfigPtr connectionInfo = deviceInfo.getConfigurationConnectionInfo();
-    
-    const auto addressInfo = AddressInfoBuilder().setAddress(host)
-                                                 .setReachabilityStatus(AddressReachabilityStatus::Reachable)
-                                                 .setType(hostType)
-                                                 .setConnectionString(connectionString)
-                                                 .build();
-
-    connectionInfo.setProtocolId(DaqOpcUaGenericProtocolId)
-                  .setProtocolName(DaqOpcUaGenericProtocolName)
-                  .setProtocolType(ProtocolType::Unknown)
-                  .setConnectionType("TCP/IP")
-                  .addAddress(host)
-                  .setPort(port)
-                  .setPrefix(DaqOpcUaGenericDevicePrefix)
-                  .setConnectionString(connectionString)
-                  .addAddressInfo(addressInfo)
-                  .freeze();
+    populateDeviceInfo(deviceInfo, connectionString, parsedConnectionInfo, username, desc.productUri);
 
     return device;
 }
@@ -197,7 +153,7 @@ DeviceInfoPtr OpcUaGenericClientModule::populateDiscoveredDevice(const MdnsDisco
 
     cap.setConnectionType("TCP/IP");
     cap.setPrefix(DaqOpcUaGenericDevicePrefix);
-    cap.setProtocolVersion("");
+    cap.setProtocolVersion(discoveredDevice.getPropertyOrDefault("protocolVersion", ""));
     if (discoveredDevice.servicePort > 0)
         cap.setPort(discoveredDevice.servicePort);
 
@@ -206,43 +162,35 @@ DeviceInfoPtr OpcUaGenericClientModule::populateDiscoveredDevice(const MdnsDisco
     return devInfo;
 }
 
-StringPtr OpcUaGenericClientModule::formConnectionString(const StringPtr& connectionString, const PropertyObjectPtr& config, std::string& host, int& port, std::string& hostType)
+OpcUaGenericClientModule::ParsedConnectionInfo OpcUaGenericClientModule::formConnectionString(const StringPtr& connectionString)
 {
+    ParsedConnectionInfo result;
     std::string urlString = connectionString.toStdString();
     std::smatch match;
 
     std::string prefix = "";
-    std::string path = "/";
-
-    if (config.assigned())
-    {
-        if (config.hasProperty(PROPERTY_NAME_OPCUA_PORT))
-            port = config.getPropertyValue(PROPERTY_NAME_OPCUA_PORT);
-
-        if (config.hasProperty(PROPERTY_NAME_OPCUA_PATH))
-            path = String(config.getPropertyValue(PROPERTY_NAME_OPCUA_PATH)).toStdString();
-    }
+    result.path = DEFAULT_OPCUA_PATH;
 
     bool parsed = false;
     parsed = std::regex_search(urlString, match, RegexIpv6Hostname);
-    hostType = "IPv6";
+    result.hostType = "IPv6";
 
     if (!parsed)
     {
         parsed = std::regex_search(urlString, match, RegexIpv4Hostname);
-        hostType = "IPv4";
+        result.hostType = "IPv4";
     }
 
     if (parsed)
     {
         prefix = match[1];
-        host = match[2];
+        result.host = match[2];
 
         if (match[3].matched)
-            port = std::stoi(match[3]);
+            result.port = std::stoi(match[3]);
 
         if (match[4].matched)
-            path = match[4];
+            result.path = match[4];
     }
     else
         DAQ_THROW_EXCEPTION(InvalidParameterException, "Host name not found in url: {}", connectionString);
@@ -250,23 +198,97 @@ StringPtr OpcUaGenericClientModule::formConnectionString(const StringPtr& connec
     if (prefix != std::string(DaqOpcUaGenericDevicePrefix) + "://")
         DAQ_THROW_EXCEPTION(InvalidParameterException, "OpcUa does not support connection string with prefix {}", prefix);
 
-
-    if (config.assigned())
-    {
-        if (config.hasProperty(PROPERTY_NAME_OPCUA_PORT))
-            config.setPropertyValue(PROPERTY_NAME_OPCUA_PORT, port);
-
-        if (config.hasProperty(PROPERTY_NAME_OPCUA_PATH))
-            config.setPropertyValue(PROPERTY_NAME_OPCUA_PATH, path);
-
-        if (config.hasProperty(PROPERTY_NAME_OPCUA_HOST))
-            config.setPropertyValue(PROPERTY_NAME_OPCUA_HOST, host);
-    }
-
-    return std::string(OpcUaGenericScheme) + "://" + host + ":" + std::to_string(port) + path;
+    return result;
 }
 
-bool OpcUaGenericClientModule::acceptsConnectionParameters(const StringPtr& connectionString, const PropertyObjectPtr& config)
+std::shared_ptr<opcua::OpcUaClient> OpcUaGenericClientModule::initOpcuaClient(const std::string& url, const std::string& username, const std::string& password)
+{
+    try
+    {
+        return std::make_shared<OpcUaClient>(OpcUaEndpoint(url, username, password));
+    }
+    catch (const OpcUaException& e)
+    {
+        switch (e.getStatusCode())
+        {
+            case UA_STATUSCODE_BADUSERACCESSDENIED:
+            case UA_STATUSCODE_BADIDENTITYTOKENINVALID:
+                DAQ_THROW_EXCEPTION(AuthenticationFailedException, e.what());
+            default:
+                DAQ_THROW_EXCEPTION(NotFoundException, e.what());
+        }
+    }
+}
+
+opcua::OpcUaClient::ApplicationDescription OpcUaGenericClientModule::readApplicationDescription(std::shared_ptr<opcua::OpcUaClient> client)
+{
+    if (!client)
+        DAQ_THROW_EXCEPTION(UninitializedException, "OPCUA client is not initialized");
+    try
+    {
+        return client->readApplicationDescription();
+    }
+    catch (const OpcUaException& e)
+    {
+        switch (e.getStatusCode())
+        {
+            case UA_STATUSCODE_BADUSERACCESSDENIED:
+            case UA_STATUSCODE_BADIDENTITYTOKENINVALID:
+                DAQ_THROW_EXCEPTION(AuthenticationFailedException, e.what());
+            default:
+                DAQ_THROW_EXCEPTION(NotFoundException, e.what());
+        }
+    }
+}
+
+std::string OpcUaGenericClientModule::buildDeviceName(const opcua::OpcUaClient::ApplicationDescription& appDesc)
+{
+    return appDesc.name.empty() ? GENERIC_OPCUA_CLIENT_DEVICE_NAME : appDesc.name;
+}
+
+std::string OpcUaGenericClientModule::buildDeviceLocalId(const opcua::OpcUaClient::ApplicationDescription& appDesc)
+{
+    std::string deviceLocalId = appDesc.uri;
+    std::replace(deviceLocalId.begin(), deviceLocalId.end(), '/', '-');
+    return deviceLocalId;
+}
+
+std::string OpcUaGenericClientModule::buildOpcuaUrl(const ParsedConnectionInfo& connectionInfo)
+{
+    return fmt::format("{}://{}:{}{}", OpcUaGenericScheme, connectionInfo.host, connectionInfo.port, connectionInfo.path);
+}
+
+void OpcUaGenericClientModule::populateDeviceInfo(DeviceInfoPtr deviceInfo,
+                                                  const StringPtr& connectionString,
+                                                  const OpcUaGenericClientModule::ParsedConnectionInfo& connectionInfo,
+                                                  const std::string& username,
+                                                  const std::string& productUri)
+{
+    deviceInfo.asPtr<IPropertyObjectProtected>().setProtectedPropertyValue("connectionString", connectionString);
+    ServerCapabilityConfigPtr configConnectionInfo = deviceInfo.getConfigurationConnectionInfo();
+
+    const auto addressInfo = AddressInfoBuilder().setAddress(connectionInfo.host)
+                                 .setReachabilityStatus(AddressReachabilityStatus::Reachable)
+                                 .setType(connectionInfo.hostType)
+                                 .setConnectionString(connectionString)
+                                 .build();
+
+    configConnectionInfo.setProtocolId(DaqOpcUaGenericProtocolId)
+        .setProtocolName(DaqOpcUaGenericProtocolName)
+        .setProtocolType(ProtocolType::Unknown)
+        .setConnectionType("TCP/IP")
+        .addAddress(connectionInfo.host)
+        .setPort(connectionInfo.port)
+        .setPrefix(DaqOpcUaGenericDevicePrefix)
+        .setConnectionString(connectionString)
+        .addAddressInfo(addressInfo)
+        .freeze();
+    deviceInfo.addProperty(StringPropertyBuilder("path", connectionInfo.path).setReadOnly(true).build());
+    deviceInfo.asPtr<IPropertyObjectProtected>().setProtectedPropertyValue("userName", username);
+    deviceInfo.asPtr<IPropertyObjectProtected>().setProtectedPropertyValue("productInstanceUri", productUri);
+}
+
+bool OpcUaGenericClientModule::acceptsConnectionParameters(const StringPtr& connectionString)
 {
     std::string connStr = connectionString;
     auto found = connStr.find(std::string(DaqOpcUaGenericDevicePrefix) + "://");
@@ -302,7 +324,7 @@ Bool OpcUaGenericClientModule::onCompleteServerCapability(const ServerCapability
         LOG_W("OPC UA server capability is missing port. Defaulting to {}.", DEFAULT_OPCUA_PORT)
     }
 
-    const auto path = target.hasProperty(PROPERTY_NAME_OPCUA_PATH) ? target.getPropertyValue(PROPERTY_NAME_OPCUA_PATH) : DEFAULT_OPCUA_PATH;
+    const auto path = target.hasProperty("Path") ? target.getPropertyValue("Path") : DEFAULT_OPCUA_PATH;
     const auto targetAddress = target.getAddresses();
     for (const auto& addrInfo : addrInfos)
     {
@@ -346,9 +368,6 @@ DeviceTypePtr OpcUaGenericClientModule::createDeviceType()
 PropertyObjectPtr OpcUaGenericClientModule::createDefaultConfig()
 {
     auto defaultConfig = PropertyObject();
-    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_HOST, DEFAULT_OPCUA_HOST));
-    defaultConfig.addProperty(IntProperty(PROPERTY_NAME_OPCUA_PORT, DEFAULT_OPCUA_PORT));
-    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_PATH, DEFAULT_OPCUA_PATH));
     defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_USERNAME, DEFAULT_OPCUA_USERNAME));
     defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_PASSWORD, DEFAULT_OPCUA_PASSWORD));
     defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID, ""));

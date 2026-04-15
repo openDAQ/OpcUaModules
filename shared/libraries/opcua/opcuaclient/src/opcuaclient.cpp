@@ -221,8 +221,9 @@ OpcUaClient::ApplicationDescription OpcUaClient::readApplicationDescription()
             if (url == endpointUrl)
             {
                 const UA_ApplicationDescription& app = endpointArray[i].server;
-                desc.uri = std::string(reinterpret_cast<char*>(app.applicationUri.data), (int)app.applicationUri.length);
+                desc.uri = utils::ToStdString(app.applicationUri);
                 desc.name = utils::ToStdString(app.applicationName.text);
+                desc.productUri = utils::ToStdString(app.productUri);
             }
         }
     }
