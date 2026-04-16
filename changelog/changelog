@@ -1,5 +1,7 @@
 ## Features
 
+- [#20](https://github.com/openDAQ/OpcUaModules/pull/20) Support advertising servers via OpcUa with discovery toggling
+
 ## Bug fixes
 
 - [#9](https://github.com/openDAQ/OpcUaModules/pull/9) Fix appending dependent boost components.
