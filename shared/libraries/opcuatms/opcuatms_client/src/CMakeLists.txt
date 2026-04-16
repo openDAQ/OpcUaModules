@@ -67,8 +67,8 @@ set(SRC_Objects_Headers ${OBJECT_SRC_DIR}/tms_client_object_impl.h
                         ${OBJECT_SRC_DIR}/tms_client_sync_component_impl.h
                         ${OBJECT_SRC_DIR}/tms_client_sync_component_factory.h
 
-                        ${OBJECT_SRC_DIR}/tms_client_daqserver_component_impl.h
-                        ${OBJECT_SRC_DIR}/tms_client_daqserver_component_factory.h
+                        ${OBJECT_SRC_DIR}/tms_client_server_impl.h
+                        ${OBJECT_SRC_DIR}/tms_client_server_factory.h
 )
 
 set(SRC_Objects ${OBJECT_SRC_DIR}/tms_client_object_impl.cpp
@@ -88,7 +88,7 @@ set(SRC_Objects ${OBJECT_SRC_DIR}/tms_client_object_impl.cpp
                 ${OBJECT_SRC_DIR}/tms_client_procedure_impl.cpp
                 ${OBJECT_SRC_DIR}/tms_client_tags_impl.cpp
                 ${OBJECT_SRC_DIR}/tms_client_function_block_type_impl.cpp
-                ${OBJECT_SRC_DIR}/tms_client_daqserver_component_impl.cpp
+                ${OBJECT_SRC_DIR}/tms_client_server_impl.cpp
 )
 
 set(SRC_PublicHeaders ${SRC_PublicHeaders} ${SRC_Objects_Headers})
@@ -109,7 +109,7 @@ source_group("objects\\server_capability" "${OBJECT_SRC_DIR}/tms_client_server_c
 source_group("objects\\tags" "${OBJECT_SRC_DIR}/tms_client_tags.*")
 source_group("objects\\function" "${OBJECT_SRC_DIR}/(tms_client_function_impl.*|tms_client_function_factory.h|tms_client_procedure.*)")
 source_group("objects\\sync_component" "${OBJECT_SRC_DIR}tms_client_sync_component.*")
-source_group("objects\\server" "${OBJECT_SRC_DIR}tms_client_daqserver_component.*")
+source_group("objects\\server" "${OBJECT_SRC_DIR}tms_client_server.*")
 
 # /objects
 

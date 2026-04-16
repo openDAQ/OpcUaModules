@@ -27,7 +27,7 @@
 #include <opcuatms_client/objects/tms_client_function_block_type_factory.h>
 #include <opendaq/device_domain_factory.h>
 #include <opendaq/address_info_factory.h>
-#include <opcuatms_client/objects/tms_client_daqserver_component_factory.h>
+#include <opcuatms_client/objects/tms_client_server_factory.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 using namespace daq::opcua;
@@ -693,7 +693,7 @@ void TmsClientDeviceImpl::findAndCreateServers()
 
         try
         {
-            auto clientDaqServer = TmsClientDaqServerComponent(context, this->servers, browseName, clientContext, daqServerNodeId, this->thisPtr<DevicePtr>());
+            auto clientDaqServer = TmsClientServer(context, this->servers, browseName, clientContext, daqServerNodeId, this->thisPtr<DevicePtr>());
             const auto numberInList = this->tryReadChildNumberInList(daqServerNodeId);
             if (numberInList != std::numeric_limits<uint32_t>::max() && !orderedDaqServers.count(numberInList))
                 orderedDaqServers.emplace(numberInList, clientDaqServer);

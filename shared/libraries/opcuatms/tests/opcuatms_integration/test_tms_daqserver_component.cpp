@@ -1,7 +1,7 @@
 #include <opendaq/context_factory.h>
 #include <gtest/gtest.h>
-#include <opcuatms_client/objects/tms_client_daqserver_component_factory.h>
-#include <opcuatms_server/objects/tms_server_daqserver_component.h>
+#include <opcuatms_client/objects/tms_client_server_factory.h>
+#include <opcuatms_server/objects/tms_server_server.h>
 #include "tms_object_integration_test.h"
 #include <opendaq/mock/advanced_components_setup_utils.h>
 
@@ -32,17 +32,17 @@ public:
 TEST_F(TmsDaqServerComponentTest, Create)
 {
     ServerPtr serverDaqServerComponent = createDaqServerComponent(ctx);
-    auto tmsServerDaqServerComponent = TmsServerDaqServerComponent(serverDaqServerComponent, this->getServer(), ctx, serverContext);
+    auto tmsServerServer = TmsServerServer(serverDaqServerComponent, this->getServer(), ctx, serverContext);
 }
 
 TEST_F(TmsDaqServerComponentTest, Register)
 {
     ServerPtr serverDaqServerComponent = createDaqServerComponent(ctx, "Id");
 
-    auto tmsServerDaqServerComponent = TmsServerDaqServerComponent(serverDaqServerComponent, this->getServer(), ctx, serverContext);
-    auto nodeId = tmsServerDaqServerComponent.registerOpcUaNode();
+    auto tmsServerServer = TmsServerServer(serverDaqServerComponent, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsServerServer.registerOpcUaNode();
 
-    ServerPtr clientDaqServerComponent = TmsClientDaqServerComponent(NullContext(), nullptr, "Id", clientContext, nodeId, nullptr);
+    ServerPtr clientDaqServerComponent = TmsClientServer(NullContext(), nullptr, "Id", clientContext, nodeId, nullptr);
 
     ASSERT_EQ(serverDaqServerComponent.getLocalId(), clientDaqServerComponent.getLocalId());
 }
@@ -51,10 +51,10 @@ TEST_F(TmsDaqServerComponentTest, Properties)
 {
     ServerPtr serverDaqServerComponent = createDaqServerComponent(ctx, "Id");
 
-    auto tmsServerDaqServerComponent = TmsServerDaqServerComponent(serverDaqServerComponent, this->getServer(), ctx, serverContext);
-    auto nodeId = tmsServerDaqServerComponent.registerOpcUaNode();
+    auto tmsServerServer = TmsServerServer(serverDaqServerComponent, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsServerServer.registerOpcUaNode();
 
-    ServerPtr clientDaqServerComponent = TmsClientDaqServerComponent(NullContext(), nullptr, "Id", clientContext, nodeId, nullptr);
+    ServerPtr clientDaqServerComponent = TmsClientServer(NullContext(), nullptr, "Id", clientContext, nodeId, nullptr);
 
     if (serverDaqServerComponent.hasProperty("StrProp"))
     {
@@ -73,10 +73,10 @@ TEST_F(TmsDaqServerComponentTest, Attributes)
 {
     ServerPtr serverDaqServerComponent = createDaqServerComponent(ctx, "Id");
 
-    auto tmsServerDaqServerComponent = TmsServerDaqServerComponent(serverDaqServerComponent, this->getServer(), ctx, serverContext);
-    auto nodeId = tmsServerDaqServerComponent.registerOpcUaNode();
+    auto tmsServerServer = TmsServerServer(serverDaqServerComponent, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsServerServer.registerOpcUaNode();
 
-    ServerPtr clientDaqServerComponent = TmsClientDaqServerComponent(NullContext(), nullptr, "Id", clientContext, nodeId, nullptr);
+    ServerPtr clientDaqServerComponent = TmsClientServer(NullContext(), nullptr, "Id", clientContext, nodeId, nullptr);
 
     ASSERT_TRUE(serverDaqServerComponent.getActive());
     ASSERT_TRUE(clientDaqServerComponent.getActive());
@@ -96,10 +96,10 @@ TEST_F(TmsDaqServerComponentTest, ComponentMethods)
 {
     ServerPtr serverDaqServerComponent = createDaqServerComponent(ctx, "Id");
 
-    auto tmsServerDaqServerComponent = TmsServerDaqServerComponent(serverDaqServerComponent, this->getServer(), ctx, serverContext);
-    auto nodeId = tmsServerDaqServerComponent.registerOpcUaNode();
+    auto tmsServerServer = TmsServerServer(serverDaqServerComponent, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsServerServer.registerOpcUaNode();
 
-    ServerPtr clientDaqServerComponent = TmsClientDaqServerComponent(NullContext(), nullptr, "Id", clientContext, nodeId, nullptr);
+    ServerPtr clientDaqServerComponent = TmsClientServer(NullContext(), nullptr, "Id", clientContext, nodeId, nullptr);
 
     ASSERT_EQ(serverDaqServerComponent.getName(), clientDaqServerComponent.getName());
 

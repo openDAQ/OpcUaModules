@@ -20,13 +20,13 @@
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
-class TmsClientDaqServerComponentImpl : public TmsClientComponentBaseImpl<ServerImpl<IServer, ITmsClientComponent>>
+class TmsClientServerImpl : public TmsClientComponentBaseImpl<ServerImpl<IServer, ITmsClientComponent>>
 {
 public:
     using Impl = ServerImpl<IServer, ITmsClientComponent>;
     using Super = TmsClientComponentBaseImpl<Impl>;
 
-    TmsClientDaqServerComponentImpl(const ContextPtr& ctx,
+    TmsClientServerImpl(const ContextPtr& ctx,
                                     const ComponentPtr& parent,
                                     const StringPtr& localId,
                                     const TmsClientContextPtr& clientContext,

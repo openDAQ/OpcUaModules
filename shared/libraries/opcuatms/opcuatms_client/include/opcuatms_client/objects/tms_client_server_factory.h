@@ -16,11 +16,11 @@
 #pragma once
 #include <opendaq/server_ptr.h>
 #include <opcuatms_client/objects/tms_client_context.h>
-#include <opcuatms_client/objects/tms_client_daqserver_component_impl.h>
+#include <opcuatms_client/objects/tms_client_server_impl.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
-inline ServerPtr TmsClientDaqServerComponent(
+inline ServerPtr TmsClientServer(
     const ContextPtr& ctx,
     const ComponentPtr& parent,
     const StringPtr& localId,
@@ -28,7 +28,7 @@ inline ServerPtr TmsClientDaqServerComponent(
     const opcua::OpcUaNodeId& nodeId,
     const DevicePtr& parentDevice)
 {
-    ServerPtr obj(createWithImplementation<IServer, TmsClientDaqServerComponentImpl>(ctx, parent, localId, clientContext, nodeId, parentDevice));
+    ServerPtr obj(createWithImplementation<IServer, TmsClientServerImpl>(ctx, parent, localId, clientContext, nodeId, parentDevice));
     return obj;
 }
 

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <opcuatms_server/objects/tms_server_daqserver_component.h>
+#include <opcuatms_server/objects/tms_server_server.h>
 #include "tms_server_test.h"
 #include <opendaq/mock/advanced_components_setup_utils.h>
 #include "test_helpers.h"
@@ -31,14 +31,14 @@ public:
 TEST_F(TmsDaqServerComponentTest, Create)
 {
     ServerPtr serverDaqServerComponent = createDaqServerComponent(ctx);
-    auto tmsServerDaqServerComponent = TmsServerDaqServerComponent(serverDaqServerComponent, this->getServer(), ctx, tmsCtx);
+    auto tmsServerServer = TmsServerServer(serverDaqServerComponent, this->getServer(), ctx, tmsCtx);
 }
 
 TEST_F(TmsDaqServerComponentTest, Register)
 {
     ServerPtr serverDaqServerComponent = createDaqServerComponent(ctx);
-    auto tmsServerDaqServerComponent = TmsServerDaqServerComponent(serverDaqServerComponent, this->getServer(), ctx, tmsCtx);
-    auto nodeId = tmsServerDaqServerComponent.registerOpcUaNode();
+    auto tmsServerServer = TmsServerServer(serverDaqServerComponent, this->getServer(), ctx, tmsCtx);
+    auto nodeId = tmsServerServer.registerOpcUaNode();
 
     ASSERT_TRUE(this->getClient()->nodeExists(nodeId));
 }
@@ -47,7 +47,7 @@ TEST_F(TmsDaqServerComponentTest, Permissions)
 {
     ServerPtr serverDaqServerComponent = createDaqServerComponent(ctx);
     serverDaqServerComponent.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
-    auto tmsObj = TmsServerDaqServerComponent(serverDaqServerComponent, this->getServer(), ctx, tmsCtx);
+    auto tmsObj = TmsServerServer(serverDaqServerComponent, this->getServer(), ctx, tmsCtx);
     auto nodeId = tmsObj.registerOpcUaNode();
     const auto enableDiscoveryNodeID = tmsObj.getEnableDiscoveryNodeId();
     const auto disableDiscoveryNodeID = tmsObj.getDisableDiscoveryNodeId();

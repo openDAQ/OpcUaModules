@@ -20,15 +20,15 @@
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
-class TmsServerDaqServerComponent;
-using TmsServerDaqServerComponentPtr = std::shared_ptr<TmsServerDaqServerComponent>;
+class TmsServerServer;
+using TmsServerServerPtr = std::shared_ptr<TmsServerServer>;
 
-class TmsServerDaqServerComponent : public TmsServerComponent<ServerPtr>
+class TmsServerServer : public TmsServerComponent<ServerPtr>
 {
 public:
     using Super = TmsServerComponent<ServerPtr>;
 
-    TmsServerDaqServerComponent(const ServerPtr& object, const opcua::OpcUaServerPtr& server, const ContextPtr& context, const TmsServerContextPtr& tmsContext);
+    TmsServerServer(const ServerPtr& object, const opcua::OpcUaServerPtr& server, const ContextPtr& context, const TmsServerContextPtr& tmsContext);
     void addChildNodes() override;
     bool checkPermission(const Permission permission,
                          const UA_NodeId* const nodeId,

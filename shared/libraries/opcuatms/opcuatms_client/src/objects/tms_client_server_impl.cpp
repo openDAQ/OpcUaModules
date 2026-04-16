@@ -1,12 +1,12 @@
 #include <coretypes/validation.h>
 #include <opendaq/custom_log.h>
-#include <opcuatms_client/objects/tms_client_daqserver_component_impl.h>
+#include <opcuatms_client/objects/tms_client_server_impl.h>
 #include <opcuatms/exceptions.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 using namespace opcua;
 
-TmsClientDaqServerComponentImpl::TmsClientDaqServerComponentImpl(const ContextPtr& ctx,
+TmsClientServerImpl::TmsClientServerImpl(const ContextPtr& ctx,
                                                                  const ComponentPtr& parent,
                                                                  const StringPtr& localId,
                                                                  const TmsClientContextPtr& clientContext,
@@ -16,7 +16,7 @@ TmsClientDaqServerComponentImpl::TmsClientDaqServerComponentImpl(const ContextPt
 {
 }
 
-ErrCode TmsClientDaqServerComponentImpl::enableDiscovery()
+ErrCode TmsClientServerImpl::enableDiscovery()
 {
     const ErrCode errCode = daqTry([&]()
     {
@@ -36,7 +36,7 @@ ErrCode TmsClientDaqServerComponentImpl::enableDiscovery()
     return errCode;
 }
 
-ErrCode TmsClientDaqServerComponentImpl::disableDiscovery()
+ErrCode TmsClientServerImpl::disableDiscovery()
 {
     const ErrCode errCode = daqTry([&]()
     {
@@ -56,7 +56,7 @@ ErrCode TmsClientDaqServerComponentImpl::disableDiscovery()
     return errCode;
 }
 
-ErrCode TmsClientDaqServerComponentImpl::stop()
+ErrCode TmsClientServerImpl::stop()
 {
     return OPENDAQ_IGNORED;
 }

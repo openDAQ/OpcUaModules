@@ -1,16 +1,16 @@
-#include <opcuatms_server/objects/tms_server_daqserver_component.h>
+#include <opcuatms_server/objects/tms_server_server.h>
 #include <open62541/daqdevice_nodeids.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
 using namespace opcua;
 
-TmsServerDaqServerComponent::TmsServerDaqServerComponent(const ServerPtr& object, const OpcUaServerPtr& server, const ContextPtr& context, const TmsServerContextPtr& tmsContext)
+TmsServerServer::TmsServerServer(const ServerPtr& object, const OpcUaServerPtr& server, const ContextPtr& context, const TmsServerContextPtr& tmsContext)
     : Super(object, server, context, tmsContext)
 {
 }
 
-void TmsServerDaqServerComponent::addChildNodes()
+void TmsServerServer::addChildNodes()
 {
     Super::addChildNodes();
 
@@ -18,12 +18,12 @@ void TmsServerDaqServerComponent::addChildNodes()
     createDisableDiscoveryNode();
 }
 
-OpcUaNodeId TmsServerDaqServerComponent::getTmsTypeId()
+OpcUaNodeId TmsServerServer::getTmsTypeId()
 {
     return OpcUaNodeId(NAMESPACE_DAQDEVICE, UA_DAQDEVICEID_DAQCOMPONENTTYPE);
 }
 
-void TmsServerDaqServerComponent::createEnableDiscoveryNode()
+void TmsServerServer::createEnableDiscoveryNode()
 {
     OpcUaNodeId nodeIdOut;
     AddMethodNodeParams params(nodeIdOut, nodeId);
@@ -54,7 +54,7 @@ void TmsServerDaqServerComponent::createEnableDiscoveryNode()
     addEvent(enableDiscoveryNodeId)->onMethodCall(callback);
 }
 
-void TmsServerDaqServerComponent::createDisableDiscoveryNode()
+void TmsServerServer::createDisableDiscoveryNode()
 {
     OpcUaNodeId nodeIdOut;
     AddMethodNodeParams params(nodeIdOut, nodeId);
@@ -85,21 +85,21 @@ void TmsServerDaqServerComponent::createDisableDiscoveryNode()
     addEvent(disableDiscoveryNodeId)->onMethodCall(callback);
 }
 
-void TmsServerDaqServerComponent::onEnableDiscovery(const NodeEventManager::MethodArgs& args)
+void TmsServerServer::onEnableDiscovery(const NodeEventManager::MethodArgs& args)
 {
     assert(args.inputSize == 0);
 
     object.enableDiscovery();
 }
 
-void TmsServerDaqServerComponent::onDisableDiscovery(const NodeEventManager::MethodArgs& args)
+void TmsServerServer::onDisableDiscovery(const NodeEventManager::MethodArgs& args)
 {
     assert(args.inputSize == 0);
 
     object.disableDiscovery();
 }
 
-bool TmsServerDaqServerComponent::checkPermission(const Permission permission,
+bool TmsServerServer::checkPermission(const Permission permission,
                                                   const UA_NodeId* const nodeId,
                                                   const OpcUaSession* const sessionContext)
 {

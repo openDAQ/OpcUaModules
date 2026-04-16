@@ -31,7 +31,7 @@ void TmsServerFolder::addChildNodes()
         }
         else if (server.assigned())
         {
-            auto tmsServerComponent = registerTmsObjectOrAddReference<TmsServerDaqServerComponent>(this->nodeId, server, numberInList++);
+            auto tmsServerComponent = registerTmsObjectOrAddReference<TmsServerServer>(this->nodeId, server, numberInList++);
             daqServerComponents.push_back(std::move(tmsServerComponent));
         }
         else if (folder.assigned()) // It is important to test for folder last as a channel and server also are folders!
@@ -62,7 +62,7 @@ void TmsServerFolder::onCoreEvent(const CoreEventArgsPtr& args)
         auto server = args.getParameters().get("Component").asPtrOrNull<IServer>();
         if (server.assigned())
         {
-            auto tmsServerComponent = registerTmsObjectOrAddReference<TmsServerDaqServerComponent>(this->nodeId, server, std::numeric_limits<uint32_t>::max());
+            auto tmsServerComponent = registerTmsObjectOrAddReference<TmsServerServer>(this->nodeId, server, std::numeric_limits<uint32_t>::max());
             daqServerComponents.push_back(std::move(tmsServerComponent));
         }
 
