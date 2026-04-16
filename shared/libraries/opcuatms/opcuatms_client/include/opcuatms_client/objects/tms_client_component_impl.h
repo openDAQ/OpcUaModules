@@ -67,6 +67,7 @@ public:
     ErrCode INTERFACE_FUNC setDescription(IString* description) override;
     ErrCode INTERFACE_FUNC getVisible(Bool* visible) override;
     ErrCode INTERFACE_FUNC setVisible(Bool visible) override;
+    ErrCode INTERFACE_FUNC updateOperationMode(OperationModeType modeType) override;
 
     // ITmsClientComponent
     ErrCode INTERFACE_FUNC getRemoteGlobalId(IString** globalId) override;

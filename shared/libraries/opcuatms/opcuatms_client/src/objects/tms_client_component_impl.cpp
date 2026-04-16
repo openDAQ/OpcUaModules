@@ -177,6 +177,12 @@ ErrCode TmsClientComponentBaseImpl<Impl>::setVisible(Bool visible)
 }
 
 template <class Impl>
+ErrCode TmsClientComponentBaseImpl<Impl>::updateOperationMode(OperationModeType modeType)
+{
+    return OPENDAQ_IGNORED;
+}
+
+template <class Impl>
 LoggerComponentPtr TmsClientComponentBaseImpl<Impl>::getLoggerComponent()
 {
     return this->daqContext.getLogger().getOrAddComponent("OpcUaClientComponent");
