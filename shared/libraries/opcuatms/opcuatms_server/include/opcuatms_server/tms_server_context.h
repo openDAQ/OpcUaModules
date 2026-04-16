@@ -27,7 +27,7 @@ class TmsServerContext : public std::enable_shared_from_this<TmsServerContext>
 public:
     TmsServerContext(const ContextPtr& context, const DevicePtr& rootDevice);
     ~TmsServerContext();
-    void registerComponent(const ComponentPtr& component, TmsServerObject& obj);
+    void registerComponent(const ComponentPtr& component, const std::weak_ptr<TmsServerObject>& obj);
     DevicePtr getRootDevice();
     ComponentPtr findComponent(const std::string& globalId);
 

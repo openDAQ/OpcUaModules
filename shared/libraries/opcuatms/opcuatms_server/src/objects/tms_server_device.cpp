@@ -94,6 +94,8 @@ bool TmsServerDevice::createOptionalNode(const OpcUaNodeId& nodeId)
         return true;
     if (name == "Synchronization" && object.getSyncComponent().assigned())
         return true;
+    if (name == "Srv")
+        return true;
 
     return Super::createOptionalNode(nodeId);
 }
@@ -549,21 +551,35 @@ void TmsServerDevice::addChildNodes()
     assert(!inputsOutputsNodeId.isNull());
 
     auto topFolder = object.getInputsOutputsFolder();
-    auto inputsOutputsNode = std::make_unique<TmsServerFolder>(topFolder, server, daqContext, tmsContext);
+    auto inputsOutputsNode = std::make_shared<TmsServerFolder>(topFolder, server, daqContext, tmsContext);
     inputsOutputsNode->registerToExistingOpcUaNode(inputsOutputsNodeId);
     folders.push_back(std::move(inputsOutputsNode));
 
     auto syncComponentNodeId = getChildNodeId("Synchronization");
     assert(!syncComponentNodeId.isNull());
     auto syncComponent = object.getSyncComponent();
-    auto syncComponentNode = std::make_unique<TmsServerSyncComponent>(syncComponent, server, daqContext, tmsContext);
+    auto syncComponentNode = std::make_shared<TmsServerSyncComponent>(syncComponent, server, daqContext, tmsContext);
     syncComponentNode->registerToExistingOpcUaNode(syncComponentNodeId);
     syncComponents.push_back(std::move(syncComponentNode));
 
+    auto serversNodeId = getChildNodeId("Srv");
+    if (serversNodeId.isNull())
+    {
+        OpcUaNodeId nodeIdOut;
+        AddObjectNodeParams params(nodeIdOut, nodeId);
+        params.referenceTypeId = OpcUaNodeId(UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT));
+        params.typeDefinition = OpcUaNodeId(UA_NS0ID_FOLDERTYPE);
+        params.setBrowseName("Srv");
+        serversNodeId = server->addObjectNode(params);
+    }
+    assert(!serversNodeId.isNull());
+    auto srvFolder = object.getItem("Srv");
+    auto srvFolderNode = std::make_shared<TmsServerFolder>(srvFolder, server, daqContext, tmsContext);
+    srvFolderNode->registerToExistingOpcUaNode(serversNodeId);
+    folders.push_back(std::move(srvFolderNode));
+
     tmsPropertyObject->ignoredProps.emplace("userName");
     tmsPropertyObject->ignoredProps.emplace("location");
-
-    // TODO add "Srv" as a default node
 
     numberInList = 0;
     for (auto component : object.getItems(search::Any()))
