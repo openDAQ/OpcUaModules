@@ -471,9 +471,9 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
                     if (validateResponse(dataValue) && validateValueDataType(dataValue))
                     {
                         const auto dps = buildDataPacket(dataValue);
-                        outputSignal.sendPacket(dps.dataPacket);
                         if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
                             outputDomainSignal.sendPacket(dps.domainDataPacket);
+                        outputSignal.sendPacket(dps.dataPacket);
                     }
                 }
                 catch (OpcUaException&)
