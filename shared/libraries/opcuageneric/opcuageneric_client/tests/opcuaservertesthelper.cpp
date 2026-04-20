@@ -332,7 +332,7 @@ void OpcUaServerTestHelper::addPropertyImpl(const std::string& name,
                                             UA_Byte accessLevel)
 {
     OpcUaObject<UA_VariableAttributes> attr = UA_VariableAttributes_default;
-    attr->displayName = UA_LOCALIZEDTEXT_ALLOC(locale, name.c_str());
+    attr->description = UA_LOCALIZEDTEXT_ALLOC(locale, name.c_str());
     attr->displayName = UA_LOCALIZEDTEXT_ALLOC(locale, name.c_str());
     attr->dataType = type->typeId;
     attr->accessLevel = accessLevel;
