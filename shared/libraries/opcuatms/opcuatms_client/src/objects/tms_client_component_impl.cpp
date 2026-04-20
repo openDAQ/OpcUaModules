@@ -16,6 +16,8 @@ using namespace daq::opcua;
 template <class Impl>
 ErrCode TmsClientComponentBaseImpl<Impl>::getActive(Bool* active)
 {
+    OPENDAQ_PARAM_NOT_NULL(active);
+
     try
     {
         *active = this->template readValue<IBoolean>("Active");
@@ -26,6 +28,53 @@ ErrCode TmsClientComponentBaseImpl<Impl>::getActive(Bool* active)
         auto loggerComponent = getLoggerComponent();
         LOG_D("Failed to get active of component \"{}\". The default value was returned \"true\"", this->globalId);
     }
+    return OPENDAQ_SUCCESS;
+}
+
+template <class Impl>
+ErrCode TmsClientComponentBaseImpl<Impl>::getLocalActive(Bool* active)
+{
+    OPENDAQ_PARAM_NOT_NULL(active);
+
+    if (!this->hasReference("LocalActive"))
+        return this->getActive(active);
+
+    try
+    {
+        *active = this->template readValue<IBoolean>("LocalActive");
+    }
+    catch(...)
+    {
+        *active = true;
+        auto loggerComponent = getLoggerComponent();
+        LOG_D("Failed to get local active of component \"{}\". The default value was returned \"true\"", this->globalId);
+    }
+
+    return OPENDAQ_SUCCESS;
+}
+
+template <class Impl>
+ErrCode TmsClientComponentBaseImpl<Impl>::getParentActive(Bool* active)
+{
+    OPENDAQ_PARAM_NOT_NULL(active);
+
+    if (!this->hasReference("ParentActive"))
+    {
+        *active = True;
+        return OPENDAQ_SUCCESS;
+    }
+
+    try
+    {
+        *active = this->template readValue<IBoolean>("ParentActive");
+    }
+    catch(...)
+    {
+        *active = true;
+        auto loggerComponent = getLoggerComponent();
+        LOG_D("Failed to get parent active of component \"{}\". The default value was returned \"true\"", this->globalId);
+    }
+
     return OPENDAQ_SUCCESS;
 }
 

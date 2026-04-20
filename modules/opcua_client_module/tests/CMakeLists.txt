@@ -2,6 +2,7 @@ set(MODULE_NAME opcua_client_module)
 set(TEST_APP test_${MODULE_NAME})
 
 set(TEST_SOURCES test_opcua_client_module.cpp
+                 test_opcua_device_module.cpp
                  test_app.cpp
 )
 
@@ -10,6 +11,7 @@ add_executable(${TEST_APP} ${TEST_SOURCES}
 
 target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_test_utils gtest
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME}
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_mocks
 )
 
 add_test(NAME ${TEST_APP}

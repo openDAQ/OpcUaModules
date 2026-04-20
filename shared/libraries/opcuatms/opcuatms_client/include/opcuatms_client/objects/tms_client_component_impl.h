@@ -73,6 +73,8 @@ public:
 
     // Component overrides
     ErrCode INTERFACE_FUNC getActive(Bool* active) override;
+    ErrCode INTERFACE_FUNC getLocalActive(Bool* active) override;
+    ErrCode INTERFACE_FUNC getParentActive(Bool* active) override;
     ErrCode INTERFACE_FUNC setActive(Bool active) override;
     ErrCode INTERFACE_FUNC getName(IString** name) override;
     ErrCode INTERFACE_FUNC setName(IString* name) override;
