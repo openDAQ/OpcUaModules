@@ -32,6 +32,12 @@ static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_STRING = "NodeIDString"
 static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC = "NodeIDNumeric";
 static constexpr const char* PROPERTY_NAME_OPCUA_NAMESPACE_INDEX = "NamespaceIndex";
 static constexpr const char* PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL = "SamplingInterval";
+
+// Device node ID for DeviceInfo reading
+static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE    = "DeviceNodeIDType";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING  = "DeviceNodeIDString";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC = "DeviceNodeIDNumeric";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX = "DeviceNamespaceIndex";
 // ----------
 
 // Defaults

@@ -12,5 +12,14 @@ enum class DomainSource : int
         LocalSystemTimestamp,
         _count
     };
-    
+
+enum class NodeIDType : int
+{
+    Numeric = 0,
+    String = 1,
+    // Guid,
+    // Opaque,
+    _count
+};
+
 END_NAMESPACE_OPENDAQ_OPCUA_GENERIC

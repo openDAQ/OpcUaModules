@@ -26,7 +26,7 @@ namespace daq::opcua::generic
 
         void CreateMonitoredItemFB(std::string nodeId, uint32_t index, uint32_t interval = 100)
         {
-            using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+            using NT = NodeIDType;
             auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::String));
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, nodeId);
@@ -38,7 +38,7 @@ namespace daq::opcua::generic
 
         void CreateMonitoredItemFB(uint32_t numericNodeId, uint32_t nsIndex, uint32_t interval = 100)
         {
-            using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+            using NT = NodeIDType;
             auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::Numeric));
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC, numericNodeId);
@@ -72,7 +72,7 @@ namespace daq::opcua::generic
         auto readValueWithTout(daq::SignalPtr sig, size_t ms, const daq::BaseObjectPtr prevVal = nullptr)
         {
             daq::BaseObjectPtr value;
-            helper::utils::Timer timer(ms);
+            ::helper::utils::Timer timer(ms);
             do
             {
                 value = sig.getLastValue();
@@ -176,7 +176,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, DefaultConfig)
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE));
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE).getValueType(), CoreType::ctInt);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE).asPtr<IInteger>(),
-              static_cast<int>(OpcUaMonitoredItemFbImpl::NodeIDType::String));
+              static_cast<int>(NodeIDType::String));
     EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE).getVisible());
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING));
@@ -544,7 +544,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReade
     SizeT count{1};
     int64_t values{};
     uint64_t domain{};
-    helper::utils::Timer timer(interval * multiplier);
+    ::helper::utils::Timer timer(interval * multiplier);
     do
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -608,7 +608,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingTailReade
     SizeT count{1};
     int64_t values{};
     uint64_t domain{};
-    helper::utils::Timer timer(interval * multiplier);
+    ::helper::utils::Timer timer(interval * multiplier);
     do
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -690,7 +690,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingTail
     SizeT count{1};
     int64_t values{};
     uint64_t domain{};
-    helper::utils::Timer timer(interval * multiplier);
+    ::helper::utils::Timer timer(interval * multiplier);
     do
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -855,7 +855,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ZeroSamplingInterval)
 
 TEST_F(GenericOpcuaMonitoredItemTest, PropertyVisibilityTogglesWithNodeIdType)
 {
-    using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+    using NT = NodeIDType;
     daq::PropertyObjectPtr defaultConfig = OpcUaMonitoredItemFbImpl::CreateType().createDefaultConfig();
 
     EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING).getVisible());
@@ -912,7 +912,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, NumericNodeIdReadValue)
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdTypeStringToNumeric)
 {
-    using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+    using NT = NodeIDType;
     StartUp();
 
     CreateMonitoredItemFB(".i32", 1, 100);
@@ -926,7 +926,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdTypeStringToNumeric)
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdTypeNumericToString)
 {
-    using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+    using NT = NodeIDType;
     StartUp();
 
     CreateMonitoredItemFB(1001, 1, 100);

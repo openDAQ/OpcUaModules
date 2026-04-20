@@ -34,23 +34,6 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
 
     initComponentStatus();
 
-    try
-    {
-        this->client->connect();
-        this->client->runIterate();
-    }
-    catch (const OpcUaException& e)
-    {
-        switch (e.getStatusCode())
-        {
-            case UA_STATUSCODE_BADUSERACCESSDENIED:
-            case UA_STATUSCODE_BADIDENTITYTOKENINVALID:
-                DAQ_THROW_EXCEPTION(AuthenticationFailedException, e.what());
-            default:
-                DAQ_THROW_EXCEPTION(GeneralErrorException, e.what());
-        }
-    }
-
     initNestedFbTypes();
     startReconnectMonitor();
 }

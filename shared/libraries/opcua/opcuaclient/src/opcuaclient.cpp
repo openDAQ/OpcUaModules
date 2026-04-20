@@ -199,36 +199,35 @@ OpcUaClient::ApplicationDescription OpcUaClient::readApplicationDescription()
 {
     std::lock_guard guard(getLock());
     ApplicationDescription desc;
-    if (!uaclient)
-        initialize();
 
-    UA_StatusCode status = UA_STATUSCODE_GOOD;
-
-    size_t endpointCount = 0;
-    UA_EndpointDescription *endpointArray = NULL;
-
-    status = UA_Client_getEndpoints(
-        uaclient,
-        endpoint.getUrl().c_str(),
-        &endpointCount,
-        &endpointArray
-        );
-    const auto url = endpoint.getUrl();
-    if (OPCUA_STATUSCODE_SUCCEEDED(status))
+    if (UA_Client* tempClient = UaClientFactory::Create(nullptr, UA_LOGLEVEL_WARNING, endpoint.getCustomDataTypes()))
     {
-        for (size_t i = 0; i < endpointCount; ++i) {
-            const std::string_view endpointUrl(reinterpret_cast<char*>(endpointArray[i].endpointUrl.data), endpointArray[i].endpointUrl.length);
-            if (url == endpointUrl)
+        size_t endpointCount = 0;
+        UA_EndpointDescription* endpointArray = nullptr;
+
+        UA_StatusCode status = UA_Client_getEndpoints(tempClient, endpoint.getUrl().c_str(), &endpointCount, &endpointArray);
+
+        UA_Client_delete(tempClient);
+
+        if (OPCUA_STATUSCODE_SUCCEEDED(status))
+        {
+            const auto url = endpoint.getUrl();
+            for (size_t i = 0; i < endpointCount; ++i)
             {
-                const UA_ApplicationDescription& app = endpointArray[i].server;
-                desc.uri = utils::ToStdString(app.applicationUri);
-                desc.name = utils::ToStdString(app.applicationName.text);
-                desc.productUri = utils::ToStdString(app.productUri);
+                const std::string_view endpointUrl(reinterpret_cast<char*>(endpointArray[i].endpointUrl.data),
+                                                   endpointArray[i].endpointUrl.length);
+                if (url == endpointUrl)
+                {
+                    const UA_ApplicationDescription& app = endpointArray[i].server;
+                    desc.uri = utils::ToStdString(app.applicationUri);
+                    desc.name = utils::ToStdString(app.applicationName.text);
+                    desc.productUri = utils::ToStdString(app.productUri);
+                }
             }
         }
-    }
 
-    UA_Array_delete(endpointArray, endpointCount, &UA_TYPES[UA_TYPES_ENDPOINTDESCRIPTION]);
+        UA_Array_delete(endpointArray, endpointCount, &UA_TYPES[UA_TYPES_ENDPOINTDESCRIPTION]);
+    }
     return desc;
 }
 

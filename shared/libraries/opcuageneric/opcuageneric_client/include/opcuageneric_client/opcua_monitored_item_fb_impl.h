@@ -29,15 +29,6 @@ class OpcUaMonitoredItemFbImpl final : public FunctionBlock
     friend class GenericOpcuaMonitoredItemTest;
 
 public:
-    enum class NodeIDType : int
-    {
-        Numeric = 0,
-        String = 1,
-        // Guid,
-        // Opaque,
-        _count
-    };
-
     explicit OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
                                       const ComponentPtr& parent,
                                       const FunctionBlockTypePtr& type,
