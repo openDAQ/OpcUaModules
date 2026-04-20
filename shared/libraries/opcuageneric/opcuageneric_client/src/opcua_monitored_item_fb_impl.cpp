@@ -387,12 +387,12 @@ bool OpcUaMonitoredItemFbImpl::validateResponse(const OpcUaDataValue& value)
         responseValidationErr.set(std::string("Reading value error: response without a value."));
         return false;
     }
-    if (config.domainSource == DomainSource::ServerTimestamp && !value.getValue().hasServerTimestamp)
+    if (config.domainSource == DomainSource::ServerTimestamp && (!value.getValue().hasServerTimestamp || value.getValue().serverTimestamp == 0))
     {
         responseValidationErr.set(std::string("Reading value error: there is no required server timestamp"));
         return false;
     }
-    if (config.domainSource == DomainSource::SourceTimestamp && !value.getValue().hasSourceTimestamp)
+    if (config.domainSource == DomainSource::SourceTimestamp && (!value.getValue().hasSourceTimestamp || value.getValue().sourceTimestamp == 0))
     {
         responseValidationErr.set(std::string("Reading value error: there is no required source timestamp"));
         return false;
