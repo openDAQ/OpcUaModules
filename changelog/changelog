@@ -1,4 +1,7 @@
 ## Features
+- [#22](https://github.com/openDAQ/OpcUaModules/pull/22) Ignore calls to `updateOperationMode` on OPC UA client side.
+
+- [#20](https://github.com/openDAQ/OpcUaModules/pull/20) Support advertising servers via OpcUa with discovery toggling
 
 ## Bug fixes
 

@@ -7,6 +7,7 @@
 #include <opendaq/mirrored_signal_impl.h>
 #include <opendaq/mirrored_input_port_impl.h>
 #include <opendaq/sync_component_impl.h>
+#include <opendaq/server_impl.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
@@ -177,6 +178,12 @@ ErrCode TmsClientComponentBaseImpl<Impl>::setVisible(Bool visible)
 }
 
 template <class Impl>
+ErrCode TmsClientComponentBaseImpl<Impl>::updateOperationMode(OperationModeType modeType)
+{
+    return OPENDAQ_IGNORED;
+}
+
+template <class Impl>
 LoggerComponentPtr TmsClientComponentBaseImpl<Impl>::getLoggerComponent()
 {
     return this->daqContext.getLogger().getOrAddComponent("OpcUaClientComponent");
@@ -229,5 +236,6 @@ template class TmsClientComponentBaseImpl<ChannelImpl<ITmsClientComponent>>;
 template class TmsClientComponentBaseImpl<MirroredSignalBase<ITmsClientComponent>>;
 template class TmsClientComponentBaseImpl<MirroredInputPortBase<ITmsClientComponent>>;
 template class TmsClientComponentBaseImpl<GenericSyncComponentImpl<ISyncComponent, ITmsClientComponent>>;
+template class TmsClientComponentBaseImpl<ServerImpl<IServer, ITmsClientComponent>>;
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

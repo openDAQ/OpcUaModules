@@ -58,6 +58,19 @@ public:
         clientContext->readObjectAttributes(nodeId);
     }
 
+    template<class T = Impl, template_utils::enable_if_any<T, ServerImpl<IServer, ITmsClientComponent>> = 0>
+    TmsClientComponentBaseImpl(const ContextPtr& ctx,
+                               const ComponentPtr& parent,
+                               const StringPtr& localId,
+                               const TmsClientContextPtr& clientContext,
+                               const opcua::OpcUaNodeId& nodeId,
+                               const DevicePtr& parentDevice)
+        : TmsClientPropertyObjectBaseImpl<Impl>(ctx, parent, localId, clientContext, nodeId, parentDevice)
+    {
+        initComponent();
+        clientContext->readObjectAttributes(nodeId);
+    }
+
     // Component overrides
     ErrCode INTERFACE_FUNC getActive(Bool* active) override;
     ErrCode INTERFACE_FUNC setActive(Bool active) override;
@@ -67,6 +80,7 @@ public:
     ErrCode INTERFACE_FUNC setDescription(IString* description) override;
     ErrCode INTERFACE_FUNC getVisible(Bool* visible) override;
     ErrCode INTERFACE_FUNC setVisible(Bool visible) override;
+    ErrCode INTERFACE_FUNC updateOperationMode(OperationModeType modeType) override;
 
     // ITmsClientComponent
     ErrCode INTERFACE_FUNC getRemoteGlobalId(IString** globalId) override;

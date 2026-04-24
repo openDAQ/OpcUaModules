@@ -34,6 +34,7 @@ set(SRC_Objects_Headers ${OBJECT_SRC_DIR}/tms_server_object.h
                         ${OBJECT_SRC_DIR}/tms_server_function_block_type.h
                         ${OBJECT_SRC_DIR}/tms_server_sync_component.h
                         ${OBJECT_SRC_DIR}/tms_server_sync_interface.h
+                        ${OBJECT_SRC_DIR}/tms_server_server.h
 )
 
 set(SRC_Objects ${OBJECT_SRC_DIR}/tms_server_object.cpp
@@ -52,6 +53,7 @@ set(SRC_Objects ${OBJECT_SRC_DIR}/tms_server_object.cpp
                 ${OBJECT_SRC_DIR}/tms_server_analog_value.cpp
                 ${OBJECT_SRC_DIR}/tms_server_function_block_type.cpp
                 ${OBJECT_SRC_DIR}/tms_server_sync_component.cpp
+                ${OBJECT_SRC_DIR}/tms_server_server.cpp
 )
 
 set(SRC_PublicHeaders ${SRC_PublicHeaders} ${SRC_Objects_Headers})
@@ -72,6 +74,7 @@ source_group("objects\\eval_value" "${OBJECT_SRC_DIR}/tms_server_eval_value.*")
 source_group("objects\\value" "${OBJECT_SRC_DIR}/tms_server_value.*")
 source_group("objects\\analog_value" "${OBJECT_SRC_DIR}/tms_server_analog_value.*")
 source_group("objects\\sync_component" "${OBJECT_SRC_DIR}/tms_server_sync_component.*")
+source_group("objects\\server_component" "${OBJECT_SRC_DIR}/tms_server_server.*")
 
 # /objects
 

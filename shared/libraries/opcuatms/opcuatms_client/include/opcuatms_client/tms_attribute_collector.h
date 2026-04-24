@@ -41,6 +41,7 @@ private:
     void collectBaseObjectAttributes(const OpcUaNodeId& nodeId);
     void collectMethodAttributes(const OpcUaNodeId& nodeId);
     void collectVariableBlockAttributes(const OpcUaNodeId& nodeId);
+    void collectServerAttributes(const OpcUaNodeId& nodeId);
 
     void collectIoNode(const OpcUaNodeId& nodeId);
     void collectInputPortNode(const OpcUaNodeId& nodeId);
@@ -48,6 +49,7 @@ private:
     void collectSignalsNode(const OpcUaNodeId& nodeId);
     void collectStreamingOptionsNode(const OpcUaNodeId& nodeId);
     void collectMethodSetNode(const OpcUaNodeId& nodeId);
+    void collectDaqServerComponentsNode(const OpcUaNodeId& nodeId);
 
     bool isSubtypeOf(const OpcUaNodeId& typeId, const OpcUaNodeId& baseType);
     bool typeEquals(const OpcUaNodeId& typeId, const OpcUaNodeId& baseType);
@@ -64,6 +66,7 @@ private:
     static const OpcUaNodeId NodeIdInputPortType;
     static const OpcUaNodeId NodeIdEvaluationVariableType;
     static const OpcUaNodeId NodeIdVariableBlockType;
+    static const OpcUaNodeId NodeIdDaqServerComonentType;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS
