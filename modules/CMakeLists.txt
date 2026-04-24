@@ -8,6 +8,10 @@ if (${REPO_OPTION_PREFIX}_ENABLE_CLIENT)
     add_subdirectory(opcua_client_module)
 endif()
 
+if (${REPO_OPTION_PREFIX}_ENABLE_GENERIC_CLIENT)
+    add_subdirectory(opcua_generic_client_module)
+endif()
+
 if (${REPO_OPTION_PREFIX}_ENABLE_SERVER)
     add_subdirectory(opcua_server_module)
 endif()

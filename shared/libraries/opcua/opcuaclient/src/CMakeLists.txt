@@ -5,7 +5,6 @@ set(SOURCE_CPPS opcuaclient.cpp
                 opcuatimertaskhelper.cpp
                 opcuanodefactory.cpp
                 opcuaasyncexecthread.cpp
-                opcuareadvalueid.cpp
                 opcuacallmethodrequest.cpp
                 subscriptions.cpp
                 monitored_item_create_request.cpp
@@ -27,7 +26,6 @@ set(SOURCE_HEADERS opcuaclient.h
                    opcuatimertaskhelper.h
                    opcuanodefactory.h
                    opcuaasyncexecthread.h
-                   opcuareadvalueid.h
                    opcuacallmethodrequest.h
                    subscriptions.h
                    monitored_item_create_request.h

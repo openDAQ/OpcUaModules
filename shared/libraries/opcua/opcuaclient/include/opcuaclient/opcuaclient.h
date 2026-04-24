@@ -29,7 +29,6 @@
 #include <thread>
 
 #include <opcuaclient/opcuacallmethodrequest.h>
-#include <opcuaclient/opcuareadvalueid.h>
 #include <opcuashared/opcuacallmethodresult.h>
 #include <opcuashared/opcuaendpoint.h>
 #include <opcuashared/opcuanodeid.h>
@@ -40,6 +39,7 @@
 
 #include <opcuaclient/opcuatimertaskcontextcollection.h>
 #include "opcuashared/node/opcuanodemethod.h"
+#include "opcuashared/opcuadatavalue.h"
 
 #include <opcuaclient/subscriptions.h>
 
@@ -95,6 +95,11 @@ private:
 class OpcUaClient
 {
 public:
+    struct ApplicationDescription{
+        std::string name;
+        std::string uri;
+    };
+
     explicit OpcUaClient(const std::string& url);
     explicit OpcUaClient(const OpcUaEndpoint& endpoint);
     ~OpcUaClient();
@@ -102,6 +107,7 @@ public:
     static constexpr size_t CONNECTION_TIMEOUT_SECONDS = 10;
 
     void initialize();
+    ApplicationDescription readApplicationDescription();
     void connect();
     void disconnect(bool doClear = true);
     void clear();
@@ -126,7 +132,9 @@ public:
 
     bool nodeExists(const OpcUaNodeId& nodeId);
     OpcUaVariant readValue(const OpcUaNodeId& node);
+    OpcUaDataValue readDataValue(const OpcUaNodeId& node);
     UA_NodeClass readNodeClass(const OpcUaNodeId& nodeId);
+    UA_Byte readAccessLevel(const OpcUaNodeId& nodeId);
     std::string readBrowseName(const OpcUaNodeId& nodeId);
     std::string readDisplayName(const OpcUaNodeId& nodeId);
     size_t readDimension(const OpcUaNodeId& nodeId);
@@ -146,8 +154,6 @@ public:
     void writeValue(const OpcUaNodeId& nodeId, const OpcUaVariant& value);
 
     OpcUaObject<UA_ReadResponse> readNodeAttributes(const OpcUaObject<UA_ReadRequest>& request);
-
-    void readNodeAttributes(const std::vector<OpcUaReadValueIdWithCallback>& request);
 
     Subscription* createSubscription(const OpcUaObject<UA_CreateSubscriptionRequest>& request,
                                      const StatusChangeNotificationCallbackType& statusChangeCallback = nullptr);

@@ -62,7 +62,7 @@ OpcUaClient::OpcUaClient(const std::string& url)
 
 OpcUaClient::~OpcUaClient()
 {
-    disconnect();
+    disconnect(true);
 }
 
 void OpcUaClient::initialize()
@@ -193,6 +193,42 @@ UA_Client* UaClientFactory::build()
     }
 
     return client;
+}
+
+OpcUaClient::ApplicationDescription OpcUaClient::readApplicationDescription()
+{
+    std::lock_guard guard(getLock());
+    ApplicationDescription desc;
+    if (!uaclient)
+        initialize();
+
+    UA_StatusCode status = UA_STATUSCODE_GOOD;
+
+    size_t endpointCount = 0;
+    UA_EndpointDescription *endpointArray = NULL;
+
+    status = UA_Client_getEndpoints(
+        uaclient,
+        endpoint.getUrl().c_str(),
+        &endpointCount,
+        &endpointArray
+        );
+    const auto url = endpoint.getUrl();
+    if (OPCUA_STATUSCODE_SUCCEEDED(status))
+    {
+        for (size_t i = 0; i < endpointCount; ++i) {
+            const std::string_view endpointUrl(reinterpret_cast<char*>(endpointArray[i].endpointUrl.data), endpointArray[i].endpointUrl.length);
+            if (url == endpointUrl)
+            {
+                const UA_ApplicationDescription& app = endpointArray[i].server;
+                desc.uri = std::string(reinterpret_cast<char*>(app.applicationUri.data), (int)app.applicationUri.length);
+                desc.name = utils::ToStdString(app.applicationName.text);
+            }
+        }
+    }
+
+    UA_Array_delete(endpointArray, endpointCount, &UA_TYPES[UA_TYPES_ENDPOINTDESCRIPTION]);
+    return desc;
 }
 
 void OpcUaClient::connect()
@@ -394,34 +430,34 @@ OpcUaVariant OpcUaClient::readValue(const OpcUaNodeId& node)
     return val;
 }
 
+OpcUaDataValue OpcUaClient::readDataValue(const OpcUaNodeId& node)
+{
+    OpcUaObject<UA_ReadRequest> request;
+
+    request->nodesToRead = UA_ReadValueId_new();
+    request->nodesToReadSize = 1;
+
+    request->nodesToRead[0].nodeId = node.copyAndGetDetachedValue();
+    request->nodesToRead[0].attributeId = UA_ATTRIBUTEID_VALUE;
+
+    request->timestampsToReturn = UA_TIMESTAMPSTORETURN_BOTH;
+
+    OpcUaObject<UA_ReadResponse> response = UA_Client_Service_read(getLockedUaClient(), *request);
+    const auto status = response->responseHeader.serviceResult;
+    if (status != UA_STATUSCODE_GOOD)
+        throw OpcUaException(status, "Attribute read request failed");
+    if (response->resultsSize != 1)
+        throw OpcUaException(UA_STATUSCODE_BADINVALIDSTATE, "Read request returned incorrect number of results");
+
+
+    OpcUaDataValue result(*response->results);
+
+    return result;
+}
+
 OpcUaObject<UA_ReadResponse> OpcUaClient::readNodeAttributes(const OpcUaObject<UA_ReadRequest>& request)
 {
     return UA_Client_Service_read(getLockedUaClient(), *request);
-}
-
-void OpcUaClient::readNodeAttributes(const std::vector<OpcUaReadValueIdWithCallback>& requests)
-{
-    size_t requestCnt = std::size(requests);
-    if (requestCnt == 0)
-        return;
-
-    OpcUaObject<UA_ReadRequest> readRequest;
-    CheckStatusCodeException(
-        UA_Array_resize((void**) &readRequest->nodesToRead, &readRequest->nodesToReadSize, requestCnt, &UA_TYPES[UA_TYPES_READVALUEID]));
-
-    for (size_t i = 0; i < requestCnt; i++)
-        UA_ReadValueId_copy(requests[i].get(), &readRequest->nodesToRead[i]);
-
-    readRequest->timestampsToReturn = UA_TimestampsToReturn::UA_TIMESTAMPSTORETURN_NEITHER;
-
-    OpcUaObject<UA_ReadResponse> response = readNodeAttributes(readRequest);
-    CheckStatusCodeException(response->responseHeader.serviceResult);
-
-    for (size_t i = 0; i < requestCnt; i++)
-    {
-        UA_DataValue* v = &response->results[i];
-        requests[i].processFunction(v);
-    }
 }
 
 OpcUaObject<UA_CallResponse> OpcUaClient::callMethods(const OpcUaObject<UA_CallRequest>& request)
@@ -434,6 +470,13 @@ UA_NodeClass OpcUaClient::readNodeClass(const OpcUaNodeId& nodeId)
     UA_NodeClass nodeClass;
     CheckStatusCodeException(UA_Client_readNodeClassAttribute(getLockedUaClient(), *nodeId, &nodeClass));
     return nodeClass;
+}
+
+UA_Byte OpcUaClient::readAccessLevel(const OpcUaNodeId& nodeId)
+{
+    UA_Byte accessLevel;
+    CheckStatusCodeException(UA_Client_readUserAccessLevelAttribute(getLockedUaClient(), *nodeId, &accessLevel));
+    return accessLevel;
 }
 
 bool OpcUaClient::nodeExists(const OpcUaNodeId& node)
