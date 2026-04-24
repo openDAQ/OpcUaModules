@@ -286,6 +286,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, TwoFbCreation)
 TEST_P(GenericOpcuaMonitoredItemPTest, ReadValue)
 {
     constexpr uint32_t interval = 50;
+    constexpr uint32_t multiplier = 50;
     StartUp();
     auto param = GetParam();
 
@@ -313,15 +314,9 @@ TEST_P(GenericOpcuaMonitoredItemPTest, ReadValue)
             daq::BaseObjectPtr val;
             {
                 // before writing
-                {
-                    // waiting to be sure that FB has read initial value
-                    helper::utils::Timer timer(interval * 3);
-                    do
-                    {
-                        prevVal = fb.getSignals()[0].getLastValue();
-                    } while (!prevVal.assigned() && !timer.expired());
-                    ASSERT_TRUE(prevVal.assigned());
-                }
+                // waiting to be sure that FB has read initial value
+                prevVal = readValueWithTout(fb.getSignals()[0], interval * multiplier);
+                ASSERT_TRUE(prevVal.assigned());
                 {
                     // check that the initial and target values are different
                     if constexpr (std::is_same_v<T, double>)
@@ -341,15 +336,7 @@ TEST_P(GenericOpcuaMonitoredItemPTest, ReadValue)
             {
                 // after writing
                 ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
-                {
-                    // the FB needs time to read the new value from the node
-                    // read the last value until it becomes different from the initial or until the timer expires
-                    helper::utils::Timer timer(interval * 3);
-                    do
-                    {
-                        val = fb.getSignals()[0].getLastValue();
-                    } while (val == prevVal && !timer.expired());
-                }
+                val = readValueWithTout(fb.getSignals()[0], interval * multiplier, prevVal);
                 {
                     // check that the target and read values are the same
                     if constexpr (std::is_same_v<T, double>)
@@ -385,6 +372,7 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingLastValue)
 {
     constexpr uint32_t interval = 50;
+    constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
     StartUp();
@@ -400,7 +388,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingLastValue
 
     // before writing
     // waiting to be sure that FB has read initial value
-    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * multiplier);
     ASSERT_TRUE(prevVal.assigned());
 
     const auto timeBefore = getTime();
@@ -413,7 +401,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingLastValue
 
     // the FB needs time to read the new value from the node
     // read the last value until it becomes different from the initial or until the timer expires
-    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * 3, prevVal);
+    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * multiplier, prevVal);
 
     auto domainVal = domainSig.getLastValue();
     const auto timeAfter = getTime();
@@ -431,6 +419,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingLastValue
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingLastValue)
 {
     constexpr uint32_t interval = 50;
+    constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
     StartUp();
@@ -447,7 +436,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingLastValue
 
     // before writing
     // waiting to be sure that FB has read initial value
-    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * multiplier);
     ASSERT_TRUE(prevVal.assigned());
 
     const auto time = getTime();
@@ -461,7 +450,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingLastValue
 
     // the FB needs time to read the new value from the node
     // read the last value until it becomes different from the initial or until the timer expires
-    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * 3, prevVal);
+    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * multiplier, prevVal);
 
     auto domainVal = domainSig.getLastValue();
 
@@ -476,6 +465,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingLastValue
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingLastValue)
 {
     constexpr uint32_t interval = 50;
+    constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
     StartUp();
@@ -491,7 +481,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingLast
 
     // before writing
     // waiting to be sure that FB has read initial value
-    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * multiplier);
     ASSERT_TRUE(prevVal.assigned());
 
     const auto timeBefore = getTime();
@@ -503,7 +493,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingLast
 
     // the FB needs time to read the new value from the node
     // read the last value until it becomes different from the initial or until the timer expires
-    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * 3, prevVal);
+    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * multiplier, prevVal);
 
     auto domainVal = domainSig.getLastValue();
     const auto timeAfter = getTime();
@@ -520,6 +510,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingLast
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReader)
 {
     constexpr uint32_t interval = 50;
+    constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
     StartUp();
@@ -535,7 +526,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReade
 
     // before writing
     // waiting to be sure that FB has read initial value
-    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * multiplier);
     ASSERT_TRUE(prevVal.assigned());
 
     const auto timeBefore = getTime();
@@ -556,12 +547,18 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReade
 
     // the FB needs time to read the new value from the node
     // read the last value until it becomes different from the initial or until the timer expires
-    std::this_thread::sleep_for(std::chrono::milliseconds(interval * 3));
 
     SizeT count{1};
     int64_t values{};
     uint64_t domain{};
-    reader.readWithDomain(&values, &domain, &count);
+    helper::utils::Timer timer(interval * multiplier);
+    do
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        count = 1;
+        reader.readWithDomain(&values, &domain, &count);
+    } while ((count == 0 || value == prevVal) && !timer.expired());
+
     const auto timeAfter = getTime();
 
     // check that the target and read values are the same
@@ -575,6 +572,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReade
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingTailReader)
 {
     constexpr uint32_t interval = 50;
+    constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
     StartUp();
@@ -591,7 +589,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingTailReade
 
     // before writing
     // waiting to be sure that FB has read initial value
-    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * multiplier);
     ASSERT_TRUE(prevVal.assigned());
 
     const auto time = getTime();
@@ -613,12 +611,18 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingTailReade
 
     // the FB needs time to read the new value from the node
     // read the last value until it becomes different from the initial or until the timer expires
-    std::this_thread::sleep_for(std::chrono::milliseconds(interval * 3));
 
     SizeT count{1};
     int64_t values{};
     uint64_t domain{};
-    reader.readWithDomain(&values, &domain, &count);
+    helper::utils::Timer timer(interval * multiplier);
+    do
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        count = 1;
+        reader.readWithDomain(&values, &domain, &count);
+    } while ((count == 0 || value == prevVal) && !timer.expired());
+
 
     // check that the target and read values are the same
     ASSERT_EQ(values, value);
@@ -630,6 +634,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingTailReade
 TEST_F(GenericOpcuaMonitoredItemTest, ReadProtectedValue)
 {
     constexpr uint32_t interval = 50;
+    constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".pi64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
     StartUp();
@@ -641,7 +646,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadProtectedValue)
     OpcUaDataValue dataValue;
     dataValue.setScalar(value);
 
-    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * multiplier);
     ASSERT_FALSE(prevVal.assigned());
 
     ASSERT_NO_THROW(testHelper.writeDataValueNode(nodeId, dataValue));
@@ -649,13 +654,14 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadProtectedValue)
     // after writing
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
 
-    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * 3, prevVal);
+    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * multiplier, prevVal);
     ASSERT_FALSE(val.assigned());
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingTailReader)
 {
     constexpr uint32_t interval = 50;
+    constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
     StartUp();
@@ -670,7 +676,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingTail
     const OpcUaVariant variant(value);
 
     // waiting to be sure that FB has read initial value
-    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * multiplier);
     ASSERT_TRUE(prevVal.assigned());
 
     const auto timeBefore = getTime();
@@ -688,12 +694,17 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingTail
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(interval * 3));
-
     SizeT count{1};
     int64_t values{};
     uint64_t domain{};
-    reader.readWithDomain(&values, &domain, &count);
+    helper::utils::Timer timer(interval * multiplier);
+    do
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        count = 1;
+        reader.readWithDomain(&values, &domain, &count);
+    } while ((count == 0 || value == prevVal) && !timer.expired());
+
     const auto timeAfter = getTime();
 
     ASSERT_EQ(values, value);
@@ -887,6 +898,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, NumericNodeIdCreationInvalidNode)
 TEST_F(GenericOpcuaMonitoredItemTest, NumericNodeIdReadValue)
 {
     constexpr uint32_t interval = 50;
+    constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, uint32_t{1001});
     StartUp();
 
@@ -894,13 +906,13 @@ TEST_F(GenericOpcuaMonitoredItemTest, NumericNodeIdReadValue)
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
-    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * 3);
+    daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * multiplier);
     ASSERT_TRUE(prevVal.assigned());
 
     const OpcUaVariant variant(int32_t{42});
     ASSERT_NO_THROW(testHelper.writeValueNode(nodeId, variant));
 
-    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * 3, prevVal);
+    daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * multiplier, prevVal);
     ASSERT_NE(val, prevVal);
     EXPECT_EQ(val.asPtr<INumber>().getValue<int32_t>(0), 42);
 }
