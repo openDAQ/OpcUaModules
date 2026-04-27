@@ -21,12 +21,10 @@ static constexpr const char* GENERIC_OPCUA_MONITORED_ITEM_FB_NAME = "MonitoredIt
 // Property names
 // ----------
 // Device and module
-static constexpr const char* PROPERTY_NAME_OPCUA_HOST = "Host";
-static constexpr const char* PROPERTY_NAME_OPCUA_PORT = "Port";
-static constexpr const char* PROPERTY_NAME_OPCUA_PATH = "Path";
 static constexpr const char* PROPERTY_NAME_OPCUA_USERNAME = "Username";
 static constexpr const char* PROPERTY_NAME_OPCUA_PASSWORD = "Password";
 static constexpr const char* PROPERTY_NAME_OPCUA_MI_LOCAL_ID = "LocalId";
+static constexpr const char* PROPERTY_NAME_OPCUA_TS_MODE = "TimestampMode";
 
 // MonitoredItem FB
 static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_TYPE = "NodeIDType";
@@ -34,7 +32,12 @@ static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_STRING = "NodeIDString"
 static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC = "NodeIDNumeric";
 static constexpr const char* PROPERTY_NAME_OPCUA_NAMESPACE_INDEX = "NamespaceIndex";
 static constexpr const char* PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL = "SamplingInterval";
-static constexpr const char* PROPERTY_NAME_OPCUA_TS_MODE = "TimestampMode";
+
+// Device node ID for DeviceInfo reading
+static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE    = "DeviceNodeIDType";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING  = "DeviceNodeIDString";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC = "DeviceNodeIDNumeric";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX = "DeviceNamespaceIndex";
 // ----------
 
 // Defaults

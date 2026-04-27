@@ -24,6 +24,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <opcuageneric_client/opcua_monitored_item_fb_impl.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
@@ -38,7 +39,8 @@ public:
                                           const std::string& name,
                                           uint32_t reconnectIntervalMs = DEFAULT_RECONNECT_INTERVAL);
     ~OpcuaGenericClientDeviceImpl();
-    static PropertyObjectPtr createDefaultConfig();
+    DAQ_OPCUA_GENERIC_MODULE_API static PropertyObjectPtr createDefaultConfig();
+
 protected:
     static std::atomic<int> localIndex;
     static std::string generateLocalId();
@@ -52,9 +54,12 @@ protected:
     };
     DictPtr<IString, IFunctionBlockType> onGetAvailableFunctionBlockTypes() override;
     FunctionBlockPtr onAddFunctionBlock(const StringPtr& typeId, const PropertyObjectPtr& config) override;
+    void onRemoveFunctionBlock(const FunctionBlockPtr& functionBlock) override;
 
     void initNestedFbTypes();
     void initProperties(const PropertyObjectPtr& config);
+    void readProperties();
+    void propertyChanged();
     std::string getConnectionString() const;
 
     DictObjectPtr<IDict, IString, IFunctionBlockType> nestedFbTypes;
@@ -65,6 +70,11 @@ protected:
     std::unordered_map<std::string, std::string> deviceMap;  // device name -> signal list JSON
 
     daq::opcua::OpcUaClientPtr client;
+    DomainSource domainSource;
+
+    mutable std::recursive_mutex processingMutex;
+    std::vector<FunctionBlockPtr> nestedFunctionBlocks;
+
 
     // Reconnect monitor
     const uint32_t reconnectIntervalMs;

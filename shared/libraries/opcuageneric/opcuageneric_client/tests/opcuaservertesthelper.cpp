@@ -35,6 +35,11 @@ void OpcUaServerTestHelper::onConfigure(const OnConfigureCallback& callback)
     onConfigureCallback = callback;
 }
 
+void OpcUaServerTestHelper::onTweakConfig(const OnConfigureCallback& callback)
+{
+    onTweakConfigCallback = callback;
+}
+
 void OpcUaServerTestHelper::startServer()
 {
     serverRunning = true;
@@ -46,6 +51,9 @@ void OpcUaServerTestHelper::startServer()
         onConfigureCallback(&initConfig);
 
     UA_ServerConfig_setMinimal(&initConfig, port, nullptr);
+    if (onTweakConfigCallback)
+        onTweakConfigCallback(&initConfig);
+
     server = UA_Server_newWithConfig(&initConfig);
     UA_ServerConfig* config = UA_Server_getConfig(server);
 
@@ -91,7 +99,6 @@ void OpcUaServerTestHelper::createModel()
     auto uaObjectsFolder = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
 
     publishFolder("f1", &uaObjectsFolder);
-
     {
         UA_Int32 myInt32 = 33;
         publishVariable("f1.i", &myInt32, &UA_TYPES[UA_TYPES_INT32], OpcUaNodeId(1, "f1").getPtr());
@@ -205,6 +212,46 @@ void OpcUaServerTestHelper::createModel()
     UA_String mySctString = UA_STRING_ALLOC("Hello Dewesoft @ struct");
     publishVariable(".sctA.s", &mySctString, &UA_TYPES[UA_TYPES_STRING], structureNodeId.getPtr());
     UA_String_clear(&mySctString);
+
+    {
+        // device information
+        using namespace daq::opcua::helper::constants;
+
+        const OpcUaObject<UA_LocalizedText> Manufacturer = UA_LOCALIZEDTEXT_ALLOC("en-US", EXPECTED_MANUFACTURER);
+        const OpcUaObject<UA_String> ManufacturerUri = UA_STRING_ALLOC(EXPECTED_MANUFACTURER_URI);
+        const OpcUaObject<UA_LocalizedText> Model = UA_LOCALIZEDTEXT_ALLOC("en-US", EXPECTED_MODEL);
+        const OpcUaObject<UA_String> HardwareRevision = UA_STRING_ALLOC(EXPECTED_HW_REVISION);
+        const OpcUaObject<UA_String> SoftwareRevision = UA_STRING_ALLOC(EXPECTED_SW_REVISION);
+        const OpcUaObject<UA_String> DeviceRevision = UA_STRING_ALLOC(EXPECTED_DEV_REVISION);
+        const OpcUaObject<UA_String> ProductCode = UA_STRING_ALLOC(EXPECTED_PRODUCT_CODE);
+        const OpcUaObject<UA_String> DeviceManual = UA_STRING_ALLOC(EXPECTED_DEVICE_MANUAL);
+        const OpcUaObject<UA_String> DeviceClass = UA_STRING_ALLOC(EXPECTED_DEVICE_CLASS);
+        const OpcUaObject<UA_String> SerialNumber = UA_STRING_ALLOC(EXPECTED_SERIAL);
+        const OpcUaObject<UA_String> ProductInstanceUri = UA_STRING_ALLOC(EXPECTED_PRODUCT_INSTANCE_URI);
+        const OpcUaObject<UA_String> AssetId = UA_STRING_ALLOC(EXPECTED_ASSET_ID);
+        const OpcUaObject<UA_String> ComponentName = UA_STRING_ALLOC(EXPECTED_COMPONENT_NAME);
+
+
+
+        OpcUaNodeId deviceNodeId(TEST_NS, DI_DEVICE_STRING_ID);
+
+        publishFolder(DI_DEVICE_STRING_ID, &uaObjectsFolder, "en_US", TEST_NS);
+
+        addPropertyImpl("Manufacturer", Manufacturer.get(), &UA_TYPES[UA_TYPES_LOCALIZEDTEXT], deviceNodeId.getPtr());
+        addPropertyImpl("ManufacturerUri", ManufacturerUri.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("Model", Model.get(), &UA_TYPES[UA_TYPES_LOCALIZEDTEXT], deviceNodeId.getPtr());
+        addPropertyImpl("HardwareRevision", HardwareRevision.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("SoftwareRevision", SoftwareRevision.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("DeviceRevision", DeviceRevision.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("ProductCode", ProductCode.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("DeviceManual", DeviceManual.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("DeviceClass", DeviceClass.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("SerialNumber", SerialNumber.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("ProductInstanceUri", ProductInstanceUri.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("AssetId", AssetId.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("ComponentName", ComponentName.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+        addPropertyImpl("RevisionCounter", &EXPECTED_REVISION_CNT, &UA_TYPES[UA_TYPES_INT32], deviceNodeId.getPtr());
+    }
 }
 
 void OpcUaServerTestHelper::publishVariable(std::string identifier,
@@ -273,6 +320,36 @@ void OpcUaServerTestHelper::publishVariableImpl(OpcUaNodeId nodeId,
                                             NULL,
                                             NULL);
 
+    CheckStatusCodeException(status);
+}
+
+void OpcUaServerTestHelper::addPropertyImpl(const std::string& name,
+                                            const void* value,
+                                            const UA_DataType* type,
+                                            UA_NodeId* parentNodeId,
+                                            const char* locale,
+                                            uint16_t nodeIndex,
+                                            UA_Byte accessLevel)
+{
+    OpcUaObject<UA_VariableAttributes> attr = UA_VariableAttributes_default;
+    attr->description = UA_LOCALIZEDTEXT_ALLOC(locale, name.c_str());
+    attr->displayName = UA_LOCALIZEDTEXT_ALLOC(locale, name.c_str());
+    attr->dataType = type->typeId;
+    attr->accessLevel = accessLevel;
+
+    OpcUaObject<UA_QualifiedName> qualifiedName = UA_QUALIFIEDNAME_ALLOC(UA_UInt16(nodeIndex), name.c_str());
+
+    UA_Variant_setScalarCopy(&attr->value, value, type);
+
+    auto status = UA_Server_addVariableNode(server,
+                                            UA_NODEID_NULL,
+                                            *parentNodeId,
+                                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASPROPERTY),
+                                            *qualifiedName,
+                                            UA_NODEID_NUMERIC(0, UA_NS0ID_PROPERTYTYPE),
+                                            *attr,
+                                            NULL,
+                                            NULL);
     CheckStatusCodeException(status);
 }
 

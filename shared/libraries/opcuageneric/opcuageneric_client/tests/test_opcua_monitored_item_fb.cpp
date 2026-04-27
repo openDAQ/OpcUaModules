@@ -2,6 +2,7 @@
 #include <coreobjects/property_object_factory.h>
 #include <coretypes/common.h>
 #include <opcuageneric_client/opcua_monitored_item_fb_impl.h>
+#include <opcuageneric_client/generic_client_device_impl.h>
 #include <opcuageneric_client/opcuageneric.h>
 #include <testutils/testutils.h>
 #include "opcuageneric_client/constants.h"
@@ -19,32 +20,30 @@ namespace daq::opcua::generic
     class GenericOpcuaMonitoredItemHelper : public DaqTestHelper
     {
     public:
-        using DS = OpcUaMonitoredItemFbImpl::DomainSource;
+        using DS = DomainSource;
         daq::FunctionBlockPtr fb;
         OpcUaServerTestHelper testHelper;
 
-        void CreateMonitoredItemFB(std::string nodeId, uint32_t index, uint32_t interval = 100, DS ds = DS::ServerTimestamp)
+        void CreateMonitoredItemFB(std::string nodeId, uint32_t index, uint32_t interval = 100)
         {
-            using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+            using NT = NodeIDType;
             auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::String));
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, nodeId);
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, index);
             config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, interval);
-            config.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(ds));
 
             ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
         }
 
-        void CreateMonitoredItemFB(uint32_t numericNodeId, uint32_t nsIndex, uint32_t interval = 100, DS ds = DS::ServerTimestamp)
+        void CreateMonitoredItemFB(uint32_t numericNodeId, uint32_t nsIndex, uint32_t interval = 100)
         {
-            using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+            using NT = NodeIDType;
             auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::Numeric));
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC, numericNodeId);
             config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, nsIndex);
             config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, interval);
-            config.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(ds));
 
             ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
         }
@@ -73,7 +72,7 @@ namespace daq::opcua::generic
         auto readValueWithTout(daq::SignalPtr sig, size_t ms, const daq::BaseObjectPtr prevVal = nullptr)
         {
             daq::BaseObjectPtr value;
-            helper::utils::Timer timer(ms);
+            ::helper::utils::Timer timer(ms);
             do
             {
                 value = sig.getLastValue();
@@ -172,12 +171,12 @@ TEST_F(GenericOpcuaMonitoredItemTest, DefaultConfig)
 
     ASSERT_TRUE(defaultConfig.assigned());
 
-    EXPECT_EQ(defaultConfig.getAllProperties().getCount(), 6u);
+    EXPECT_EQ(defaultConfig.getAllProperties().getCount(), 5u);
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE));
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE).getValueType(), CoreType::ctInt);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE).asPtr<IInteger>(),
-              static_cast<int>(OpcUaMonitoredItemFbImpl::NodeIDType::String));
+              static_cast<int>(NodeIDType::String));
     EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE).getVisible());
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING));
@@ -202,12 +201,6 @@ TEST_F(GenericOpcuaMonitoredItemTest, DefaultConfig)
                   .getValue(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL),
               DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
     EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL).getVisible());
-
-    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
-    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_TS_MODE).getValueType(), CoreType::ctInt);
-    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
-              static_cast<int>(OpcUaMonitoredItemFbImpl::DomainSource::ServerTimestamp));
-    EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_TS_MODE).getVisible());
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, CreationWithDefaultConfig)
@@ -375,9 +368,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingLastValue
     constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
-    StartUp();
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
 
-    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval, DS::ServerTimestamp);
+    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
@@ -422,9 +415,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingLastValue
     constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
-    StartUp();
+    StartUp(buildDeviceConfig(DomainSource::SourceTimestamp));
 
-    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval, DS::SourceTimestamp);
+    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
@@ -468,9 +461,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingLast
     constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
-    StartUp();
+    StartUp(buildDeviceConfig(DomainSource::LocalSystemTimestamp));
 
-    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval, DS::LocalSystemTimestamp);
+    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
@@ -513,9 +506,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReade
     constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
-    StartUp();
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
 
-    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval, DS::ServerTimestamp);
+    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
@@ -551,7 +544,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReade
     SizeT count{1};
     int64_t values{};
     uint64_t domain{};
-    helper::utils::Timer timer(interval * multiplier);
+    ::helper::utils::Timer timer(interval * multiplier);
     do
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -575,9 +568,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingTailReade
     constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
-    StartUp();
+    StartUp(buildDeviceConfig(DomainSource::SourceTimestamp));
 
-    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval, DS::SourceTimestamp);
+    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
@@ -615,7 +608,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingTailReade
     SizeT count{1};
     int64_t values{};
     uint64_t domain{};
-    helper::utils::Timer timer(interval * multiplier);
+    ::helper::utils::Timer timer(interval * multiplier);
     do
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -637,9 +630,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadProtectedValue)
     constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".pi64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
-    StartUp();
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
 
-    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval, DS::ServerTimestamp);
+    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
 
@@ -664,9 +657,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingTail
     constexpr uint32_t multiplier = 50;
     const OpcUaNodeId nodeId(1, ".i64");
     const auto value = int64_t{std::numeric_limits<int64_t>::min()};
-    StartUp();
+    StartUp(buildDeviceConfig(DomainSource::LocalSystemTimestamp));
 
-    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval, DS::LocalSystemTimestamp);
+    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
@@ -697,7 +690,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingTail
     SizeT count{1};
     int64_t values{};
     uint64_t domain{};
-    helper::utils::Timer timer(interval * multiplier);
+    ::helper::utils::Timer timer(interval * multiplier);
     do
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -715,9 +708,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingTail
 
 TEST_F(GenericOpcuaMonitoredItemTest, TsModeNoneCreatesSingleSignal)
 {
-    StartUp();
+    StartUp(buildDeviceConfig(DomainSource::None));
 
-    CreateMonitoredItemFB(".i32", 1, 100, DS::None);
+    CreateMonitoredItemFB(".i32", 1, 100);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
     EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 1u);
@@ -726,20 +719,20 @@ TEST_F(GenericOpcuaMonitoredItemTest, TsModeNoneCreatesSingleSignal)
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureTsModeTogglesDomainSignal)
 {
-    StartUp();
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
 
-    CreateMonitoredItemFB(".i32", 1, 100, DS::ServerTimestamp);
+    CreateMonitoredItemFB(".i32", 1, 100);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
     EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 2u);
     EXPECT_TRUE(fb.getSignals()[0].getDomainSignal().assigned());
 
-    fb.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::None));
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::None));
 
     EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 1u);
     EXPECT_FALSE(fb.getSignals()[0].getDomainSignal().assigned());
 
-    fb.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::ServerTimestamp));
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::ServerTimestamp));
 
     EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 2u);
     EXPECT_TRUE(fb.getSignals()[0].getDomainSignal().assigned());
@@ -747,9 +740,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureTsModeTogglesDomainSignal)
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdFromInvalidToValid)
 {
-    StartUp();
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
 
-    CreateMonitoredItemFB("nonExistent", 1, 100, DS::ServerTimestamp);
+    CreateMonitoredItemFB("nonExistent", 1, 100);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
 
@@ -765,7 +758,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdFromValidToInvalid)
 {
     StartUp();
 
-    CreateMonitoredItemFB(".i32", 1, 100, DS::ServerTimestamp);
+    CreateMonitoredItemFB(".i32", 1, 100);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
@@ -778,7 +771,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNamespaceIndex)
 {
     StartUp();
 
-    CreateMonitoredItemFB(".i32", 1, 100, DS::ServerTimestamp);
+    CreateMonitoredItemFB(".i32", 1, 100);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
@@ -819,7 +812,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, UnsupportedDataTypeNode)
     StartUp();
 
     // .b is a BOOLEAN node — not in supportedDataTypes
-    CreateMonitoredItemFB(".b", 1, 10, DS::ServerTimestamp);
+    CreateMonitoredItemFB(".b", 1, 10);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
@@ -833,7 +826,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, FolderNode)
     StartUp();
 
     // "f1" ns=1 is an ObjectFolder, not a VARIABLE node
-    CreateMonitoredItemFB("f1", 1, 100, DS::ServerTimestamp);
+    CreateMonitoredItemFB("f1", 1, 100);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
 }
@@ -862,7 +855,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ZeroSamplingInterval)
 
 TEST_F(GenericOpcuaMonitoredItemTest, PropertyVisibilityTogglesWithNodeIdType)
 {
-    using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+    using NT = NodeIDType;
     daq::PropertyObjectPtr defaultConfig = OpcUaMonitoredItemFbImpl::CreateType().createDefaultConfig();
 
     EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING).getVisible());
@@ -919,10 +912,10 @@ TEST_F(GenericOpcuaMonitoredItemTest, NumericNodeIdReadValue)
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdTypeStringToNumeric)
 {
-    using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+    using NT = NodeIDType;
     StartUp();
 
-    CreateMonitoredItemFB(".i32", 1, 100, DS::ServerTimestamp);
+    CreateMonitoredItemFB(".i32", 1, 100);
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
     fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::Numeric));
@@ -933,10 +926,10 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdTypeStringToNumeric)
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdTypeNumericToString)
 {
-    using NT = OpcUaMonitoredItemFbImpl::NodeIDType;
+    using NT = NodeIDType;
     StartUp();
 
-    CreateMonitoredItemFB(1001, 1, 100, DS::ServerTimestamp);
+    CreateMonitoredItemFB(1001, 1, 100);
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
     fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::String));

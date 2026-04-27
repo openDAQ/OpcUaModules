@@ -19,6 +19,8 @@
 #include <opendaq/module_impl.h>
 #include <daq_discovery/daq_discovery_client.h>
 #include <opendaq/device_ptr.h>
+#include "opcuaclient/opcuaclient.h"
+#include <unordered_map>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC_CLIENT_MODULE
 
@@ -32,17 +34,51 @@ public:
     DevicePtr onCreateDevice(const StringPtr& connectionString,
                              const ComponentPtr& parent,
                              const PropertyObjectPtr& config) override;
-    bool acceptsConnectionParameters(const StringPtr& connectionString, const PropertyObjectPtr& config);
+    bool acceptsConnectionParameters(const StringPtr& connectionString);
     Bool onCompleteServerCapability(const ServerCapabilityPtr& source, const ServerCapabilityConfigPtr& target) override;
 
 private:
-    StringPtr formConnectionString(const StringPtr& connectionString, const PropertyObjectPtr& config, std::string& host, int& port, std::string& hostType);
+    struct ParsedConnectionInfo
+    {
+        std::string host;
+        int port;
+        std::string hostType;
+        std::string path;
+    };
+
+    using DeviceInfoList = std::vector<std::pair<std::string, opcua::OpcUaVariant>>;
+    static ParsedConnectionInfo formConnectionString(const StringPtr& connectionString);
+    static std::shared_ptr<opcua::OpcUaClient> initOpcuaClient(const std::string& url,
+                                                               const std::string& username,
+                                                               const std::string& password);
+    static opcua::OpcUaClient::ApplicationDescription readApplicationDescription(std::shared_ptr<opcua::OpcUaClient> client);
+    static std::string buildDeviceName(const opcua::OpcUaClient::ApplicationDescription& appDesc);
+    static std::string buildDeviceLocalId(const opcua::OpcUaClient::ApplicationDescription& appDesc);
+    static void tweakLocalId(std::string& localId);
+    std::string buildDeviceLocalId(const ComponentPtr& parent,
+                                   const std::string& userProvided,
+                                   const DeviceInfoList& devInfoList,
+                                   const opcua::OpcUaClient::ApplicationDescription& appDesc);
+    static std::string buildOpcuaUrl(const ParsedConnectionInfo& connectionInfo);
     static DeviceTypePtr createDeviceType();
     static PropertyObjectPtr createDefaultConfig();
     static PropertyObjectPtr populateDefaultConfig(const PropertyObjectPtr& config);
     static DeviceInfoPtr populateDiscoveredDevice(const discovery::MdnsDiscoveredDevice& discoveredDevice);
-    discovery::DiscoveryClient discoveryClient;
 
+    opcua::OpcUaNodeId readRootNodeIdFromConfig(const PropertyObjectPtr& config);
+    void populateDeviceInfo(DeviceInfoPtr deviceInfo,
+                            const StringPtr& connectionString,
+                            const ParsedConnectionInfo& connectionInfo,
+                            const std::string& username,
+                            const std::string& productUri,
+                            const DeviceInfoList& devInfoList);
+    DeviceInfoList readDeviceInfoFromRootDevice(const std::shared_ptr<opcua::OpcUaClient>& client,
+                                                const opcua::OpcUaNodeId& rootDeviceNodeId);
+    void populateDeviceInfoFromRootDevice(DeviceInfoPtr deviceInfo, const DeviceInfoList& list);
+
+    static std::unordered_map<std::string, std::string> deviceInfoMap;
+
+    discovery::DiscoveryClient discoveryClient;
     std::mutex sync;
 };
 

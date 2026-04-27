@@ -25,3 +25,16 @@
     {
 #define END_NAMESPACE_OPENDAQ_OPCUA_GENERIC }
 
+#if !defined(DAQMODULES_OPCUA_ENABLE_TESTS)
+    #define DAQ_OPCUA_GENERIC_MODULE_API
+#else
+    #if defined(_WIN32)
+        #if defined(OPENDAQ_MODULE_DLL_IMPORT)
+            #define DAQ_OPCUA_GENERIC_MODULE_API __declspec(dllimport)
+        #else
+            #define DAQ_OPCUA_GENERIC_MODULE_API __declspec(dllexport)
+        #endif
+    #else
+        #define DAQ_OPCUA_GENERIC_MODULE_API __attribute__((visibility("default")))
+    #endif
+#endif
