@@ -34,7 +34,7 @@ public:
     DevicePtr onCreateDevice(const StringPtr& connectionString,
                              const ComponentPtr& parent,
                              const PropertyObjectPtr& config) override;
-    bool acceptsConnectionParameters(const StringPtr& connectionString);
+    std::string acceptsConnectionParameters(const StringPtr& connectionString);
     Bool onCompleteServerCapability(const ServerCapabilityPtr& source, const ServerCapabilityConfigPtr& target) override;
 
 private:

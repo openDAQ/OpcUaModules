@@ -81,8 +81,8 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
 
     auto configPtr = config.assigned() ? populateDefaultConfig(config) : createDefaultConfig();
 
-    if (!acceptsConnectionParameters(connectionString))
-        DAQ_THROW_EXCEPTION(InvalidParameterException);
+    if (const auto err = acceptsConnectionParameters(connectionString); !err.empty())
+        DAQ_THROW_EXCEPTION(InvalidParameterException, err);
 
     if (!context.assigned())
         DAQ_THROW_EXCEPTION(InvalidParameterException, "Context is not available.");
@@ -530,11 +530,14 @@ void OpcUaGenericClientModule::populateDeviceInfoFromRootDevice(DeviceInfoPtr de
     }
 }
 
-bool OpcUaGenericClientModule::acceptsConnectionParameters(const StringPtr& connectionString)
+std::string OpcUaGenericClientModule::acceptsConnectionParameters(const StringPtr& connectionString)
 {
+    std::string errMsg;
     std::string connStr = connectionString;
     auto found = connStr.find(std::string(DaqOpcUaGenericDevicePrefix) + "://");
-    return found == 0;
+    if (found != 0)
+        errMsg = fmt::format("Connection string must start with {}://", DaqOpcUaGenericDevicePrefix);
+    return errMsg;
 }
 
 Bool OpcUaGenericClientModule::onCompleteServerCapability(const ServerCapabilityPtr& source, const ServerCapabilityConfigPtr& target)
