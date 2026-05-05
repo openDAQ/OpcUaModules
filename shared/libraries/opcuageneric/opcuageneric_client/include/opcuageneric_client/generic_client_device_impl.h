@@ -66,9 +66,6 @@ protected:
 
     StatusAdaptor connectionStatus;
 
-    std::atomic<bool> connectedDone{false};
-    std::unordered_map<std::string, std::string> deviceMap;  // device name -> signal list JSON
-
     daq::opcua::OpcUaClientPtr client;
     DomainSource domainSource;
 
