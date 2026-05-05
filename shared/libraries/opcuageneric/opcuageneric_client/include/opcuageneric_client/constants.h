@@ -23,7 +23,7 @@ static constexpr const char* GENERIC_OPCUA_MONITORED_ITEM_FB_NAME = "MonitoredIt
 // Device and module
 static constexpr const char* PROPERTY_NAME_OPCUA_USERNAME = "Username";
 static constexpr const char* PROPERTY_NAME_OPCUA_PASSWORD = "Password";
-static constexpr const char* PROPERTY_NAME_OPCUA_MI_LOCAL_ID = "LocalId";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID = "LocalId";
 static constexpr const char* PROPERTY_NAME_OPCUA_TS_MODE = "TimestampMode";
 
 // MonitoredItem FB

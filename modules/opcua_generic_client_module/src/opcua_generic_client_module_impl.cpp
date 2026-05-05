@@ -96,7 +96,7 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
     // ApplicationDescription. If that's also not set, we will generate a local id for the device.
     // A user need to have this opportunity to set local id in the config when they want to have a stable local id for the device across
     // different runs of the application, and they don't want to rely on the server to provide it (especially it the server uses default values).
-    const std::string userSpecifiedLocalId = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID);
+    const std::string userSpecifiedLocalId = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID);
 
     const auto username = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME);
     const auto password = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD);
@@ -615,7 +615,7 @@ PropertyObjectPtr OpcUaGenericClientModule::createDefaultConfig()
     auto defaultConfig = PropertyObject();
     defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_USERNAME, DEFAULT_OPCUA_USERNAME));
     defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_PASSWORD, DEFAULT_OPCUA_PASSWORD));
-    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID, ""));
+    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID, ""));
 
     {
         auto builder =
