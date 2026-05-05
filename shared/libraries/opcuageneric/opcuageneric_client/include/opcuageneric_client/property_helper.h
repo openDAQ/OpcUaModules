@@ -32,15 +32,15 @@ namespace property_helper
     }
 
     template <typename retT, typename intfT>
-    retT readProperty(const daq::PropertyObjectPtr objPtr, const std::string& propertyName, const retT defaultValue)
+    retT readProperty(const daq::PropertyObjectPtr& objPtr, const std::string& propertyName, const retT defaultValue)
     {
         retT returnValue{defaultValue};
         if (objPtr.hasProperty(propertyName))
         {
-            auto property = objPtr.getPropertyValue(propertyName).asPtrOrNull<intfT>();
-            if (property.assigned())
+            auto convertedObj = objPtr.getPropertyValue(propertyName).asPtrOrNull<intfT>();
+            if (convertedObj.assigned())
             {
-                returnValue = property.getValue(defaultValue);
+                returnValue = convertedObj.getValue(defaultValue);
             }
         }
         return returnValue;
