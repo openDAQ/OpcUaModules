@@ -226,6 +226,7 @@ OpcUaGenericClientModule::ParsedConnectionInfo OpcUaGenericClientModule::formCon
 
     std::string prefix = "";
     result.path = DEFAULT_OPCUA_PATH;
+    result.port = DEFAULT_OPCUA_PORT;
 
     bool parsed = false;
     parsed = std::regex_search(urlString, match, RegexIpv6Hostname);
