@@ -33,6 +33,7 @@ public:
                                       const ComponentPtr& parent,
                                       const FunctionBlockTypePtr& type,
                                       daq::opcua::OpcUaClientPtr client,
+                                      const std::string& localId,
                                       DomainSource defaultDomainSource,
                                       const PropertyObjectPtr& config = nullptr);
     ~OpcUaMonitoredItemFbImpl();

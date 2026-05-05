@@ -60,6 +60,7 @@ protected:
     void readProperties();
     void propertyChanged();
     std::string getConnectionString() const;
+    std::string buildMILocalId(const std::string& userProvided);
 
     DictObjectPtr<IDict, IString, IFunctionBlockType> nestedFbTypes;
 

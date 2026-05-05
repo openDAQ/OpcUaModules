@@ -204,8 +204,12 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
             auto fbTypePtr = nestedFbTypes.getOrDefault(typeId);
             if (fbTypePtr.getName() == GENERIC_OPCUA_MONITORED_ITEM_FB_NAME)
             {
+                std::string userSpecifiedLocalId;
+                if (config.assigned() && config.hasProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID))
+                    userSpecifiedLocalId = config.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID).asPtr<IString>().toStdString();
+                const auto localId = buildMILocalId(userSpecifiedLocalId);
                 nestedFunctionBlock = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
-                    context, functionBlocks, fbTypePtr, client, domainSource, config);
+                    context, functionBlocks, fbTypePtr, client, localId, domainSource, config);
             }
             else
             {
@@ -232,5 +236,34 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
 std::string OpcuaGenericClientDeviceImpl::generateLocalId()
 {
     return std::string(GENERIC_OPCUA_CLIENT_DEVICE_NAME + std::to_string(localIndex++));
+}
+
+std::string OpcuaGenericClientDeviceImpl::buildMILocalId(const std::string& userProvided)
+{
+    {
+        if (userProvided.empty())
+        {
+            LOG_I("User did not provide local ID for the device. Generating a unique local ID for "
+                  "the new function block.");
+            return "";
+        }
+    }
+    {
+        Bool hasItemFlag = false;
+        daq::GenericComponentPtr<daq::IComponent> fbs;
+        checkErrorInfo(getItem(String("FB"), &fbs));
+        if (fbs.asPtr<IFolder>().hasItem(userProvided))
+        {
+            LOG_W("Function block with local ID {} already exists under the parent folder. Generating a unique local ID for "
+                  "the new function block.",
+                  userProvided);
+            return "";
+        }
+        else
+        {
+            return userProvided;
+        }
+    }
+    return "";
 }
 END_NAMESPACE_OPENDAQ_OPCUA_GENERIC

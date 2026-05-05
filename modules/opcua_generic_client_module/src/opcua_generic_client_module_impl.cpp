@@ -615,8 +615,13 @@ PropertyObjectPtr OpcUaGenericClientModule::createDefaultConfig()
     auto defaultConfig = PropertyObject();
     defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_USERNAME, DEFAULT_OPCUA_USERNAME));
     defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_PASSWORD, DEFAULT_OPCUA_PASSWORD));
-    defaultConfig.addProperty(StringProperty(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID, ""));
-
+    {
+        auto builder = StringPropertyBuilder(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID, String(""))
+                           .setDescription("Specifies a local ID for the device. This is used to identify the device within the parent "
+                                           "folder. This property is optional and can be left empty. If not set, a local ID will be "
+                                           "generated based on the device information read from the server or application URI.");
+        defaultConfig.addProperty(builder.build());
+    }
     {
         auto builder =
             SelectionPropertyBuilder(

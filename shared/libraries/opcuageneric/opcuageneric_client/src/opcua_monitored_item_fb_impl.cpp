@@ -64,9 +64,10 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
                                                    const ComponentPtr& parent,
                                                    const FunctionBlockTypePtr& type,
                                                    daq::opcua::OpcUaClientPtr client,
+                                                   const std::string& localId,
                                                    DomainSource defaultDomainSource,
                                                    const PropertyObjectPtr& config)
-    : FunctionBlock(type, ctx, parent, generateLocalId())
+    : FunctionBlock(type, ctx, parent, localId.empty() ? generateLocalId() : localId)
     , client(client)
     , running(false)
     , statuses(std::make_shared<utils::StatusContainer>())
@@ -118,6 +119,13 @@ void OpcUaMonitoredItemFbImpl::initStatusContainer()
 FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
 {
     auto defaultConfig = PropertyObject();
+    {
+        auto builder =
+            StringPropertyBuilder(PROPERTY_NAME_OPCUA_MI_LOCAL_ID, String(""))
+                .setDescription("Specifies a local ID for the monitored item. This is used to identify the monitored item within the "
+                                "device. This property is optional and can be left empty. If not set, a local ID will be generated.");
+        defaultConfig.addProperty(builder.build());
+    }
     {
         auto builder =
             SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, List<IString>("Numeric", "String"), static_cast<int>(NodeIDType::String))
@@ -201,6 +209,8 @@ void OpcUaMonitoredItemFbImpl::initProperties(const PropertyObjectPtr& config)
     for (const auto& prop : config.getAllProperties())
     {
         const auto propName = prop.getName();
+        if (propName.toStdString() == PROPERTY_NAME_OPCUA_MI_LOCAL_ID)
+            continue;
         if (!objPtr.hasProperty(propName))
         {
             if (const auto internalProp = prop.asPtrOrNull<IPropertyInternal>(true); internalProp.assigned())
@@ -401,6 +411,7 @@ void OpcUaMonitoredItemFbImpl::createSignal()
     LOG_I("Creating a signal...");
 
     outputSignal = createAndAddSignal(OPCUA_VALUE_SIGNAL_LOCAL_ID, outputSignalDescriptor);
+    outputSignal.setName(localId.toStdString() + "ValueSignal");
     if (config.domainSource != DomainSource::None)
         outputSignal.setDomainSignal(createDomainSignal());
 }
@@ -442,6 +453,7 @@ SignalConfigPtr OpcUaMonitoredItemFbImpl::createDomainSignal()
                                      .setName("Time")
                                      .build();
     outputDomainSignal = createAndAddSignal(OPCUA_TS_SIGNAL_LOCAL_ID, domainSignalDsc, false);
+    outputDomainSignal.setName(localId.toStdString() + "DomainSignal");
     return outputDomainSignal;
 }
 
