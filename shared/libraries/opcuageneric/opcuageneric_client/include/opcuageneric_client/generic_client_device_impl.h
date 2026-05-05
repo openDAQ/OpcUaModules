@@ -54,7 +54,6 @@ protected:
     };
     DictPtr<IString, IFunctionBlockType> onGetAvailableFunctionBlockTypes() override;
     FunctionBlockPtr onAddFunctionBlock(const StringPtr& typeId, const PropertyObjectPtr& config) override;
-    void onRemoveFunctionBlock(const FunctionBlockPtr& functionBlock) override;
 
     void initNestedFbTypes();
     void initProperties(const PropertyObjectPtr& config);
@@ -68,10 +67,6 @@ protected:
 
     daq::opcua::OpcUaClientPtr client;
     DomainSource domainSource;
-
-    mutable std::recursive_mutex processingMutex;
-    std::vector<FunctionBlockPtr> nestedFunctionBlocks;
-
 
     // Reconnect monitor
     const uint32_t reconnectIntervalMs;

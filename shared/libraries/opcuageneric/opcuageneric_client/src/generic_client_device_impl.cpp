@@ -97,11 +97,10 @@ void OpcuaGenericClientDeviceImpl::readProperties()
 
 void OpcuaGenericClientDeviceImpl::propertyChanged()
 {
-    auto lock = this->getRecursiveConfigLock();
-    auto lockProcessing = std::scoped_lock(processingMutex);
+    auto lock = this->getRecursiveConfigLock2();
     readProperties();
 
-    for (const auto& fb : nestedFunctionBlocks)
+    for (const FunctionBlockPtr& fb : this->functionBlocks.getItems(search::Any()))
     {
         if (fb.assigned())
         {
@@ -216,13 +215,11 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
         }
         if (nestedFunctionBlock.assigned())
         {
-            addNestedFunctionBlock(nestedFunctionBlock);
-            setComponentStatus(ComponentStatus::Ok);
-
             {
-                auto lockProcessing = std::scoped_lock(processingMutex);
-                nestedFunctionBlocks.push_back(nestedFunctionBlock);
+                auto lock = this->getRecursiveConfigLock2();
+                addNestedFunctionBlock(nestedFunctionBlock);
             }
+            setComponentStatus(ComponentStatus::Ok);
         }
         else
         {
@@ -232,22 +229,6 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
     return nestedFunctionBlock;
 }
 
-void OpcuaGenericClientDeviceImpl::onRemoveFunctionBlock(const FunctionBlockPtr& functionBlock)
-{
-    {
-        auto lockProcessing = std::scoped_lock(processingMutex);
-        auto it = std::find_if(nestedFunctionBlocks.begin(),
-                               nestedFunctionBlocks.end(),
-                               [&functionBlock](const FunctionBlockPtr& fb) { return fb.getObject() == functionBlock.getObject(); });
-
-        if (it != nestedFunctionBlocks.end())
-        {
-            nestedFunctionBlocks.erase(it);
-        }
-    }
-    auto lock = this->getRecursiveConfigLock2();
-    GenericDevice::onRemoveFunctionBlock(functionBlock);
-}
 std::string OpcuaGenericClientDeviceImpl::generateLocalId()
 {
     return std::string(GENERIC_OPCUA_CLIENT_DEVICE_NAME + std::to_string(localIndex++));
