@@ -249,7 +249,6 @@ std::string OpcuaGenericClientDeviceImpl::buildMILocalId(const std::string& user
         }
     }
     {
-        Bool hasItemFlag = false;
         daq::GenericComponentPtr<daq::IComponent> fbs;
         checkErrorInfo(getItem(String("FB"), &fbs));
         if (fbs.asPtr<IFolder>().hasItem(userProvided))
