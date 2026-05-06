@@ -10,8 +10,9 @@
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
-OpcUaServer::OpcUaServer()
+OpcUaServer::OpcUaServer(bool addCustomTypes)
     : eventManager(std::make_shared<ServerEventManager>(this))
+    , addCustomTypes(addCustomTypes)
 {
     setPort(OPCUA_DEFAULT_PORT);
     createSessionContextCallback = [this](const OpcUaNodeId& sessionId, const UserPtr& authorizedUser) { return createSessionContextCallbackImp(sessionId, authorizedUser); };
@@ -157,7 +158,8 @@ void OpcUaServer::prepareServer()
     config->nodeLifecycle.generateChildNodeId = generateChildId;
 
     prepareAccessControl(config);
-    addTmsTypes(server);
+    if (addCustomTypes)
+        addTmsTypes(server);
 
     eventManager->registerEvents();
 }

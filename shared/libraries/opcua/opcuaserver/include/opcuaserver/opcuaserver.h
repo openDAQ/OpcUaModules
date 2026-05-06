@@ -64,7 +64,7 @@ public:
                                                        const UA_NodeId* methodId,
                                                        void* methodContext);
 
-    OpcUaServer();
+    OpcUaServer(bool addCustomTypes = true);
     ~OpcUaServer();
 
     static constexpr uint16_t OPCUA_DEFAULT_PORT = 4840;
@@ -201,6 +201,7 @@ private:
     AuthenticationProviderPtr authenticationProvider;
     OnClientConnectedCallback clientConnectedHandler;
     OnClientDisconnectedCallback clientDisconnectedHandler;
+    bool addCustomTypes;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA
