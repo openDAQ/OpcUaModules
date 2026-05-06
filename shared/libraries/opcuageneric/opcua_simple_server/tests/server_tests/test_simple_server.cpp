@@ -39,5 +39,6 @@ TEST_F(SimpleServerTest, Temp)
     auto daqInstance = SetupInstance();
     GenericServer server(daqInstance);
     ASSERT_NO_THROW(server.start());
+    daqInstance.getDevices()[0].setPropertyValue("GeneratePackets", 1000000);
     std::this_thread::sleep_for(std::chrono::seconds(600));
 }

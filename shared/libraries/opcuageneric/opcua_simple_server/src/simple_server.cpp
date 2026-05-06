@@ -23,6 +23,7 @@ GenericServer::GenericServer(const InstancePtr& instance)
 GenericServer::GenericServer(const DevicePtr& device, const ContextPtr& context)
     : device(device)
     , context(context)
+    , readingIntervalMs(100)
 {
 }
 
@@ -96,6 +97,8 @@ void GenericServer::start()
     // info.asPtr<IDeviceInfoInternal>(true).addServerCapability(serverCapability);
 
     server->start();
+
+    startReadingThread();
 }
 
 void GenericServer::stop()
@@ -113,11 +116,13 @@ void GenericServer::stop()
     //     }
     // }
     // registeredClientIds.clear();
+    stopReadingThread();
 
     if (server)
         server->stop();
-    
+
     server.reset();
+    signalNodes.clear();
 }
 
 void GenericServer::createDeviceNode()
@@ -154,5 +159,41 @@ void GenericServer::addSignalNodes()
         signalNodes.emplace_back(server, rootDeviceNodeId, sig);
     }
 }
+
+void GenericServer::startReadingThread()
+{
+    readingRunning = true;
+    readingThread = std::thread([this] { readingLoop(); });
+}
+
+void GenericServer::stopReadingThread()
+{
+    {
+        std::lock_guard<std::mutex> lock(readingMutex);
+        readingRunning = false;
+    }
+    readingCv.notify_all();
+    if (readingThread.joinable())
+        readingThread.join();
+}
+
+void GenericServer::readingLoop()
+    {
+        auto interruptibleSleep = [&](std::chrono::steady_clock::time_point nextTimePoint)
+        {
+            std::unique_lock<std::mutex> lock(readingMutex);
+            readingCv.wait_until(lock, nextTimePoint, [this]() { return !readingRunning.load(); });
+        };
+
+        while (readingRunning)
+        {
+            const auto nextTimePoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(readingIntervalMs);
+            for (auto& signalNode : signalNodes)
+            {
+                signalNode.process();
+            }
+            interruptibleSleep(nextTimePoint);
+        }
+    }
 
 END_NAMESPACE_OPENDAQ_OPCUA

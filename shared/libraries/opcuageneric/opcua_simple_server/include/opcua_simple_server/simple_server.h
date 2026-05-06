@@ -15,11 +15,14 @@
  */
 
 #pragma once
+#include <opcua_simple_objects/signal.h>
+#include <opcuaserver/opcuaserver.h>
 #include <opendaq/device_ptr.h>
 #include <opendaq/instance_ptr.h>
-#include <opcuaserver/opcuaserver.h>
+#include <condition_variable>
 #include <vector>
-#include <opcua_simple_objects/signal.h>
+#include <thread>
+#include <mutex>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
@@ -48,9 +51,19 @@ protected:
     std::vector<simple_objects::SignalNode> signalNodes;
     // std::unordered_map<std::string, SizeT> registeredClientIds;
 
+    uint64_t readingIntervalMs;
+    std::thread readingThread;
+    std::atomic<bool> readingRunning{false};
+    std::condition_variable readingCv;
+    std::mutex readingMutex;
+
     void createDeviceNode();
     void fillDeviceNode();
     void addSignalNodes();
+
+    void startReadingThread();
+    void stopReadingThread();
+    void readingLoop();
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA
