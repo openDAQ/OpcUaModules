@@ -632,10 +632,18 @@ UA_StatusCode OpcUaServer::activateSession(UA_Server* server,
             OpcUaServer::ClientConnectionInfo info;
             info.clientId = OpcUaNodeId::getIdentifier(*sessionId);
 
+            // UA_Server_getSessionById requires the server mutex to be held,
+            // but activateSession is called with it released — reacquire briefly
+            // just to read the socket fd, then drop it before the blocking DNS call.
+            UA_SOCKET sockfd = UA_INVALID_SOCKET;
+            UA_LOCK(&server->serviceMutex);
             UA_Session* session = UA_Server_getSessionById(server, sessionId);
             if (session && session->header.channel && session->header.channel->connection)
+                sockfd = session->header.channel->connection->sockfd;
+            UA_UNLOCK(&server->serviceMutex);
+
+            if (sockfd != UA_INVALID_SOCKET)
             {
-                UA_SOCKET sockfd = session->header.channel->connection->sockfd;
                 struct sockaddr_storage addr{};
                 socklen_t addrLen = sizeof(addr);
                 if (getpeername(sockfd, reinterpret_cast<struct sockaddr*>(&addr), &addrLen) == 0)
