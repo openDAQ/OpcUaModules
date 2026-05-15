@@ -7,6 +7,14 @@
 #include <cassert>
 #include <coreobjects/authentication_provider_factory.h>
 #include <coreobjects/exceptions.h>
+#include "server/ua_server_internal.h"
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+#else
+    #include <sys/socket.h>
+    #include <netdb.h>
+#endif
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
@@ -620,7 +628,31 @@ UA_StatusCode OpcUaServer::activateSession(UA_Server* server,
     {
         serverInstance->createSession(*sessionId, authorizedUser, sessionContext);
         if (serverInstance->clientConnectedHandler)
-            serverInstance->clientConnectedHandler(OpcUaNodeId::getIdentifier(*sessionId));
+        {
+            OpcUaServer::ClientConnectionInfo info;
+            info.clientId = OpcUaNodeId::getIdentifier(*sessionId);
+
+            UA_Session* session = UA_Server_getSessionById(server, sessionId);
+            if (session && session->header.channel && session->header.channel->connection)
+            {
+                UA_SOCKET sockfd = session->header.channel->connection->sockfd;
+                struct sockaddr_storage addr{};
+                socklen_t addrLen = sizeof(addr);
+                if (getpeername(sockfd, reinterpret_cast<struct sockaddr*>(&addr), &addrLen) == 0)
+                {
+                    char ipBuf[NI_MAXHOST] = {};
+                    char hostBuf[NI_MAXHOST] = {};
+                    getnameinfo(reinterpret_cast<struct sockaddr*>(&addr), addrLen,
+                                ipBuf, sizeof(ipBuf), nullptr, 0, NI_NUMERICHOST);
+                    getnameinfo(reinterpret_cast<struct sockaddr*>(&addr), addrLen,
+                                hostBuf, sizeof(hostBuf), nullptr, 0, 0);
+                    info.address  = ipBuf;
+                    info.hostname = hostBuf;
+                }
+            }
+
+            serverInstance->clientConnectedHandler(info);
+        }
     }
 
     return status;

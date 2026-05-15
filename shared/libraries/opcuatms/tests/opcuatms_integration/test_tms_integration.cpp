@@ -14,6 +14,8 @@
 #include <opendaq/sync_component_private_ptr.h>
 #include <coreobjects/property_factory.h>
 #include <coreobjects/property_object_class_factory.h>
+#include <opendaq/device_info_factory.h>
+#include <opendaq/connected_client_info_ptr.h>
 
 using namespace daq;
 using namespace daq::opcua;
@@ -634,4 +636,31 @@ TEST_F(TmsIntegrationTest, GetDaqServers)
     ListPtr<IServer> servers;
     ASSERT_NO_THROW(servers = clientDevice.getServers());
     ASSERT_EQ(servers.getCount(), device.getServers().getCount());
+}
+
+TEST_F(TmsIntegrationTest, ConnectedClientInfoHasAddressAndHostname)
+{
+    InstancePtr device = createDevice();
+
+    TmsServer tmsServer(device);
+    tmsServer.start();
+
+    TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
+    ASSERT_NO_THROW(tmsClient.connect());
+
+    const auto clients = device.getInfo().getConnectedClientsInfo();
+
+    ConnectedClientInfoPtr opcuaClient;
+    for (const auto& client : clients)
+    {
+        if (client.getProtocolName() == "OpenDAQOPCUA")
+        {
+            opcuaClient = client;
+            break;
+        }
+    }
+
+    ASSERT_TRUE(opcuaClient.assigned()) << "No connected client with protocolName 'OpenDAQOPCUA' found";
+    ASSERT_FALSE(opcuaClient.getAddress().getLength() == 0) << "Client address must not be empty";
+    ASSERT_FALSE(opcuaClient.getHostName().getLength() == 0) << "Client hostname must not be empty";
 }

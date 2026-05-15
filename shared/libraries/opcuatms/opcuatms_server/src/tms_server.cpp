@@ -53,18 +53,18 @@ void TmsServer::start()
     server->setPort(opcUaPort);
     server->setAuthenticationProvider(context.getAuthenticationProvider());
     server->setClientConnectedHandler(
-        [this](const std::string& clientId)
+        [this](const OpcUaServer::ClientConnectionInfo& connInfo)
         {
             const auto loggerComponent = context.getLogger().getOrAddComponent("TmsServer");
-            LOG_I("New client connected, ID: {}", clientId);
+            LOG_I("New client connected, ID: {}, address: {}", connInfo.clientId, connInfo.address);
             SizeT clientNumber = 0;
             if (device.assigned() && !device.isRemoved())
             {
                 device.getInfo().asPtr<IDeviceInfoInternal>(true).addConnectedClient(
                     &clientNumber,
-                    ConnectedClientInfo("", ProtocolType::Configuration, "OpenDAQOPCUA", "", ""));
+                    ConnectedClientInfo(connInfo.address, ProtocolType::Configuration, "OpenDAQOPCUA", "Control", connInfo.hostname));
             }
-            registeredClientIds.insert({clientId, clientNumber});
+            registeredClientIds.insert({connInfo.clientId, clientNumber});
         }
     );
     server->setClientDisconnectedHandler(

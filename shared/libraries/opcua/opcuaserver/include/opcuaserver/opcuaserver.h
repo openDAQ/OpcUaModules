@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <string>
 #include <opendaq/utils/thread_ex.h>
 #include <unordered_set>
 
@@ -36,7 +37,14 @@ BEGIN_NAMESPACE_OPENDAQ_OPCUA
 class OpcUaServer final : public daq::utils::ThreadEx
 {
 public:
-    using OnClientConnectedCallback = std::function<void(const std::string& clientId)>;
+    struct ClientConnectionInfo
+    {
+        std::string clientId;
+        std::string address;
+        std::string hostname;
+    };
+
+    using OnClientConnectedCallback = std::function<void(const ClientConnectionInfo& info)>;
     using OnClientDisconnectedCallback = std::function<void(const std::string& clientId)>;
     using OnAllowBrowsingNodeCallback = UA_Boolean (*)(UA_Server* server,
                                                        UA_AccessControl* ac,
