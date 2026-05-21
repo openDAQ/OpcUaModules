@@ -9,6 +9,7 @@ if (${REPO_OPTION_PREFIX}_ENABLE_CLIENT)
 endif()
 
 if (${REPO_OPTION_PREFIX}_ENABLE_GENERIC_CLIENT)
+    message(WARNING "Generic OPC UA client is experimental, use with caution")
     add_subdirectory(opcua_generic_client_module)
 endif()
 
