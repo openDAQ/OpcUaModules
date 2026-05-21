@@ -104,9 +104,8 @@ void OpcuaGenericClientDeviceImpl::propertyChanged()
     {
         if (fb.assigned())
         {
-            auto monitoredItemFb = dynamic_cast<OpcUaMonitoredItemFbImpl*>(*fb);
-            if (monitoredItemFb)
-                monitoredItemFb->setDomainSource(domainSource);
+            auto monitoredItemFb = static_cast<OpcUaMonitoredItemFbImpl*>(*fb);
+            monitoredItemFb->setDomainSource(domainSource);
         }
     }
 }
