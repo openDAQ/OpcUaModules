@@ -6,7 +6,6 @@ set(SOURCE_CPPS opcuaserver.cpp
                 opcuataskqueue.cpp
                 opcuaaddnodeparams.cpp
                 opcuatmstypes.cpp
-                node_event_manager.cpp
                 opcuaservernode.cpp
                 opcuaservernodefactory.cpp
                 event_attributes.cpp
@@ -20,7 +19,6 @@ set(SOURCE_HEADERS common.h
                    opcuataskqueue.h
                    opcuatmstypes.h
                    opcuaaddnodeparams.h
-                   node_event_manager.h
                    opcuaservernode.h
                    opcuaservernodefactory.h
                    event_attributes.h
@@ -47,7 +45,6 @@ target_link_libraries(${MODULE_NAME} PUBLIC  ${OPENDAQ_SDK_TARGET_NAMESPACE}::op
                                              ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_utils
                                      PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua_daq_types
                                              ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq
-                                             ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_server
 )
 
 set_target_properties(${MODULE_NAME} PROPERTIES PUBLIC_HEADER "${SOURCE_HEADERS}")
