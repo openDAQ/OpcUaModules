@@ -29,6 +29,27 @@ BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
 #define ASSERT_EQ_STATUS(status, expectedStatus) ASSERT_EQ(status, (UA_StatusCode) expectedStatus)
 
+namespace helper::constants
+{
+    constexpr uint16_t TEST_NS = 1;
+    constexpr const char* DI_DEVICE_STRING_ID = "TestDiDevice";
+
+    constexpr const char* EXPECTED_MANUFACTURER = "openDAQ test manufacturer";
+    constexpr const char* EXPECTED_MANUFACTURER_URI = "https://www.opendaq.com/opcua-test-manufacturer";
+    constexpr const char* EXPECTED_MODEL = "TEST MODEL";
+    constexpr const char* EXPECTED_HW_REVISION = "HW-1.0";
+    constexpr const char* EXPECTED_SW_REVISION = "SW-2.3.4";
+    constexpr const char* EXPECTED_DEV_REVISION = "DEV-5.6.7";
+    constexpr const char* EXPECTED_SERIAL = "SN-1234567";
+    constexpr const char* EXPECTED_PRODUCT_CODE = "TEST PRODUCT CODE";
+    constexpr const char* EXPECTED_DEVICE_MANUAL = "TEST DEVICE MANUAL";
+    constexpr const char* EXPECTED_DEVICE_CLASS = "TEST DEVICE CLASS";
+    constexpr const char* EXPECTED_PRODUCT_INSTANCE_URI = "https://www.opendaq.com/test-product-instance";
+    constexpr const char* EXPECTED_ASSET_ID = "testASSET_ID-1234567";
+    constexpr const char* EXPECTED_COMPONENT_NAME = "TEST COMPONENT NAME";
+    constexpr const UA_Int32 EXPECTED_REVISION_CNT = 33;
+}
+
 class OpcUaServerTestHelper final
 {
 public:
@@ -40,6 +61,7 @@ public:
     void setSessionTimeout(double sessionTimeoutMs);
 
     void onConfigure(const OnConfigureCallback& callback);
+    void onTweakConfig(const OnConfigureCallback& callback);
     void startServer();
     void stop();
 
@@ -82,6 +104,14 @@ private:
                              size_t dimension,
                              UA_Byte accessLevel);
 
+    void addPropertyImpl(const std::string& name,
+                         const void* value,
+                         const UA_DataType* type,
+                         UA_NodeId* parentNodeId,
+                         const char* locale = "en_US",
+                         uint16_t nodeIndex = 1,
+                         UA_Byte accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE);
+
     static UA_StatusCode helloMethodCallback(UA_Server* server,
                                              const UA_NodeId* sessionId,
                                              void* sessionHandle,
@@ -101,6 +131,7 @@ private:
 
     UA_UInt16 port = 4842u;
     OnConfigureCallback onConfigureCallback;
+    OnConfigureCallback onTweakConfigCallback;
 };
 
 class BaseClientTest : public testing::Test

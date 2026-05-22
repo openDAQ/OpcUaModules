@@ -3,19 +3,23 @@ set(HEADERS_DIR ../include/${TARGET_FOLDER_NAME})
 
 
 set(SRC_PublicHeaders   constants.h
+                        common.h
                         opcuageneric.h
                         generic_client_device_impl.h
                         opcua_monitored_item_fb_impl.h
                         status_container.h
                         status_adaptor.h
+                        property_helper.h
 )
 set(SRC_Cpp generic_client_device_impl.cpp
             opcua_monitored_item_fb_impl.cpp
 )
 
 source_group("common" FILES ${HEADERS_DIR}/constants.h
+                            ${HEADERS_DIR}/common.h
                             ${HEADERS_DIR}/opcuageneric.h
                             ${HEADERS_DIR}/status_container.h
+                            ${HEADERS_DIR}/property_helper.h
 )
 source_group("device" FILES ${HEADERS_DIR}/generic_client_device_impl.h
                             generic_client_device_impl.cpp
@@ -31,6 +35,12 @@ add_library(${LIB_NAME} STATIC ${SRC_Cpp}
 )
 
 add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${LIB_NAME} ALIAS ${LIB_NAME})
+
+if(${REPO_OPTION_PREFIX}_ENABLE_TESTS)
+    target_compile_definitions(${LIB_NAME}
+        PRIVATE ${REPO_OPTION_PREFIX}_ENABLE_TESTS
+    )
+endif()
 
 if(BUILD_64Bit OR BUILD_ARM)
     set_target_properties(${LIB_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)

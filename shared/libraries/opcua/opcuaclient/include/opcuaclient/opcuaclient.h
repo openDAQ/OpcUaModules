@@ -95,9 +95,10 @@ private:
 class OpcUaClient
 {
 public:
-    struct ApplicationDescription{
+    struct ApplicationDescription {
         std::string name;
         std::string uri;
+        std::string productUri;
     };
 
     explicit OpcUaClient(const std::string& url);
