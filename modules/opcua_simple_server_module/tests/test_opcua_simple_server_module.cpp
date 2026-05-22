@@ -11,6 +11,7 @@
 #include <opendaq/mock/mock_fb_module.h>
 #include <opcuaclient/opcuaclient.h>
 #include <coreobjects/authentication_provider_factory.h>
+#include <generic_opcua_test_helper.h>
 
 #include <testutils/testutils.h>
 
@@ -216,4 +217,54 @@ TEST_F(OpcUaServerModuleTest, StopServer)
 
     serverPtr.stop();
     ASSERT_THROW(client.connect(), OpcUaException);
+}
+
+TEST_F(OpcUaServerModuleTest, DeviceNodeExistsInObjectsFolder)
+{
+    auto daqInstance = CreateTestInstance();
+    auto module = CreateModule(daqInstance.getContext());
+    auto config = CreateServerConfig(daqInstance);
+
+    auto serverPtr = module.createServer(DAQ_OPCUA_SIMPLE_SERVER_ID, daqInstance.getRootDevice(), config);
+
+    test_helpers::OpcuaServerHelper helper;
+    helper.Init();
+
+    auto browseName = daqInstance.getRootDevice().getGlobalId().toStdString();
+    std::replace(browseName.begin(), browseName.end(), '/', '-');
+
+    auto deviceNodeId = helper.getChildNodeId(OpcUaNodeId(UA_NS0ID_OBJECTSFOLDER), browseName);
+    ASSERT_FALSE(deviceNodeId.isNull());
+}
+
+TEST_F(OpcUaServerModuleTest, SignalNodesExistUnderDeviceNode)
+{
+    auto daqInstance = CreateTestInstance();
+    const auto rootDevice = daqInstance.getRootDevice();
+    SizeT expectedCount = 0;
+    for (const auto& sig : rootDevice.getSignalsRecursive(search::Any()))
+    {
+        if (sig.getDescriptor().assigned())
+            expectedCount++;
+    }
+    ASSERT_GT(expectedCount, 0u);
+
+    auto module = CreateModule(rootDevice.getContext());
+    auto config = CreateServerConfig(daqInstance);
+    auto serverPtr = module.createServer(DAQ_OPCUA_SIMPLE_SERVER_ID, daqInstance.getRootDevice(), config);
+
+    test_helpers::OpcuaServerHelper helper;
+    helper.Init();
+
+    auto browseName = rootDevice.getGlobalId().toStdString();
+    std::replace(browseName.begin(), browseName.end(), '/', '-');
+
+    auto deviceNodeId = helper.getChildNodeId(OpcUaNodeId(UA_NS0ID_OBJECTSFOLDER), browseName);
+    ASSERT_FALSE(deviceNodeId.isNull());
+
+    auto browseResult = helper.browseNode(deviceNodeId);
+
+    ASSERT_EQ(browseResult->results[0].referencesSize, expectedCount + 1);  // +1 because of HasTypeDefinition
+
+    helper.Clear();
 }

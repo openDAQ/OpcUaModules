@@ -15,12 +15,13 @@
  */
 
 #pragma once
+#include <coretypes/intfs.h>
 #include <opcua_simple_server_module/common.h>
+#include <opcuatms_server/tms_server.h>
 #include <opendaq/device_ptr.h>
 #include <opendaq/server.h>
 #include <opendaq/server_impl.h>
-#include <coretypes/intfs.h>
-#include <opcuatms_server/tms_server.h>
+#include <opcua_simple_server/simple_server.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_SIMPLE_SERVER_MODULE
 
@@ -40,7 +41,7 @@ protected:
     void onStopServer() override;
     static void populateDefaultConfigFromProvider(const ContextPtr& context, const PropertyObjectPtr& config);
 
-    daq::opcua::TmsServer server;
+    daq::opcua::GenericServer server;
     ContextPtr context;
 };
 

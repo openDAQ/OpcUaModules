@@ -33,6 +33,8 @@ public:
                         const PropertyObjectPtr& config = nullptr);
     ~SignalNode() = default;
 
+    static PropertyObjectPtr createDefaultConfig();
+
     void process();
 
 protected:
@@ -44,7 +46,7 @@ protected:
     OpcUaNodeId variableNodeId;
     const uint16_t namespaceIndex = 1;
 
-    void addVariableNode();
+    void addVariableNode(const PropertyObjectPtr& config);
     OpcUaNodeId convertSampleTypeToDataTypeId(const daq::SampleType sampleType) const;
     OpcUaVariant toVariant(const BaseObjectPtr& lastValue, SampleType sampleType) const;
 

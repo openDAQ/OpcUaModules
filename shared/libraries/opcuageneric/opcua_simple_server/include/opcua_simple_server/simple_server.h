@@ -49,7 +49,7 @@ protected:
     OpcUaNodeId rootDeviceNodeId;
 
     std::vector<simple_objects::SignalNode> signalNodes;
-    // std::unordered_map<std::string, SizeT> registeredClientIds;
+    std::unordered_map<std::string, SizeT> registeredClientIds;
 
     uint64_t readingIntervalMs;
     std::thread readingThread;

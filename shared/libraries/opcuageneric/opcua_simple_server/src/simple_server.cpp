@@ -6,6 +6,12 @@
 #include <opendaq/reader_factory.h>
 #include <opendaq/custom_log.h>
 
+#define PROTOCOL_ID "OpenDAQOPCUASimple"
+#define PROTOCOL_NAME "OpenDAQOPCUASimple"
+#define LOGGER_COMPONENT_NAME "SimpleOPCUAServer"
+#define PROTOCOL_PREFIX "daq.opcua.simple"
+#define PROTOCOL_TYPE ProtocolType::Unknown
+
 //using namespace daq::opcua;
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
@@ -49,52 +55,73 @@ void GenericServer::start()
     server = std::make_shared<OpcUaServer>(false);
     server->setPort(opcUaPort);
     server->setAuthenticationProvider(context.getAuthenticationProvider());
-    // server->setClientConnectedHandler(
-    //     [this](const std::string& clientId)
-    //     {
-    //         const auto loggerComponent = context.getLogger().getOrAddComponent("SimpleOPCUAServer");
-    //         LOG_I("New client connected, ID: {}", clientId);
-    //         SizeT clientNumber = 0;
-    //         if (device.assigned() && !device.isRemoved())
-    //         {
-    //             device.getInfo().asPtr<IDeviceInfoInternal>(true).addConnectedClient(
-    //                 &clientNumber,
-    //                 ConnectedClientInfo("", ProtocolType::Configuration, "OpenDAQOPCUA", "", ""));
-    //         }
-    //         registeredClientIds.insert({clientId, clientNumber});
-    //     }
-    // );
-    // server->setClientDisconnectedHandler(
-    //     [this](const std::string& clientId)
-    //     {
-    //         if (auto it = registeredClientIds.find(clientId); it != registeredClientIds.end())
-    //         {
-    //             const auto loggerComponent = context.getLogger().getOrAddComponent("SimpleOPCUAServer");
-    //             LOG_I("Client disconnected, ID: {}", clientId);
-    //             if (device.assigned() && !device.isRemoved() && it->second != 0)
-    //             {
-    //                 device.getInfo().asPtr<IDeviceInfoInternal>(true).removeConnectedClient(it->second);
-    //             }
-    //             registeredClientIds.erase(it);
-    //         }
-    //     }
-    // );
-    // server->setAllowBrowsingNodeCallback(TmsServerObject::allowBrowsingNodeCallback);
-    // server->setGetUserAccessLevelCallback(TmsServerObject::getUserAccessLevelCallback);
-    // server->setGetUserRightsMaskCallback(TmsServerObject::getUserRightsMaskCallback);
-    // server->setGetUserExecutableCallback(TmsServerObject::getUserExecutableCallback);
+    server->setClientConnectedHandler(
+        [this](const std::string& clientId)
+        {
+            const auto loggerComponent = context.getLogger().getOrAddComponent(LOGGER_COMPONENT_NAME);
+            LOG_I("New client connected, ID: {}", clientId);
+            SizeT clientNumber = 0;
+            if (device.assigned() && !device.isRemoved())
+            {
+                device.getInfo().asPtr<IDeviceInfoInternal>(true).addConnectedClient(
+                    &clientNumber,
+                    ConnectedClientInfo("", PROTOCOL_TYPE, PROTOCOL_NAME, "", ""));
+            }
+            registeredClientIds.insert({clientId, clientNumber});
+        }
+    );
+    server->setClientDisconnectedHandler(
+        [this](const std::string& clientId)
+        {
+            if (auto it = registeredClientIds.find(clientId); it != registeredClientIds.end())
+            {
+                const auto loggerComponent = context.getLogger().getOrAddComponent(LOGGER_COMPONENT_NAME);
+                LOG_I("Client disconnected, ID: {}", clientId);
+                if (device.assigned() && !device.isRemoved() && it->second != 0)
+                {
+                    device.getInfo().asPtr<IDeviceInfoInternal>(true).removeConnectedClient(it->second);
+                }
+                registeredClientIds.erase(it);
+            }
+        }
+    );
+    // TODO : set proper callbacks for access control
+    server->setAllowBrowsingNodeCallback([](UA_Server* server,
+                                            UA_AccessControl* ac,
+                                            const UA_NodeId* sessionId,
+                                            void* sessionContext,
+                                            const UA_NodeId* nodeId,
+                                            void* nodeContext) { return true; });
+    server->setGetUserAccessLevelCallback([](UA_Server* server,
+                                             UA_AccessControl* ac,
+                                             const UA_NodeId* sessionId,
+                                             void* sessionContext,
+                                             const UA_NodeId* nodeId,
+                                             void* nodeContext) { return UA_Byte(UA_ACCESSLEVELMASK_READ); });
+    server->setGetUserRightsMaskCallback([](UA_Server* server,
+                                            UA_AccessControl* ac,
+                                            const UA_NodeId* sessionId,
+                                            void* sessionContext,
+                                            const UA_NodeId* nodeId,
+                                            void* nodeContext) { return UA_UInt32(0); });
+    server->setGetUserExecutableCallback([](UA_Server* server,
+                                            UA_AccessControl* ac,
+                                            const UA_NodeId* sessionId,
+                                            void* sessionContext,
+                                            const UA_NodeId* nodeId,
+                                            void* nodeContext) { return false; });
     server->prepare();
 
     createDeviceNode();
     fillDeviceNode();
     addSignalNodes();
 
-    // auto serverCapability = ServerCapability("OpenDAQOPCUAConfiguration", "OpenDAQOPCUA", ProtocolType::Configuration);
-    // serverCapability.setPrefix("daq.opcua");
-    // serverCapability.setConnectionType("TCP/IP");
-    // serverCapability.setPort(opcUaPort);
-    // serverCapability.addProperty(StringProperty("Path", opcUaPath == "/" ? "" : opcUaPath));
-    // info.asPtr<IDeviceInfoInternal>(true).addServerCapability(serverCapability);
+    auto serverCapability = ServerCapability(PROTOCOL_ID, PROTOCOL_NAME, PROTOCOL_TYPE);
+    serverCapability.setPrefix(PROTOCOL_PREFIX);
+    serverCapability.setConnectionType("TCP/IP");
+    serverCapability.setPort(opcUaPort);
+    serverCapability.addProperty(StringProperty("Path", opcUaPath == "/" ? "" : opcUaPath));
+    info.asPtr<IDeviceInfoInternal>(true).addServerCapability(serverCapability);
 
     server->start();
 
@@ -103,19 +130,19 @@ void GenericServer::start()
 
 void GenericServer::stop()
 {
-    // if (device.assigned() && !device.isRemoved())
-    // {
-    //     const auto info = device.getInfo();
-    //     const auto infoInternal = info.asPtr<IDeviceInfoInternal>();
-    //     if (info.hasServerCapability("OpenDAQOPCUAConfiguration"))
-    //         infoInternal.removeServerCapability("OpenDAQOPCUAConfiguration");
-    //     for (const auto& [_, clientNumber] : registeredClientIds)
-    //     {
-    //         if (clientNumber != 0)
-    //             infoInternal.removeConnectedClient(clientNumber);
-    //     }
-    // }
-    // registeredClientIds.clear();
+    if (device.assigned() && !device.isRemoved())
+    {
+        const auto info = device.getInfo();
+        const auto infoInternal = info.asPtr<IDeviceInfoInternal>();
+        if (info.hasServerCapability(PROTOCOL_ID))
+            infoInternal.removeServerCapability(PROTOCOL_ID);
+        for (const auto& [_, clientNumber] : registeredClientIds)
+        {
+            if (clientNumber != 0)
+                infoInternal.removeConnectedClient(clientNumber);
+        }
+    }
+    registeredClientIds.clear();
     stopReadingThread();
 
     if (server)
@@ -148,7 +175,7 @@ void GenericServer::createDeviceNode()
 
 void GenericServer::fillDeviceNode()
 {
-
+    // TODO
 }
 
 void GenericServer::addSignalNodes()
@@ -156,7 +183,16 @@ void GenericServer::addSignalNodes()
     const auto sigList = device.getSignalsRecursive(search::Any());
     for (const auto& sig : sigList)
     {
-        signalNodes.emplace_back(server, rootDeviceNodeId, sig);
+        auto config = simple_objects::SignalNode::createDefaultConfig();
+        config.setPropertyValue("BrowseName", "");
+        try {
+            simple_objects::SignalNode node(server, rootDeviceNodeId, sig, config);
+            signalNodes.push_back(std::move(node));
+        } catch (const DaqException& e) {
+            const auto loggerComponent = context.getLogger().getOrAddComponent(LOGGER_COMPONENT_NAME);
+            LOG_E("Failed to create signal node for signal '{}', error: {}", sig.getName(), e.what());
+        }
+
     }
 }
 
@@ -185,13 +221,15 @@ void GenericServer::readingLoop()
             readingCv.wait_until(lock, nextTimePoint, [this]() { return !readingRunning.load(); });
         };
 
+        auto prewPoint = std::chrono::steady_clock::now();
         while (readingRunning)
         {
-            const auto nextTimePoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(readingIntervalMs);
+            const auto nextTimePoint = prewPoint + std::chrono::milliseconds(readingIntervalMs);
             for (auto& signalNode : signalNodes)
             {
                 signalNode.process();
             }
+            prewPoint = nextTimePoint;
             interruptibleSleep(nextTimePoint);
         }
     }

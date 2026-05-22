@@ -12,6 +12,7 @@ target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opend
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuaclient
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_mocks
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME}
+                                          ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua_simple_server_test_utils
 )
 
 add_test(NAME ${TEST_APP}

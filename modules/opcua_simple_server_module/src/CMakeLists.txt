@@ -34,6 +34,7 @@ add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${LIB_NAME} ALIAS ${LIB_NAME})
 
 target_link_libraries(${LIB_NAME} PUBLIC  ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq
                                   PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuatms_server
+                                  PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcua_simple_server
 )
 
 if (MSVC)

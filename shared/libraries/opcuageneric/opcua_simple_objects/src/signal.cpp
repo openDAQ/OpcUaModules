@@ -1,6 +1,8 @@
 #include <opcua_simple_objects/common.h>
 #include <opcua_simple_objects/constants.h>
 #include <opcua_simple_objects/signal.h>
+#include "coreobjects/property_factory.h"
+#include "coreobjects/property_object_factory.h"
 #include "opcuaserver/opcuaaddnodeparams.h"
 #include "opcuaserver/opcuaserver.h"
 #include "opcuashared/opcuanodeid.h"
@@ -16,6 +18,7 @@ std::unordered_map<SampleType, uint32_t> SignalNode::converterMap = {{SampleType
                                                                      {SampleType::UInt32, UA_TYPES_UINT32},
                                                                      {SampleType::Int32, UA_TYPES_INT32},
                                                                      {SampleType::UInt64, UA_TYPES_UINT64},
+                                                                     {SampleType::Int64, UA_TYPES_INT64},
                                                                      {SampleType::String, UA_TYPES_STRING}};
 
 SignalNode::SignalNode(daq::opcua::OpcUaServerPtr server,
@@ -27,10 +30,10 @@ SignalNode::SignalNode(daq::opcua::OpcUaServerPtr server,
     , parentNodeId(parentNodeId)
 
 {
-    addVariableNode();
+    addVariableNode(config);
 }
 
-void SignalNode::addVariableNode()
+void SignalNode::addVariableNode(const PropertyObjectPtr& config)
 {
     OpcUaNodeId variableNodeId(namespaceIndex, signal.getGlobalId().toStdString());
     AddVariableNodeParams params(variableNodeId, parentNodeId);
@@ -45,8 +48,18 @@ void SignalNode::addVariableNode()
 
     params.setDataType(dataType);
 
-    auto browseName = signal.getGlobalId().toStdString();
-    std::replace(browseName.begin(), browseName.end(), '/', '-');
+    std::string browseName;
+    if (config.hasProperty("BrowseName"))
+    {
+        browseName = config.getPropertyValue("BrowseName").asPtr<IString>().toStdString();
+    }
+    if (browseName.empty())
+    {
+        browseName = signal.getGlobalId().toStdString();
+        if (browseName.front() == '/')
+            browseName.erase(0, 1);
+        std::replace(browseName.begin(), browseName.end(), '/', '-');
+    }
     params.setBrowseName(browseName);
 
     params.attr->displayName = UA_LOCALIZEDTEXT_ALLOC(DEFAULT_LOCALE, signal.getName().toStdString().c_str());
@@ -72,6 +85,14 @@ OpcUaNodeId SignalNode::convertSampleTypeToDataTypeId(const SampleType sampleTyp
         return OpcUaNodeId(UA_TYPES[converterMap[sampleType]].typeId);
     else
         return OpcUaNodeId();
+}
+
+PropertyObjectPtr SignalNode::createDefaultConfig()
+{
+    auto config = PropertyObject();
+
+    config.addProperty(StringProperty("BrowseName", ""));
+    return config;
 }
 
 void SignalNode::process()
