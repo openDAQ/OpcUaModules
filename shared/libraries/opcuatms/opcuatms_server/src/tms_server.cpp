@@ -120,11 +120,13 @@ void TmsServer::stop()
     }
     registeredClientIds.clear();
 
+    tmsDevice.reset();
+    tmsContext.reset();
+
     if (server)
         server->stop();
     
     server.reset();
-    tmsDevice.reset();
 }
 
 END_NAMESPACE_OPENDAQ_OPCUA

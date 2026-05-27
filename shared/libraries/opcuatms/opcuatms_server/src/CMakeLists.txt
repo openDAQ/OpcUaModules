@@ -2,6 +2,7 @@ set(LIB_NAME opcuatms_server)
 
 set(SRC_Cpp tms_server.cpp
             tms_server_context.cpp
+            node_event_manager.cpp
 )
 
 set(SRC_PublicHeaders
@@ -9,6 +10,7 @@ set(SRC_PublicHeaders
 
 set(SRC_PrivateHeaders tms_server.h
                        tms_server_context.h
+                       node_event_manager.h
 )
 
 # objects
