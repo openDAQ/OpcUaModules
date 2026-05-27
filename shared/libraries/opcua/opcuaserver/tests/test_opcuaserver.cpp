@@ -230,10 +230,10 @@ TEST_F(OpcUaServerTest, ClientConnectDisconnectCallbacks)
     bool clientConnected{false};
     bool clientDisconnected{false};
     server.setClientConnectedHandler(
-        [&clientId, &clientConnected](const OpcUaServer::ClientConnectionInfo& info)
+        [&clientId, &clientConnected](const std::string& id)
         {
             clientConnected = true;
-            clientId = info.clientId;
+            clientId = id;
         }
     );
     server.setClientDisconnectedHandler(

@@ -4,7 +4,10 @@
 #include <open62541/plugin/nodestore_default.h>
 #include <open62541/server_config_default.h>
 #include <open62541/plugin/log_stdout.h>
+#include <algorithm>
 #include <cassert>
+#include <chrono>
+#include <future>
 #include <coreobjects/authentication_provider_factory.h>
 #include <coreobjects/exceptions.h>
 #include "server/ua_server_internal.h"
@@ -67,6 +70,11 @@ void OpcUaServer::setClientConnectedHandler(const OnClientConnectedCallback& cal
     this->clientConnectedHandler = callback;
 }
 
+void OpcUaServer::setClientInfoHandler(const OnSetClientInfoCallback& callback)
+{
+    this->clientInfoHandler = callback;
+}
+
 void OpcUaServer::setClientDisconnectedHandler(const OnClientDisconnectedCallback& callback)
 {
     this->clientDisconnectedHandler = callback;
@@ -119,7 +127,51 @@ void OpcUaServer::start()
 void OpcUaServer::stop()
 {
     ThreadEx::stop();
+    waitForPendingClientInfoFutures();
     shutdownServer();
+}
+
+void OpcUaServer::waitForPendingClientInfoFutures()
+{
+    std::lock_guard<std::mutex> lock(pendingClientInfoFuturesMutex);
+    for (auto& future : pendingClientInfoFutures)
+    {
+        if (future.valid())
+            future.wait();
+    }
+    pendingClientInfoFutures.clear();
+}
+
+void OpcUaServer::scheduleClientInfoAsync(ClientConnectionInfo info,
+                                          const sockaddr_storage& addr,
+                                          socklen_t addrLen)
+{
+    const OnSetClientInfoCallback handler = clientInfoHandler;
+    if (!handler)
+        return;
+
+    std::lock_guard<std::mutex> lock(pendingClientInfoFuturesMutex);
+
+    pendingClientInfoFutures.erase(
+        std::remove_if(pendingClientInfoFutures.begin(),
+                       pendingClientInfoFutures.end(),
+                       [](std::future<void>& f) {
+                           return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+                       }),
+        pendingClientInfoFutures.end());
+    
+    pendingClientInfoFutures.push_back(
+        std::async(std::launch::async, [handler, info = std::move(info), addr, addrLen]() mutable
+        {
+            const auto* sockAddr = reinterpret_cast<const struct sockaddr*>(&addr);
+            char ipBuf[NI_MAXHOST] = {};
+            char hostBuf[NI_MAXHOST] = {};
+            if (getnameinfo(sockAddr, addrLen, ipBuf, sizeof(ipBuf), nullptr, 0, NI_NUMERICHOST) == 0)
+                info.address = ipBuf;
+            if (getnameinfo(sockAddr, addrLen, hostBuf, sizeof(hostBuf), nullptr, 0, 0) == 0)
+                info.hostname = hostBuf;
+            handler(info);
+        }));
 }
 
 void OpcUaServer::prepare()
@@ -627,14 +679,16 @@ UA_StatusCode OpcUaServer::activateSession(UA_Server* server,
     if (status == UA_STATUSCODE_GOOD)
     {
         serverInstance->createSession(*sessionId, authorizedUser, sessionContext);
-        if (serverInstance->clientConnectedHandler)
-        {
-            OpcUaServer::ClientConnectionInfo info;
-            info.clientId = OpcUaNodeId::getIdentifier(*sessionId);
 
+        const std::string clientId = OpcUaNodeId::getIdentifier(*sessionId);
+        if (serverInstance->clientConnectedHandler)
+            serverInstance->clientConnectedHandler(clientId);
+
+        if (serverInstance->clientInfoHandler)
+        {
             // UA_Server_getSessionById requires the server mutex to be held,
             // but activateSession is called with it released — reacquire briefly
-            // just to read the socket fd, then drop it before the blocking DNS call.
+            // to read the socket fd and peer address (reverse DNS is done asynchronously).
             UA_SOCKET sockfd = UA_INVALID_SOCKET;
             UA_LOCK(&server->serviceMutex);
             UA_Session* session = UA_Server_getSessionById(server, sessionId);
@@ -648,18 +702,11 @@ UA_StatusCode OpcUaServer::activateSession(UA_Server* server,
                 socklen_t addrLen = sizeof(addr);
                 if (getpeername(sockfd, reinterpret_cast<struct sockaddr*>(&addr), &addrLen) == 0)
                 {
-                    char ipBuf[NI_MAXHOST] = {};
-                    char hostBuf[NI_MAXHOST] = {};
-                    getnameinfo(reinterpret_cast<struct sockaddr*>(&addr), addrLen,
-                                ipBuf, sizeof(ipBuf), nullptr, 0, NI_NUMERICHOST);
-                    getnameinfo(reinterpret_cast<struct sockaddr*>(&addr), addrLen,
-                                hostBuf, sizeof(hostBuf), nullptr, 0, 0);
-                    info.address  = ipBuf;
-                    info.hostname = hostBuf;
+                    ClientConnectionInfo connInfo;
+                    connInfo.clientId = clientId;
+                    serverInstance->scheduleClientInfoAsync(std::move(connInfo), addr, addrLen);
                 }
             }
-
-            serverInstance->clientConnectedHandler(info);
         }
     }
 
