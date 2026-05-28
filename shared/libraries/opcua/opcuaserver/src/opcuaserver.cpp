@@ -690,11 +690,14 @@ UA_StatusCode OpcUaServer::activateSession(UA_Server* server,
             // but activateSession is called with it released — reacquire briefly
             // to read the socket fd and peer address (reverse DNS is done asynchronously).
             UA_SOCKET sockfd = UA_INVALID_SOCKET;
-            UA_LOCK(&server->serviceMutex);
-            UA_Session* session = UA_Server_getSessionById(server, sessionId);
-            if (session && session->header.channel && session->header.channel->connection)
-                sockfd = session->header.channel->connection->sockfd;
-            UA_UNLOCK(&server->serviceMutex);
+            {
+                UA_LOCK(&server->serviceMutex);
+                Finally finallyUnlock([&]() { UA_UNLOCK(&server->serviceMutex); });
+
+                UA_Session* session = UA_Server_getSessionById(server, sessionId);
+                if (session && session->header.channel && session->header.channel->connection)
+                    sockfd = session->header.channel->connection->sockfd;
+            }
 
             if (sockfd != UA_INVALID_SOCKET)
             {
