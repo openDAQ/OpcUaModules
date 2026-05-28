@@ -38,6 +38,7 @@ public:
     ErrCode INTERFACE_FUNC setOperationMode(OperationModeType modeType) override;
     ErrCode INTERFACE_FUNC setOperationModeRecursive(OperationModeType modeType) override;
     ErrCode INTERFACE_FUNC getOperationMode(OperationModeType* modeType) override;
+    ErrCode INTERFACE_FUNC getParentActive(Bool* active) override;
 
 protected:
     void findAndCreateSubdevices();
