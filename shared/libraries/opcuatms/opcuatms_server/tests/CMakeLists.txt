@@ -14,6 +14,7 @@ set(TEST_SOURCES test_helpers.h
                  test_tms_user_access.cpp
                  tms_server_test.h
                  tms_server_test.cpp
+                 test_tms_daqserver_component.cpp
 )
 
 add_executable(${TEST_APP} testapp.cpp

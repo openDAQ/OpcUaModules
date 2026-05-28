@@ -63,10 +63,12 @@ protected:
     StringPtr onGetLog(const StringPtr& id, Int size, Int offset) override;
 
     void findAndCreateServerCapabilities(const DeviceInfoPtr& deviceInfo);
+    void findAndCreateServers();
 
     void removed() override;
     bool isAddedToLocalComponentTree() override;
     StringPtr onGetRemoteId() const override;
+    ErrCode setOperationModeImpl(OperationModeType modeType, bool recursiveCall);
 
 private:
     void fetchTimeDomain();

@@ -1,6 +1,7 @@
-#include <opcuatms_client/objects/tms_client_object_impl.h>
 #include <opcuaclient/browse_request.h>
 #include <opcuaclient/browser/opcuabrowser.h>
+#include <opcuatms_client/objects/tms_client_object_impl.h>
+#include "opendaq/custom_log.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
@@ -103,6 +104,53 @@ CachedReferences TmsClientObjectImpl::getChildReferencesOfType(const opcua::OpcU
     BrowseFilter filter;
     filter.typeDefinition = typeId;
     return clientContext->getReferenceBrowser()->browseFiltered(nodeId, filter);
+}
+
+bool TmsClientObjectImpl::getAttributeWritePermission(const opcua::OpcUaNodeId& nodeId)
+{
+    // Note: This method is used to determine if a node attributes is changeable.
+    // For variable nodes you should check UA_ATTRIBUTEID_ACCESSLEVEL and UA_ATTRIBUTEID_USERACCESSLEVEL!
+    // In common case a user can have write permission to a node but not to its attributes.
+    bool commonWritePerm = true;
+    try
+    {
+        const auto reader = clientContext->getAttributeReader();
+        const int64_t userWriteMask = reader->getValue(nodeId, UA_ATTRIBUTEID_USERWRITEMASK).toInteger();
+        const int64_t writeMask = reader->getValue(nodeId, UA_ATTRIBUTEID_WRITEMASK).toInteger();
+        commonWritePerm = ((userWriteMask & writeMask) != 0);
+    }
+    catch (...)
+    {
+        if (this->daqContext.getLogger().assigned())
+        {
+            auto loggerComponent = this->daqContext.getLogger().getOrAddComponent("OpcUaClientObject");
+            LOG_W("Cannot read write mask attributes for OpcUA node");
+        }
+    }
+    return commonWritePerm;
+}
+
+bool TmsClientObjectImpl::getExecutePermission(const opcua::OpcUaNodeId& nodeId)
+{
+    // Note: This method is used to determine if a method node is executable.
+    // Other nodes don't have executable attributes and this method will return true for them.
+    bool commonExecutable = true;
+    try
+    {
+        const auto reader = clientContext->getAttributeReader();
+        const bool userExecutable = reader->getValue(nodeId, UA_ATTRIBUTEID_USEREXECUTABLE).toBool();
+        const bool executable = reader->getValue(nodeId, UA_ATTRIBUTEID_EXECUTABLE).toBool();
+        commonExecutable = userExecutable & executable;
+    }
+    catch (...)
+    {
+        if (this->daqContext.getLogger().assigned())
+        {
+            auto loggerComponent = this->daqContext.getLogger().getOrAddComponent("OpcUaClientObject");
+            LOG_W("Cannot read executable mask attributes for OpcUA node");
+        }
+    }
+    return commonExecutable;
 }
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

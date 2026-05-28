@@ -18,7 +18,7 @@
 #include <coretypes/constexpr_utils.h>
 #include <opendaq/component_ptr.h>
 #include <opendaq/signal_ptr.h>
-#include <opcuaserver/node_event_manager.h>
+#include <opcuatms_server/node_event_manager.h>
 #include <opcuaserver/opcuaserver.h>
 #include <opcuatms/opcuatms.h>
 

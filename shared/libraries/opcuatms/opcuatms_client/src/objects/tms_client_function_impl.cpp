@@ -47,21 +47,18 @@ ErrCode TmsClientFunctionImpl::call(IBaseObject* args, IBaseObject** result)
         lastProccessDescription = "Calling function";
         OpcUaObject<UA_CallMethodResult> callResult = ctx->getClient()->callMethod(callRequest);
         if (OPCUA_STATUSCODE_FAILED(callResult->statusCode) || (callResult->outputArgumentsSize != 1))
-            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_CALLFAILED);
+        {
+            if (callResult->statusCode == UA_STATUSCODE_BADUSERACCESSDENIED)
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ACCESSDENIED);
+            else
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_CALLFAILED);
+        }
 
         lastProccessDescription = "Getting call result";
         *result = VariantConverter<IBaseObject>::ToDaqObject(OpcUaVariant(callResult->outputArguments[0]), daqContext).detach();
         return OPENDAQ_SUCCESS;
     });
-    if (OPENDAQ_FAILED(errCode))
-    {
-        daqClearErrorInfo();
-        if (this->daqContext.getLogger().assigned())
-        {
-            auto loggerComponent = this->daqContext.getLogger().getOrAddComponent("OpcUaClientProcedure");
-            LOG_W("Failed to call function on OpcUA client. Error in \"{}\"", lastProccessDescription);
-        }
-    }
+    OPENDAQ_RETURN_IF_FAILED(errCode, fmt::format("Failed to call function on OpcUA client. Error in \"{}\"", lastProccessDescription));
     return OPENDAQ_SUCCESS;
 }
 

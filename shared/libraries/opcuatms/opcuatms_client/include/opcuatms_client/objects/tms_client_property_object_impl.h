@@ -23,6 +23,7 @@
 #include <opcuatms_client/objects/tms_client_component.h>
 #include <opendaq/server_capability_impl.h>
 #include <opendaq/mirrored_input_port_impl.h>
+#include <opendaq/server_impl.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
@@ -114,10 +115,26 @@ public:
         init();
     }
 
+    template<class T = Impl, template_utils::enable_if_any<T, ServerImpl<IServer, ITmsClientComponent>> = 0>
+    TmsClientPropertyObjectBaseImpl(const ContextPtr& ctx,
+                                    const ComponentPtr& parent,
+                                    const StringPtr& localId,
+                                    const TmsClientContextPtr& clientContext,
+                                    const opcua::OpcUaNodeId& nodeId,
+                                    const DevicePtr& parentDevice,
+                                    const std::map<std::string, std::string>& propBrowseName = {})
+        : TmsClientObjectImpl(ctx, clientContext, nodeId)
+        , Impl(localId, nullptr, parentDevice, ctx, parent)
+        , propBrowseName(propBrowseName)
+    {
+        init();
+    }
+
     void init();
 
     ErrCode INTERFACE_FUNC setPropertyValue(IString* propertyName, IBaseObject* value) override;
     ErrCode INTERFACE_FUNC setProtectedPropertyValue(IString* propertyName, IBaseObject* value) override;
+    ErrCode INTERFACE_FUNC setPropertySelectionValue(IString* propertyName, IBaseObject* value) override;
     ErrCode INTERFACE_FUNC getPropertyValue(IString* propertyName, IBaseObject** value) override;
     ErrCode INTERFACE_FUNC getPropertySelectionValue(IString* propertyName, IBaseObject** value) override;
     ErrCode INTERFACE_FUNC clearPropertyValue(IString* propertyName) override;
@@ -154,6 +171,7 @@ protected:
                              std::unordered_map<std::string, BaseObjectPtr>& functionPropValues);
     PropertyPtr addVariableBlockProperty(const StringPtr& propName, const OpcUaNodeId& propNodeId);
     void browseRawProperties();
+    void setLocksForAttributes();
     bool isIgnoredMethodProperty(const std::string& browseName);
     PropertyObjectPtr cloneChildPropertyObject(const PropertyPtr& prop) override;
 

@@ -17,9 +17,9 @@ TmsServerContext::~TmsServerContext()
     this->context.getOnCoreEvent() -= event(this, &TmsServerContext::coreEventCallback);
 }
 
-void TmsServerContext::registerComponent(const ComponentPtr& component, tms::TmsServerObject& obj)
+void TmsServerContext::registerComponent(const ComponentPtr& component, const std::weak_ptr<tms::TmsServerObject>& obj)
 {
-    idToObjMap.insert(std::make_pair(component.getGlobalId(), obj.weak_from_this()));
+    idToObjMap.insert(std::make_pair(component.getGlobalId(), obj));
 }
 
 DevicePtr TmsServerContext::getRootDevice()
@@ -39,7 +39,7 @@ void TmsServerContext::coreEventCallback(ComponentPtr& component, CoreEventArgsP
         return;
 
     if (const auto it = idToObjMap.find(component.getGlobalId()); it != idToObjMap.end())
-        if (const std::shared_ptr<tms::TmsServerObject> spt = it->second.lock())
+        if (const std::shared_ptr<tms::TmsServerObject> spt = it->second.lock(); spt)
             spt->onCoreEvent(eventArgs);
 }
 

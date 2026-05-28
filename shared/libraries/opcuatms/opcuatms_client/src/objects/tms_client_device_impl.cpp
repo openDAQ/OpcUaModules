@@ -27,13 +27,14 @@
 #include <opcuatms_client/objects/tms_client_function_block_type_factory.h>
 #include <opendaq/device_domain_factory.h>
 #include <opendaq/address_info_factory.h>
+#include <opcuatms_client/objects/tms_client_server_factory.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 using namespace daq::opcua;
 
 namespace detail
 {
-    static std::unordered_set<std::string> defaultComponents = {"Sig", "FB", "IO", "ServerCapabilities", "Synchronization"};
+    static std::unordered_set<std::string> defaultComponents = {"Sig", "FB", "IO", "ServerCapabilities", "Synchronization", "Srv"};
 
     static std::unordered_map<std::string, std::string> deviceInfoFieldMap = 
     {
@@ -118,6 +119,7 @@ TmsClientDeviceImpl::TmsClientDeviceImpl(const ContextPtr& ctx,
     findAndCreateInputsOutputs();
     findAndCreateCustomComponents();
     findAndCreateSyncComponent();
+    findAndCreateServers();
 
     // for the root device the client side local config object is used
     if (!isRootDevice)
@@ -156,30 +158,40 @@ ErrCode TmsClientDeviceImpl::getAvailableOperationModes(IList** availableOpModes
 
 ErrCode TmsClientDeviceImpl::setOperationMode(OperationModeType modeType)
 {
-    if (!this->hasReference("OperationMode"))
-        return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOT_SUPPORTED, "OperationModes are not supported by the server");
-    
-    const auto nodeId = getNodeId("OperationMode");
-    const auto modeTypeStr = OperationModeTypeToString(modeType);
-
-    const auto variant = VariantConverter<IString>::ToVariant(String(modeTypeStr), nullptr, daqContext);
-    client->writeValue(nodeId, variant);   
-           
-    return OPENDAQ_SUCCESS;
+    return setOperationModeImpl(modeType, false);
 }
 
 ErrCode TmsClientDeviceImpl::setOperationModeRecursive(OperationModeType modeType)
 {
-    if (!this->hasReference("OperationMode"))
-        return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOT_SUPPORTED, "OperationModes are not supported by the server");
-    
-    const auto nodeId = getNodeId("OperationMode");
-    const auto modeTypeStr = "Recursive" + OperationModeTypeToString(modeType);
+    return setOperationModeImpl(modeType, true);
+}
 
-    const auto variant = VariantConverter<IString>::ToVariant(String(modeTypeStr), nullptr, daqContext);
-    client->writeValue(nodeId, variant);   
+ErrCode TmsClientDeviceImpl::setOperationModeImpl(OperationModeType modeType, bool recursiveCall)
+{
+    ErrCode errCode = OPENDAQ_SUCCESS;
+    if (this->hasReference("OperationMode"))
+    {
+        const auto nodeId = getNodeId("OperationMode");
+        const auto modeTypeStr = ((recursiveCall) ? "Recursive" : "") + OperationModeTypeToString(modeType);
 
-    return OPENDAQ_SUCCESS;
+        const auto variant = VariantConverter<IString>::ToVariant(String(modeTypeStr), nullptr, daqContext);
+        try
+        {
+            client->writeValue(nodeId, variant);
+        }
+        catch (OpcUaException& e)
+        {
+            if (e.getStatusCode() == UA_STATUSCODE_BADUSERACCESSDENIED)
+                errCode = DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ACCESSDENIED, "Access denied when setting OperationModes");
+            else
+                errCode = DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_OPCUA_GENERAL, "Failed to set OperationMode on server");
+        }
+    }
+    else
+    {
+        errCode = DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOT_SUPPORTED, "OperationModes are not supported by the server");
+    }
+    return errCode;
 }
 
 ErrCode TmsClientDeviceImpl::getOperationMode(OperationModeType* modeType)
@@ -680,6 +692,39 @@ void TmsClientDeviceImpl::findAndCreateServerCapabilities(const DeviceInfoPtr& d
         deviceInfoInternal.addServerCapability(val);
 }
 
+void TmsClientDeviceImpl::findAndCreateServers()
+{
+    std::map<uint32_t, ServerPtr> orderedDaqServers;
+    std::vector<ServerPtr> unorderedDaqServers;
+
+    auto daqServersNodeId = getNodeId("Srv");
+    const auto& references = getChildReferencesOfType(daqServersNodeId, OpcUaNodeId(NAMESPACE_DAQDEVICE, UA_DAQDEVICEID_DAQCOMPONENTTYPE));
+
+    for (const auto& [browseName, ref] : references.byBrowseName)
+    {
+        const auto daqServerNodeId = OpcUaNodeId(ref->nodeId.nodeId);
+
+        try
+        {
+            auto clientDaqServer = TmsClientServer(context, this->servers, browseName, clientContext, daqServerNodeId, this->thisPtr<DevicePtr>());
+            const auto numberInList = this->tryReadChildNumberInList(daqServerNodeId);
+            if (numberInList != std::numeric_limits<uint32_t>::max() && !orderedDaqServers.count(numberInList))
+                orderedDaqServers.emplace(numberInList, clientDaqServer);
+            else
+                unorderedDaqServers.emplace_back(clientDaqServer);
+        }
+        catch(...)
+        {
+            LOG_W("Failed to create daq server component \"{}\" to OpcUA client device \"{}\"", browseName, this->globalId);
+        }
+    }
+
+    for (const auto& [_, srv] : orderedDaqServers)
+        this->servers.addItem(srv);
+    for (const auto& srv : unorderedDaqServers)
+        this->servers.addItem(srv);
+}
+
 void TmsClientDeviceImpl::removed()
 {
     if (this->clientContext->getRootDevice() == this->thisPtr<DevicePtr>())
@@ -747,6 +792,9 @@ DictPtr<IString, IFunctionBlockType> TmsClientDeviceImpl::onGetAvailableFunction
 {
     auto browser = clientContext->getReferenceBrowser();
     auto types = Dict<IString, IFunctionBlockType>();
+
+    if (getAttributeWritePermission(this->nodeId) == false)
+        return types;
 
     const auto fbFolderNodeId = browser->getChildNodeId(nodeId, "FB");
 

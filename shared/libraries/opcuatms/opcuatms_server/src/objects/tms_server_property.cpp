@@ -118,7 +118,7 @@ void TmsServerProperty::bindCallbacks()
 
 opcua::OpcUaNodeId TmsServerProperty::getTmsTypeId()
 {
-    if (objectInternal.getSelectionValuesUnresolved().assigned())
+    if (objectInternal.getSelectionValuesUnresolved().assigned() && object.getItemType() != CoreType::ctUndefined)
         return OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_SELECTIONVARIABLETYPE);
 
     if (objectInternal.getReferencedPropertyUnresolved().assigned())

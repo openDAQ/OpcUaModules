@@ -67,6 +67,19 @@ public:
         return object;
     }
 
+    PropertyObjectPtr createSelectionPropertyObject()
+    {
+        auto obj = PropertyObject();
+        
+        // Non-index/sparse selections
+		obj.addProperty(StringPropertyBuilder("StringSelection", "foo").setSelectionValues(List<IString>("foo", "bar")).build());
+		obj.addProperty(IntPropertyBuilder("IntSelection", 10).setSelectionValues(List<IInteger>(0, 6, 15, 10)).setIsIntegerValueSelection(true).build());
+		obj.addProperty(FloatPropertyBuilder("FloatSelection", 5.12).setSelectionValues(List<IFloat>(0.12, -5.2, 5.12, 10.2)).build());
+        obj.addProperty(IntPropertyBuilder("IndexSelection", 3).setSelectionValues(List<IInteger>(0, 6, 15, 10)).build());
+
+        return obj;
+    }
+
     StringPtr getLastMessage()
     {
         logger.flush();
@@ -425,6 +438,53 @@ TEST_F(TmsPropertyObjectTest, StringSuggestedValues)
     ASSERT_NO_THROW(clientObj.setPropertyValue("StringSuggestedValues", "Tomato"));
 }
 
+// NOTE: Value-based selection properties are not yet supported over OPC UA. They still function, but the list
+//       of selection values is not populated on the client.
+TEST_F(TmsPropertyObjectTest, SelectionPropertyValues)
+{
+    auto obj = createSelectionPropertyObject();
+    auto [serverObj, clientObj] = registerPropertyObject(obj);
+
+    ASSERT_FALSE(clientObj.getProperty("StringSelection").getSelectionValues().assigned());
+    ASSERT_FALSE(clientObj.getProperty("IntSelection").getSelectionValues().assigned());
+    ASSERT_FALSE(clientObj.getProperty("FloatSelection").getSelectionValues().assigned());
+    ASSERT_TRUE(clientObj.getProperty("IndexSelection").getSelectionValues().assigned());
+
+    // check default values
+    ASSERT_EQ(clientObj.getPropertyValue("StringSelection"), "foo");
+    ASSERT_EQ(clientObj.getPropertyValue("IntSelection"), 10);
+    ASSERT_EQ(clientObj.getPropertyValue("FloatSelection"), 5.12);
+    ASSERT_EQ(clientObj.getPropertyValue("IndexSelection"), 3);
+
+    ASSERT_NO_THROW(clientObj.setPropertyValue("StringSelection", "Invalid")); // will print a warning but should not throw
+    ASSERT_EQ(clientObj.getPropertyValue("StringSelection"), "foo");
+    ASSERT_NO_THROW(clientObj.setPropertyValue("IntSelection", 42)); // will print a warning but should not throw
+    ASSERT_EQ(clientObj.getPropertyValue("IntSelection"), 10);
+    ASSERT_NO_THROW(clientObj.setPropertyValue("FloatSelection", 3.14)); // will print a warning but should not throw
+    ASSERT_EQ(clientObj.getPropertyValue("FloatSelection"), 5.12);
+    ASSERT_NO_THROW(clientObj.setPropertyValue("IndexSelection", 5)); // will print a warning but should not throw
+    ASSERT_EQ(clientObj.getPropertyValue("IndexSelection"), 3);
+
+    ASSERT_NO_THROW(clientObj.setPropertyValue("StringSelection", "bar"));
+    ASSERT_NO_THROW(clientObj.setPropertyValue("IntSelection", 0));
+    ASSERT_NO_THROW(clientObj.setPropertyValue("FloatSelection", 0.12));
+    ASSERT_NO_THROW(clientObj.setPropertyValue("IndexSelection", 0));
+
+    ASSERT_EQ(obj.getPropertyValue("StringSelection"), "bar");
+    ASSERT_EQ(obj.getPropertyValue("IntSelection"), 0);
+    ASSERT_DOUBLE_EQ(obj.getPropertyValue("FloatSelection"), 0.12);
+    ASSERT_EQ(obj.getPropertyValue("IndexSelection"), 0);
+
+    ASSERT_EQ(clientObj.getPropertyValue("StringSelection"), "bar");
+    ASSERT_EQ(clientObj.getPropertyValue("IntSelection"), 0);
+    ASSERT_DOUBLE_EQ(clientObj.getPropertyValue("FloatSelection"), 0.12);
+    ASSERT_EQ(clientObj.getPropertyValue("IndexSelection"), 0);
+
+    ASSERT_NO_THROW(clientObj.setPropertySelectionValue("IndexSelection", 10));
+    ASSERT_EQ(clientObj.getPropertyValue("IndexSelection"), 3);
+    ASSERT_EQ(clientObj.getPropertySelectionValue("IndexSelection"), 10);
+}
+
 class TmsNestedPropertyObjectTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:
@@ -665,7 +725,6 @@ TEST_F(TmsNestedPropertyObjectTest, TestNestedObjectClientFunctionCall)
     ASSERT_EQ(func2(5), 5);
 }
 
-// NOTE: OPC UA does not propagate error codes.
 TEST_F(TmsNestedPropertyObjectTest, TestNestedObjectClientProcedureCall)
 {
     const PropertyObjectPtr child = clientObj.getPropertyValue("child1.child1_2.child1_2_1");
@@ -673,7 +732,7 @@ TEST_F(TmsNestedPropertyObjectTest, TestNestedObjectClientProcedureCall)
     ProcedurePtr proc2 = child.getPropertyValue("Procedure");
 
     ASSERT_NO_THROW(proc1(5));
-    ASSERT_NO_THROW(proc1(0)); // Outputs warning
+    ASSERT_ANY_THROW(proc1(0));
     ASSERT_NO_THROW(proc2(5));
-    ASSERT_NO_THROW(proc2(0)); // Outputs warning
+    ASSERT_ANY_THROW(proc2(0));
 }

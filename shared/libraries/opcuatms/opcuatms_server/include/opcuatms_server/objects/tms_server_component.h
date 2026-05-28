@@ -228,7 +228,7 @@ template <typename Ptr>
 void TmsServerComponent<Ptr>::registerToTmsServerContext()
 {
     Super::registerToTmsServerContext();
-    this->tmsContext->registerComponent(this->object, *this);
+    this->tmsContext->registerComponent(this->object, this->weak_from_this());
 }
 
 template <typename Ptr>

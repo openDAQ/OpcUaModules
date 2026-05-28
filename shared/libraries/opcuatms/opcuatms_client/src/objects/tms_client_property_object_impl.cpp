@@ -16,6 +16,7 @@
 #include <opendaq/io_folder_impl.h>
 #include <opendaq/sync_component_impl.h>
 #include <opcuatms/errors.h>
+#include <opendaq/server_impl.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
@@ -129,6 +130,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::init()
     }
     clientContext->readObjectAttributes(nodeId);
     browseRawProperties();
+    setLocksForAttributes();
 }
 
 template <typename Impl>
@@ -188,6 +190,79 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::getPropertyValue(I
         LOG_W("Failed to get value for property \"{}\" on OpcUA client property object", propertyNamePtr);
     }
     return OPENDAQ_SUCCESS;
+}
+
+template <typename Impl>
+ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::setPropertySelectionValue(IString* propertyName, IBaseObject* value)
+{
+    if (propertyName == nullptr)
+        return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ARGUMENT_NULL, "Property name must not be null");
+    if (value == nullptr)
+        return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ARGUMENT_NULL, "Value must not be null");
+
+    return daqTry([&]
+    {
+        const auto propNamePtr = StringPtr::Borrow(propertyName);
+        const auto valuePtr = BaseObjectPtr::Borrow(value);
+
+        PropertyPtr prop;
+        const ErrCode err = getProperty(propertyName, &prop);
+        OPENDAQ_RETURN_IF_FAILED(err);
+
+        if (!prop.assigned())
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND, fmt::format(R"(Property "{}" not found)", propNamePtr));
+
+        const PropertyType propType = prop.getPropertyType();
+        BaseObjectPtr indexOrKey;
+
+        if (propType == PropertyType::IndexSelection)
+        {
+            const ListPtr<IBaseObject> selectionList = prop.getSelectionValues();
+            if (!selectionList.assigned())
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_INVALIDPROPERTY,
+                                           fmt::format(R"(Index selection property "{}" has no selection values assigned)", propNamePtr));
+
+            for (SizeT i = 0; i < selectionList.getCount(); ++i)
+            {
+                if (selectionList.getItemAt(i) == valuePtr)
+                {
+                    indexOrKey = Int(i);
+                    break;
+                }
+            }
+
+            if (!indexOrKey.assigned())
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND,
+                                           fmt::format(R"(Value not found in selection values of property "{}")", propNamePtr));
+        }
+        else if (propType == PropertyType::SparseSelection)
+        {
+            const DictPtr<IBaseObject, IBaseObject> selectionDict = prop.getSelectionValues();
+            if (!selectionDict.assigned())
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_INVALIDPROPERTY,
+                                           fmt::format(R"(Sparse selection property "{}" has no selection values assigned)", propNamePtr));
+
+            for (const auto& [key, val] : selectionDict)
+            {
+                if (val == valuePtr)
+                {
+                    indexOrKey = key;
+                    break;
+                }
+            }
+
+            if (!indexOrKey.assigned())
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND,
+                                           fmt::format(R"(Value not found in sparse selection values of property "{}")", propNamePtr));
+        }
+        else
+        {
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_INVALIDPROPERTY,
+                                       fmt::format(R"(Property "{}" is not a selection property)", propNamePtr));
+        }
+
+        return TmsClientPropertyObjectBaseImpl::setPropertyValue(propertyName, indexOrKey);
+    });
 }
 
 template <typename Impl>
@@ -287,7 +362,14 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::beginUpdate()
     request->inputArgumentsSize = 0;
     request->objectId = nodeId.copyAndGetDetachedValue();
     request->methodId = beginUpdateId.copyAndGetDetachedValue();
-    client->callMethod(request);
+    OpcUaObject<UA_CallMethodResult> callResult = client->callMethod(request);
+    if (callResult->statusCode != UA_STATUSCODE_GOOD)
+    {
+        if (callResult->statusCode == UA_STATUSCODE_BADUSERACCESSDENIED)
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ACCESSDENIED);
+        else
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_CALLFAILED);
+    }
     return OPENDAQ_SUCCESS;
 }
 
@@ -302,7 +384,14 @@ ErrCode INTERFACE_FUNC TmsClientPropertyObjectBaseImpl<Impl>::endUpdate()
     request->inputArgumentsSize = 0;
     request->objectId = nodeId.copyAndGetDetachedValue();
     request->methodId = endUpdateId.copyAndGetDetachedValue();
-    client->callMethod(request);
+    OpcUaObject<UA_CallMethodResult> callResult = client->callMethod(request);
+    if (callResult->statusCode != UA_STATUSCODE_GOOD)
+    {
+        if (callResult->statusCode == UA_STATUSCODE_BADUSERACCESSDENIED)
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_ACCESSDENIED);
+        else
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_CALLFAILED);
+    }
     return OPENDAQ_SUCCESS;
 }
 
@@ -430,6 +519,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::addMethodProperties(const OpcUaNodeI
                 ListPtr<IArgumentInfo> inputArgs;
                 ListPtr<IArgumentInfo> outputArgs;
                 uint32_t numberInList = std::numeric_limits<uint32_t>::max();
+                bool commonExecutable = true;
 
                 try
                 {
@@ -450,6 +540,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::addMethodProperties(const OpcUaNodeI
                         const auto numberInListId = browser->getChildNodeId(childNodeId, "NumberInList");
                         numberInList = VariantConverter<IInteger>::ToDaqObject(reader->getValue(numberInListId, UA_ATTRIBUTEID_VALUE));
                     }
+                    commonExecutable = getExecutePermission(childNodeId);
                 }
                 catch(const std::exception& e)
                 {
@@ -462,13 +553,13 @@ void TmsClientPropertyObjectBaseImpl<Impl>::addMethodProperties(const OpcUaNodeI
                 if (outputArgs.assigned() && outputArgs.getCount() == 1)
                 {
                     auto callableInfo = FunctionInfo(outputArgs[0].getType(), inputArgs);
-                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).build();
+                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).setVisible(commonExecutable).build();
                     func = TmsClientFunction(clientContext, daqContext, parentNodeId, childNodeId);
                 }
                 else
                 {
                     auto callableInfo = ProcedureInfo(inputArgs);
-                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).build();
+                    prop = FunctionPropertyBuilder(propName, callableInfo).setReadOnly(true).setVisible(commonExecutable).build();
                     func = TmsClientProcedure(clientContext, daqContext, parentNodeId, childNodeId);
                 }
 
@@ -564,6 +655,22 @@ void TmsClientPropertyObjectBaseImpl<Impl>::browseRawProperties()
 
 }
 
+template <typename Impl>
+void TmsClientPropertyObjectBaseImpl<Impl>::setLocksForAttributes()
+{
+    if (!getAttributeWritePermission(nodeId))
+    {
+        if (this->objPtr.template supportsInterface<IComponentPrivate>())
+        {
+            this->objPtr.template asPtrOrNull<IComponentPrivate>(true).lockAllAttributes();
+        }
+        else
+        {
+            LOG_W("Object does not support IComponentPrivate, cannot lock attributes for write protection");
+        }
+    }
+}
+
 template <class Impl>
 bool TmsClientPropertyObjectBaseImpl<Impl>::isIgnoredMethodProperty(const std::string& browseName)
 {
@@ -616,6 +723,7 @@ template class TmsClientPropertyObjectBaseImpl<MirroredSignalBase<ITmsClientComp
 template class TmsClientPropertyObjectBaseImpl<MirroredInputPortBase<ITmsClientComponent>>;
 template class TmsClientPropertyObjectBaseImpl<ServerCapabilityConfigImpl>;
 template class TmsClientPropertyObjectBaseImpl<GenericSyncComponentImpl<ISyncComponent, ITmsClientComponent>>;
+template class TmsClientPropertyObjectBaseImpl<ServerImpl<IServer, ITmsClientComponent>>;
 
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

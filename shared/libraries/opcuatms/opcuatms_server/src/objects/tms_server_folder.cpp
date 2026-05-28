@@ -21,6 +21,7 @@ void TmsServerFolder::addChildNodes()
     {
         auto folder = item.asPtrOrNull<IFolder>();
         auto channel = item.asPtrOrNull<IChannel>();
+        auto server = item.asPtrOrNull<IServer>();
         auto component = item.asPtrOrNull<IComponent>();
 
         if (channel.assigned())
@@ -28,7 +29,12 @@ void TmsServerFolder::addChildNodes()
             auto tmsChannel = registerTmsObjectOrAddReference<TmsServerChannel>(this->nodeId, channel, numberInList++);
             channels.push_back(std::move(tmsChannel));
         }
-        else if (folder.assigned()) // It is important to test for folder last as a channel also is a folder!
+        else if (server.assigned())
+        {
+            auto tmsServerComponent = registerTmsObjectOrAddReference<TmsServerServer>(this->nodeId, server, numberInList++);
+            daqServerComponents.push_back(std::move(tmsServerComponent));
+        }
+        else if (folder.assigned()) // It is important to test for folder last as a channel and server also are folders!
         {
             auto tmsFolder = registerTmsObjectOrAddReference<TmsServerFolder>(this->nodeId, folder, numberInList++);
             folders.push_back(std::move(tmsFolder));
@@ -47,6 +53,22 @@ void TmsServerFolder::addChildNodes()
     Super::addChildNodes();
 }
 
+void TmsServerFolder::onCoreEvent(const CoreEventArgsPtr& args)
+{
+    Super::onCoreEvent(args);
+
+    if (this->object.getLocalId() == "Srv" && args.getEventId() == static_cast<int>(CoreEventId::ComponentAdded))
+    {
+        auto server = args.getParameters().get("Component").asPtrOrNull<IServer>();
+        if (server.assigned())
+        {
+            auto tmsServerComponent = registerTmsObjectOrAddReference<TmsServerServer>(this->nodeId, server, std::numeric_limits<uint32_t>::max());
+            daqServerComponents.push_back(std::move(tmsServerComponent));
+        }
+
+    }
+}
+
 OpcUaNodeId TmsServerFolder::getTmsTypeId()
 {
     if (object.supportsInterface<IIoFolderConfig>())
@@ -57,8 +79,9 @@ OpcUaNodeId TmsServerFolder::getTmsTypeId()
 void TmsServerFolder::createNonhierarchicalReferences()
 {
     createChildNonhierarchicalReferences(channels);
+    createChildNonhierarchicalReferences(daqServerComponents);
     createChildNonhierarchicalReferences(folders);
+    // createChildNonhierarchicalReferences(components); // ?
 }
-
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

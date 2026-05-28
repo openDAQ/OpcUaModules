@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "opcuacommon.h"
 #include "opcuavariant.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
@@ -24,24 +23,54 @@ BEGIN_NAMESPACE_OPENDAQ_OPCUA
 class OpcUaDataValue;
 using OpcUaDataValuePtr = std::shared_ptr<OpcUaDataValue>;
 
-class OpcUaDataValue
+class OpcUaDataValue : public OpcUaObject<UA_DataValue>
 {
 public:
-    OpcUaDataValue(const UA_DataValue* dataValue);
-    virtual ~OpcUaDataValue();
+    using OpcUaObject<UA_DataValue>::OpcUaObject;
+
+    static uint64_t toUnixTimeUs(UA_DateTime date);
+    static UA_DateTime fromUnixTimeUs(uint64_t date);
+
+    const UA_DataValue& getDataValue() const;
 
     bool hasValue() const;
-    const OpcUaVariant& getValue() const;
-    const UA_StatusCode& getStatusCode() const;
+
+    UA_StatusCode getStatusCode() const;
+
+    bool hasServerTimestamp() const;
+    UA_DateTime getServerTimestampUnixEpoch() const;  // us
+
+    bool hasSourceTimestamp() const;
+    UA_DateTime getSourceTimestampUnixEpoch() const;  // us
 
     bool isStatusOK() const;
 
-    const UA_DataValue* getDataValue() const;
-    operator const UA_DataValue*() const;
+    bool isInteger() const;
+    bool isString() const;
+    bool isDouble() const;
+    bool isNull() const;
+    bool isReal() const;
+    bool isNumber() const;
 
-protected:
-    const UA_DataValue* dataValue;
-    const OpcUaVariant variant;
+    std::string toString() const;
+    int64_t toInteger() const;
+
+    template <typename T>
+    inline T readScalar() const
+    {
+        return VariantUtils::ReadScalar<T>(this->value.value);
+    }
+
+    template <typename T, typename UATYPE = TypeToUaDataType<T>>
+    void setScalar(const T& value)
+    {
+        static_assert(UATYPE::DataType != nullptr, "Implement specialization of TypeToUaDataType");
+
+        this->clear();
+
+        const auto status = UA_Variant_setScalarCopy(&(this->value.value), &value, UATYPE::DataType);
+        CheckStatusCodeException(status);
+    }
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA

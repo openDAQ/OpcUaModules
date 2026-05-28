@@ -16,6 +16,7 @@ const OpcUaNodeId TmsAttributeCollector::NodeIdSignalType = OpcUaNodeId(NAMESPAC
 const OpcUaNodeId TmsAttributeCollector::NodeIdInputPortType = OpcUaNodeId(NAMESPACE_DAQBSP, UA_DAQBSPID_INPUTPORTTYPE);
 const OpcUaNodeId TmsAttributeCollector::NodeIdEvaluationVariableType = OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_EVALUATIONVARIABLETYPE);
 const OpcUaNodeId TmsAttributeCollector::NodeIdVariableBlockType = OpcUaNodeId(NAMESPACE_DAQBT, UA_DAQBTID_VARIABLEBLOCKTYPE);
+const OpcUaNodeId TmsAttributeCollector::NodeIdDaqServerComonentType = OpcUaNodeId(NAMESPACE_DAQDEVICE, UA_DAQDEVICEID_DAQCOMPONENTTYPE);
 
 // TmsAttributeCollector
 
@@ -86,6 +87,9 @@ void TmsAttributeCollector::collectDeviceAttributes(const OpcUaNodeId& nodeId)
 
     const auto synchronizationNoded = browser->getChildNodeId(nodeId, "Synchronization");
     collectComponentAttributes(synchronizationNoded);
+
+    const auto serversNodeId = browser->getChildNodeId(nodeId, "Srv");
+    collectDaqServerComponentsNode(serversNodeId);
 }
 
 void TmsAttributeCollector::collectFunctionBlockAttributes(const OpcUaNodeId& nodeId)
@@ -113,6 +117,13 @@ void TmsAttributeCollector::collectFunctionBlockAttributes(const OpcUaNodeId& no
 void TmsAttributeCollector::collectInputPortAttributes(const OpcUaNodeId& nodeId)
 {
     collectBaseObjectAttributes(nodeId);
+
+    const auto& references = browser->browse(nodeId);
+    for (const auto& [refNodeId, ref] : references.byNodeId)
+    {
+        if (ref->nodeClass == UA_NODECLASS_METHOD)
+            collectMethodAttributes(refNodeId);
+    }
 }
 
 void TmsAttributeCollector::collectSignalAttributes(const OpcUaNodeId& nodeId)
@@ -134,6 +145,11 @@ void TmsAttributeCollector::collectComponentAttributes(const OpcUaNodeId& nodeId
         else if (isSubtypeOf(ref->typeDefinition.nodeId, NodeIdComponentType))
             collectComponentAttributes(refNodeId);
     }
+}
+
+void TmsAttributeCollector::collectServerAttributes(const OpcUaNodeId& nodeId)
+{
+    collectComponentAttributes(nodeId);
 }
 
 void TmsAttributeCollector::collectPropertyObjectAttributes(const OpcUaNodeId& nodeId)
@@ -165,6 +181,10 @@ void TmsAttributeCollector::collectPropertyAttributes(const OpcUaNodeId& nodeId)
     attributes.insert({nodeId, UA_ATTRIBUTEID_DISPLAYNAME});
     attributes.insert({nodeId, UA_ATTRIBUTEID_DESCRIPTION});
     attributes.insert({nodeId, UA_ATTRIBUTEID_DATATYPE});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_ACCESSLEVEL});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERACCESSLEVEL});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_EXECUTABLE});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USEREXECUTABLE});
 
     if (browser->hasReference(nodeId, "ValidationExpression"))
         attributes.insert({browser->getChildNodeId(nodeId, "ValidationExpression"), UA_ATTRIBUTEID_VALUE});
@@ -193,6 +213,8 @@ void TmsAttributeCollector::collectEvaluationPropertyAttributes(const OpcUaNodeI
 void TmsAttributeCollector::collectBaseObjectAttributes(const OpcUaNodeId& nodeId)
 {
     attributes.insert({nodeId, UA_ATTRIBUTEID_NODECLASS});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
 
     if (browser->hasReference(nodeId, "NumberInList"))
         attributes.insert({browser->getChildNodeId(nodeId, "NumberInList"), UA_ATTRIBUTEID_VALUE});
@@ -200,6 +222,9 @@ void TmsAttributeCollector::collectBaseObjectAttributes(const OpcUaNodeId& nodeI
 
 void TmsAttributeCollector::collectMethodAttributes(const OpcUaNodeId& nodeId)
 {
+    attributes.insert({nodeId, UA_ATTRIBUTEID_EXECUTABLE});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USEREXECUTABLE});
+
     if (browser->hasReference(nodeId, "InputArguments"))
         attributes.insert({browser->getChildNodeId(nodeId, "InputArguments"), UA_ATTRIBUTEID_VALUE});
     if (browser->hasReference(nodeId, "OutputArguments"))
@@ -215,6 +240,9 @@ void TmsAttributeCollector::collectVariableBlockAttributes(const OpcUaNodeId& no
 
 void TmsAttributeCollector::collectIoNode(const OpcUaNodeId& nodeId)
 {
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
+
     const auto& references = browser->browse(nodeId);
 
     for (const auto& [refNodeId, ref] : references.byNodeId)
@@ -228,6 +256,9 @@ void TmsAttributeCollector::collectIoNode(const OpcUaNodeId& nodeId)
 
 void TmsAttributeCollector::collectInputPortNode(const OpcUaNodeId& nodeId)
 {
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
+
     const auto& references = browser->browse(nodeId);
 
     for (const auto& [refNodeId, ref] : references.byNodeId)
@@ -239,6 +270,9 @@ void TmsAttributeCollector::collectInputPortNode(const OpcUaNodeId& nodeId)
 
 void TmsAttributeCollector::collectFunctionBlockNode(const OpcUaNodeId& nodeId)
 {
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
+
     const auto& references = browser->browse(nodeId);
 
     for (const auto& [refNodeId, ref] : references.byNodeId)
@@ -250,6 +284,9 @@ void TmsAttributeCollector::collectFunctionBlockNode(const OpcUaNodeId& nodeId)
 
 void TmsAttributeCollector::collectSignalsNode(const OpcUaNodeId& nodeId)
 {
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
+
     const auto& signalReferences = browser->browse(nodeId);
 
     for (const auto& [refNodeId, ref] : signalReferences.byNodeId)
@@ -289,6 +326,20 @@ bool TmsAttributeCollector::isSubtypeOf(const OpcUaNodeId& typeId, const OpcUaNo
 bool TmsAttributeCollector::typeEquals(const OpcUaNodeId& typeId, const OpcUaNodeId& baseType)
 {
     return typeId == baseType;
+}
+
+void TmsAttributeCollector::collectDaqServerComponentsNode(const OpcUaNodeId& nodeId)
+{
+    attributes.insert({nodeId, UA_ATTRIBUTEID_WRITEMASK});
+    attributes.insert({nodeId, UA_ATTRIBUTEID_USERWRITEMASK});
+
+    const auto& serverReferences = browser->browse(nodeId);
+
+    for (const auto& [refNodeId, ref] : serverReferences.byNodeId)
+    {
+        if (isSubtypeOf(ref->typeDefinition.nodeId, NodeIdDaqServerComonentType))
+            collectServerAttributes(refNodeId);
+    }
 }
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS
