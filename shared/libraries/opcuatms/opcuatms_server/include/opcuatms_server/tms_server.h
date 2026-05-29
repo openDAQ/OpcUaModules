@@ -21,6 +21,8 @@
 #include <opcuaserver/opcuaserver.h>
 #include <opcuatms_server/objects/tms_server_device.h>
 #include <opcuatms_server/tms_server_context.h>
+#include <atomic>
+#include <mutex>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
@@ -45,6 +47,8 @@ protected:
     uint16_t opcUaPort = 4840;
     std::string opcUaPath = "/";
     std::unordered_map<std::string, SizeT> registeredClientIds;
+    std::mutex connectedClientsMutex;
+    std::atomic<bool> running{false};
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA

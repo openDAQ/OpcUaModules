@@ -57,19 +57,45 @@ void TmsServer::start()
         {
             const auto loggerComponent = context.getLogger().getOrAddComponent("TmsServer");
             LOG_I("New client connected, ID: {}", clientId);
+            std::lock_guard<std::mutex> lock(connectedClientsMutex);
+            registeredClientIds.insert({clientId, 0});
+        }
+    );
+    server->setClientInfoHandler(
+        [this](const OpcUaServer::ClientConnectionInfo& connInfo)
+        {
+            if (!running.load())
+                return;
+
+            std::lock_guard<std::mutex> lock(connectedClientsMutex);
+            const auto it = registeredClientIds.find(connInfo.clientId);
+            if (it == registeredClientIds.end())
+                return;
+
+            const auto loggerComponent = context.getLogger().getOrAddComponent("TmsServer");
+            LOG_I("Client address resolved, ID: {}, address: {}, hostname: {}",
+                  connInfo.clientId,
+                  connInfo.address,
+                  connInfo.hostname);
+
             SizeT clientNumber = 0;
             if (device.assigned() && !device.isRemoved())
             {
-                device.getInfo().asPtr<IDeviceInfoInternal>(true).addConnectedClient(
+                device.getInfo().asPtr<IDeviceInfoInternal>().addConnectedClient(
                     &clientNumber,
-                    ConnectedClientInfo("", ProtocolType::Configuration, "OpenDAQOPCUA", "", ""));
+                    ConnectedClientInfo(connInfo.address,
+                                        ProtocolType::Configuration,
+                                        "OpenDAQOPCUA",
+                                        "Control",
+                                        connInfo.hostname));
             }
-            registeredClientIds.insert({clientId, clientNumber});
+            it->second = clientNumber;
         }
     );
     server->setClientDisconnectedHandler(
         [this](const std::string& clientId)
         {
+            std::lock_guard<std::mutex> lock(connectedClientsMutex);
             if (auto it = registeredClientIds.find(clientId); it != registeredClientIds.end())
             {
                 const auto loggerComponent = context.getLogger().getOrAddComponent("TmsServer");
@@ -101,31 +127,37 @@ void TmsServer::start()
     tmsDevice->registerOpcUaNode(OpcUaNodeId(NAMESPACE_DI, UA_DIID_DEVICESET));
     tmsDevice->createNonhierarchicalReferences();
 
+    running = true;
     server->start();
 }
 
 void TmsServer::stop()
 {
-    if (device.assigned() && !device.isRemoved())
+    running = false;
+
     {
-        const auto info = device.getInfo();
-        const auto infoInternal = info.asPtr<IDeviceInfoInternal>();
-        if (info.hasServerCapability("OpenDAQOPCUAConfiguration"))
-            infoInternal.removeServerCapability("OpenDAQOPCUAConfiguration");
-        for (const auto& [_, clientNumber] : registeredClientIds)
+        std::lock_guard<std::mutex> lock(connectedClientsMutex);
+        if (device.assigned() && !device.isRemoved())
         {
-            if (clientNumber != 0)
-                infoInternal.removeConnectedClient(clientNumber);
+            const auto info = device.getInfo();
+            const auto infoInternal = info.asPtr<IDeviceInfoInternal>();
+            if (info.hasServerCapability("OpenDAQOPCUAConfiguration"))
+                infoInternal.removeServerCapability("OpenDAQOPCUAConfiguration");
+            for (const auto& [_, clientNumber] : registeredClientIds)
+            {
+                if (clientNumber != 0)
+                    infoInternal.removeConnectedClient(clientNumber);
+            }
         }
+        registeredClientIds.clear();
     }
-    registeredClientIds.clear();
 
     tmsDevice.reset();
     tmsContext.reset();
 
     if (server)
         server->stop();
-    
+
     server.reset();
 }
 

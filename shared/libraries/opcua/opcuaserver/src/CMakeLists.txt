@@ -37,8 +37,9 @@ set(SOURCE_FILES ${ALL_SOURCES})
 add_library(${MODULE_NAME} STATIC ${ALL_SOURCES})
 add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME} ALIAS ${MODULE_NAME})
 
-target_include_directories(${MODULE_NAME} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/>
-                                                 $<INSTALL_INTERFACE:include/${MODULE_NAME}>
+target_include_directories(${MODULE_NAME} PUBLIC  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/>
+                                                  $<INSTALL_INTERFACE:include/${MODULE_NAME}>
+                                         PRIVATE  $<BUILD_INTERFACE:${open62541_SOURCE_DIR}/src>
 )
 
 target_link_libraries(${MODULE_NAME} PUBLIC  ${OPENDAQ_SDK_TARGET_NAMESPACE}::opcuashared
