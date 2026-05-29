@@ -116,6 +116,95 @@ TEST_F(TmsFolderTest, Active)
               folder.clientFolder.getItems()[0].asPtr<IFolder>().getItems()[0].getActive());
 }
 
+TEST_F(TmsFolderTest, GetParentActiveParentIsActive)
+{
+    auto folder = registerTestFolder(createTestFolder());
+
+    auto child = folder.clientFolder.getItems()[0];
+    Bool active = false;
+    ASSERT_EQ(child->getParentActive(&active), OPENDAQ_SUCCESS);
+    ASSERT_EQ(active, folder.serverFolder.getActive());
+}
+
+TEST_F(TmsFolderTest, GetParentActiveParentIsInactive)
+{
+    auto folder = registerTestFolder(createTestFolder());
+
+    folder.clientFolder.setActive(false);
+    auto child = folder.clientFolder.getItems()[0];
+    Bool active = true;
+    ASSERT_EQ(child->getParentActive(&active), OPENDAQ_SUCCESS);
+    ASSERT_EQ(active, folder.serverFolder.getActive());
+}
+
+// When the folder is set inactive, nested components inherit that state:
+// server's getActive() returns localActive && parentActive, so OPC UA
+// reflects the combined value. All assertions below verify client == server.
+
+TEST_F(TmsFolderTest, NestedActiveInheritsParentInactive)
+{
+    auto folder = registerTestFolder(createTestFolder());
+    auto child  = folder.clientFolder.getItems()[0];
+
+    // baseline
+    ASSERT_TRUE(folder.clientFolder.getActive());
+    ASSERT_TRUE(child.getActive());
+
+    folder.clientFolder.setActive(false);
+
+    ASSERT_FALSE(folder.clientFolder.getActive());
+    ASSERT_EQ(folder.serverFolder.getActive(), folder.clientFolder.getActive());
+
+    // child's getActive reads OPC UA which reflects parentActive &&  localActive
+    ASSERT_FALSE(child.getActive());
+    ASSERT_EQ(folder.serverFolder.getItems()[0].getActive(), child.getActive());
+}
+
+TEST_F(TmsFolderTest, NestedGetParentActiveMatchesFolderActive)
+{
+    auto folder = registerTestFolder(createTestFolder());
+    auto child  = folder.clientFolder.getItems()[0];
+
+    folder.clientFolder.setActive(false);
+
+    Bool parentActive;
+    ASSERT_EQ(child->getParentActive(&parentActive), OPENDAQ_SUCCESS);
+    ASSERT_FALSE(parentActive);
+    ASSERT_EQ(parentActive, folder.serverFolder.getActive());
+}
+
+TEST_F(TmsFolderTest, DeepNestedActiveInheritsParentInactive)
+{
+    auto folder = registerTestFolder(createTestFolder());
+    auto child  = folder.clientFolder.getItems()[0];
+    auto leaf   = child.asPtr<IFolder>().getItems()[0];
+
+    folder.clientFolder.setActive(false);
+
+    // leaf.getActive() reads OPC UA: serverLeaf.getActive() = localActive && serverChild.getActive()
+    //   = true && (localActive && serverFolder.getActive()) = true && (true && false) = false
+    ASSERT_FALSE(leaf.getActive());
+    ASSERT_EQ(folder.serverFolder.getItems()[0].asPtr<IFolder>().getItems()[0].getActive(), leaf.getActive());
+
+    // leaf.getParentActive() calls child.getActive() which is also false
+    Bool parentActive;
+    ASSERT_EQ(leaf->getParentActive(&parentActive), OPENDAQ_SUCCESS);
+    ASSERT_FALSE(parentActive);
+}
+
+TEST_F(TmsFolderTest, NestedActiveRestoresAfterFolderReactivated)
+{
+    auto folder = registerTestFolder(createTestFolder());
+    auto child  = folder.clientFolder.getItems()[0];
+
+    folder.clientFolder.setActive(false);
+    ASSERT_FALSE(child.getActive());
+
+    folder.clientFolder.setActive(true);
+    ASSERT_TRUE(child.getActive());
+    ASSERT_EQ(folder.serverFolder.getItems()[0].getActive(), child.getActive());
+}
+
 TEST_F(TmsFolderTest, Tags)
 {
     auto folder = registerTestFolder(createTestFolder());
