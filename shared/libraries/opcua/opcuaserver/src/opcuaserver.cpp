@@ -4,6 +4,7 @@
 #include <open62541/plugin/nodestore_default.h>
 #include <open62541/server_config_default.h>
 #include <open62541/plugin/log_stdout.h>
+#include <algorithm>
 #include <cassert>
 #include <future>
 #include <coreobjects/authentication_provider_factory.h>

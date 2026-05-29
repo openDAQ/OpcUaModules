@@ -30,6 +30,25 @@ ErrCode TmsClientComponentBaseImpl<Impl>::getActive(Bool* active)
 }
 
 template <class Impl>
+ErrCode TmsClientComponentBaseImpl<Impl>::getLocalActive(Bool* active)
+{
+    return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOT_SUPPORTED);
+}
+
+template <class Impl>
+ErrCode TmsClientComponentBaseImpl<Impl>::getParentActive(Bool* active)
+{
+    ComponentPtr parent;
+    OPENDAQ_RETURN_IF_FAILED(this->getParent(&parent));
+
+    if (parent.assigned())
+        return parent->getActive(active);
+    else
+        *active = True;
+    return OPENDAQ_SUCCESS;
+}
+
+template <class Impl>
 ErrCode TmsClientComponentBaseImpl<Impl>::setActive(Bool active)
 {
     try
