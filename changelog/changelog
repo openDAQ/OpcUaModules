@@ -13,4 +13,4 @@
 
 - [#1](https://github.com/openDAQ/OpcUaModules/pull/1) Project initial version.
 - [#2](https://github.com/openDAQ/OpcUaModules/pull/2) Import commit history from openDAQ SDK.
-- Bumped to 4.0.0 — major version raised to reflect the module's move to a standalone release cycle, decoupled from openDAQ core versioning.
+- [#30](https://github.com/openDAQ/OpcUaModules/pull/30) Bumped to 4.0.0 — major version raised to reflect the module's move to a standalone release cycle, decoupled from openDAQ core versioning.
