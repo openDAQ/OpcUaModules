@@ -680,7 +680,7 @@ TEST_F(TmsIntegrationTest, RapidMultiThreadClientConnectDisconnectLeavesNoClient
     threads.reserve(threadCount);
     for (int t = 0; t < threadCount; ++t)
     {
-        threads.emplace_back([opcUrl]()
+        threads.emplace_back([opcUrl, connectsPerThread]()
         {
             const auto moduleManager = ModuleManager("[[none]]");
             auto logger = Logger();
