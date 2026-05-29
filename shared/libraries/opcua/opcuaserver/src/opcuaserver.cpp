@@ -4,9 +4,7 @@
 #include <open62541/plugin/nodestore_default.h>
 #include <open62541/server_config_default.h>
 #include <open62541/plugin/log_stdout.h>
-#include <algorithm>
 #include <cassert>
-#include <chrono>
 #include <future>
 #include <coreobjects/authentication_provider_factory.h>
 #include <coreobjects/exceptions.h>
@@ -133,45 +131,72 @@ void OpcUaServer::stop()
 
 void OpcUaServer::waitForPendingClientInfoFutures()
 {
-    std::lock_guard<std::mutex> lock(pendingClientInfoFuturesMutex);
-    for (auto& future : pendingClientInfoFutures)
+    std::future<void> chain;
     {
-        if (future.valid())
-            future.wait();
+        std::lock_guard<std::mutex> lock(clientInfoChainMutex);
+        clientInfoChainWaiting.clear();
+        chain = std::move(clientInfoChain);
     }
-    pendingClientInfoFutures.clear();
+    if (chain.valid())
+        chain.wait();
+}
+
+void OpcUaServer::processClientInfo(ClientConnectionInfo& info,
+                                    const sockaddr_storage& addr,
+                                    socklen_t addrLen)
+{
+    const OnSetClientInfoCallback handler = clientInfoHandler;
+    if (!handler)
+        return;
+
+    const auto* sockAddr = reinterpret_cast<const struct sockaddr*>(&addr);
+    char ipBuf[NI_MAXHOST] = {};
+    char hostBuf[NI_MAXHOST] = {};
+    if (getnameinfo(sockAddr, addrLen, ipBuf, sizeof(ipBuf), nullptr, 0, NI_NUMERICHOST) == 0)
+        info.address = ipBuf;
+    if (getnameinfo(sockAddr, addrLen, hostBuf, sizeof(hostBuf), nullptr, 0, 0) == 0)
+        info.hostname = hostBuf;
+    handler(info);
+}
+
+void OpcUaServer::continueClientInfoChain()
+{
+    while (true)
+    {
+        std::function<void()> task;
+        {
+            std::lock_guard<std::mutex> lock(clientInfoChainMutex);
+            if (clientInfoChainWaiting.empty())
+                return;
+            task = std::move(clientInfoChainWaiting.front());
+            clientInfoChainWaiting.pop_front();
+        }
+        task();
+    }
+}
+
+void OpcUaServer::scheduleClientInfoChainTask(std::function<void()> task)
+{
+    std::lock_guard<std::mutex> lock(clientInfoChainMutex);
+    const bool chainRunning = !clientInfoChainWaiting.empty() ||
+                              (clientInfoChain.valid() &&
+                               clientInfoChain.wait_for(std::chrono::seconds(0)) != std::future_status::ready);
+    clientInfoChainWaiting.push_back(std::move(task));
+    if (!chainRunning)
+        clientInfoChain = std::async(std::launch::async, [this]() { continueClientInfoChain(); });
 }
 
 void OpcUaServer::scheduleClientInfoAsync(ClientConnectionInfo info,
                                           const sockaddr_storage& addr,
                                           socklen_t addrLen)
 {
-    const OnSetClientInfoCallback handler = clientInfoHandler;
-    if (!handler)
+    if (!clientInfoHandler)
         return;
 
-    std::lock_guard<std::mutex> lock(pendingClientInfoFuturesMutex);
-
-    pendingClientInfoFutures.erase(
-        std::remove_if(pendingClientInfoFutures.begin(),
-                       pendingClientInfoFutures.end(),
-                       [](std::future<void>& f) {
-                           return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
-                       }),
-        pendingClientInfoFutures.end());
-    
-    pendingClientInfoFutures.push_back(
-        std::async(std::launch::async, [handler, info = std::move(info), addr, addrLen]() mutable
-        {
-            const auto* sockAddr = reinterpret_cast<const struct sockaddr*>(&addr);
-            char ipBuf[NI_MAXHOST] = {};
-            char hostBuf[NI_MAXHOST] = {};
-            if (getnameinfo(sockAddr, addrLen, ipBuf, sizeof(ipBuf), nullptr, 0, NI_NUMERICHOST) == 0)
-                info.address = ipBuf;
-            if (getnameinfo(sockAddr, addrLen, hostBuf, sizeof(hostBuf), nullptr, 0, 0) == 0)
-                info.hostname = hostBuf;
-            handler(info);
-        }));
+    scheduleClientInfoChainTask([this, info = std::move(info), addr, addrLen]() mutable
+    {
+        processClientInfo(info, addr, addrLen);
+    });
 }
 
 void OpcUaServer::prepare()

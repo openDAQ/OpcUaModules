@@ -38,6 +38,10 @@ public:
     void start();
     void stop();
 
+private:
+    void addConnectedClientInfo(const OpcUaServer::ClientConnectionInfo& connInfo);
+    void removeConnectedClientInfo(const std::string& clientId);
+
 protected:
     DevicePtr device;
     ContextPtr context;
