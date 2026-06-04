@@ -5,6 +5,7 @@
 #include "coreobjects/property_object_factory.h"
 #include "opcuaserver/opcuaaddnodeparams.h"
 #include "opcuaserver/opcuaserver.h"
+#include "opcuashared/opcuadatavalue.h"
 #include "opcuashared/opcuanodeid.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_SIMPLE_OBJECTS
@@ -97,7 +98,11 @@ PropertyObjectPtr SignalNode::createDefaultConfig()
 
 void SignalNode::process()
 {
-    const auto lastValue = signal.getLastValue();
+    BaseObjectPtr lastValue;
+    const BaseObjectPtr timestamp = signal.getLastValueWithTimestamp(lastValue);
+    if (!lastValue.assigned())
+        return;
+
     auto sigDesc = signal.getDescriptor();
     if (!sigDesc.assigned())
         return;
@@ -105,9 +110,21 @@ void SignalNode::process()
     const auto dataType = convertSampleTypeToDataTypeId(st);
     if (dataType.isNull())
         return;
-    const auto variant = toVariant(lastValue, st);
+
+    auto variant = toVariant(lastValue, st);
+
+    OpcUaDataValue dataValue;
+    dataValue.getValue().value = variant.getDetachedValue();
+    dataValue.getValue().hasValue = true;
+
+    if (const auto tsInt = timestamp.asPtrOrNull<IInteger>(); tsInt.assigned())
+    {
+        dataValue.getValue().hasSourceTimestamp = true;
+        dataValue.getValue().sourceTimestamp = OpcUaDataValue::fromUnixTimeUs(static_cast<uint64_t>(static_cast<Int>(tsInt)));
+    }
+
     try {
-        server->writeValue(variableNodeId, variant);
+        server->writeDataValue(variableNodeId, dataValue);
     } catch (OpcUaException& ex) {
 
     }

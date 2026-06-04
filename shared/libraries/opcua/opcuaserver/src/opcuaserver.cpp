@@ -516,6 +516,11 @@ void OpcUaServer::writeValue(const OpcUaNodeId& nodeId, const OpcUaVariant& valu
     CheckStatusCodeException(UA_Server_writeValue(server, *nodeId, *value));
 }
 
+void OpcUaServer::writeDataValue(const OpcUaNodeId& nodeId, const OpcUaDataValue& value)
+{
+    CheckStatusCodeException(UA_Server_writeDataValue(server, *nodeId, *value));
+}
+
 OpcUaVariant OpcUaServer::readValue(const OpcUaNodeId& nodeId)
 {
     OpcUaVariant value;

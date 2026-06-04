@@ -20,6 +20,7 @@
 #include <unordered_set>
 
 #include <opcuashared/node/opcuanodeobject.h>
+#include <opcuashared/opcuadatavalue.h>
 #include <opcuashared/opcuasecurity_config.h>
 
 #include <opcuaserver/opcuaaddnodeparams.h>
@@ -128,6 +129,7 @@ public:
     void setAccessLevel(const OpcUaNodeId& nodeId, UA_Byte accessLevel);
 
     void writeValue(const OpcUaNodeId& nodeId, const OpcUaVariant& var);
+    void writeDataValue(const OpcUaNodeId& nodeId, const OpcUaDataValue& value);
     OpcUaVariant readValue(const OpcUaNodeId& nodeId);
     OpcUaNodeId readDataType(const OpcUaNodeId& typeNodeId);
 
