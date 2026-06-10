@@ -642,6 +642,8 @@ void TmsClientPropertyObjectBaseImpl<Impl>::browseRawProperties()
         auto ec = Impl::addProperty(prop);
         if (ec != OPENDAQ_ERR_ALREADYEXISTS)
             return ec;
+        else
+            daqClearErrorInfo();
         LOG_W("OPC UA exposes two properties with the same name \"{}\". The duplicate property will be ignored.", prop.getName())
         return OPENDAQ_SUCCESS;
     };
@@ -674,7 +676,7 @@ void TmsClientPropertyObjectBaseImpl<Impl>::setLocksForAttributes()
 template <class Impl>
 bool TmsClientPropertyObjectBaseImpl<Impl>::isIgnoredMethodProperty(const std::string& browseName)
 {
-    return browseName == "BeginUpdate" || browseName == "EndUpdate" || browseName == "GetErrorInformation";
+    return browseName == "BeginUpdate" || browseName == "EndUpdate" || browseName == "GetErrorInformation" || defaultMethodsNames.count(browseName) != 0;
 }
 
 template <class Impl>

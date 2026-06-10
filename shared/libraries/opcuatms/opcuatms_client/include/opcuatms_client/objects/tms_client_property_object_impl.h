@@ -82,6 +82,7 @@ public:
         : TmsClientObjectImpl(ctx, clientContext, nodeId)
         , Impl(ctx, parent, localId)
         , propBrowseName(propBrowseName)
+        , defaultMethodsNames({"Connect", "Disconnect"})
     {
         init();
     }
@@ -126,6 +127,7 @@ public:
         : TmsClientObjectImpl(ctx, clientContext, nodeId)
         , Impl(localId, nullptr, parentDevice, ctx, parent)
         , propBrowseName(propBrowseName)
+        , defaultMethodsNames({"EnableDiscovery", "DisableDiscovery"})
     {
         init();
     }
@@ -160,6 +162,7 @@ protected:
     std::map<std::string, std::string> propBrowseName;
     opcua::OpcUaNodeId methodParentNodeId;
     LoggerComponentPtr loggerComponent;
+    const std::unordered_set<std::string> defaultMethodsNames{};
     
     ErrCode setOPCUAPropertyValueInternal(IString* propertyName, IBaseObject* value, bool protectedWrite);
     void addProperties(const OpcUaNodeId& parentId,
