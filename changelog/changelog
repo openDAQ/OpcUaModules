@@ -5,6 +5,7 @@
 
 ## Bug fixes
 
+- [#32](https://github.com/openDAQ/OpcUaModules/pull/32) Filter-out duplicating method-properties.
 - [#9](https://github.com/openDAQ/OpcUaModules/pull/9) Fix appending dependent boost components.
 
 ## Documenation
