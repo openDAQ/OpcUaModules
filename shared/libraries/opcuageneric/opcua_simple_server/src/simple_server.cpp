@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <coreobjects/property_factory.h>
 #include <opcua_simple_server/simple_server.h>
 #include <opendaq/device_info_factory.h>

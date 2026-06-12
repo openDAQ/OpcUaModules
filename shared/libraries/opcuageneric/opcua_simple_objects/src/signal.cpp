@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <opcua_simple_objects/common.h>
 #include <opcua_simple_objects/constants.h>
 #include <opcua_simple_objects/signal.h>
