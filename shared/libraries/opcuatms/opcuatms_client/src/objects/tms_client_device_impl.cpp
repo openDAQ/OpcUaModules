@@ -489,6 +489,19 @@ PropertyObjectPtr TmsClientDeviceImpl::onCreateDefaultAddDeviceConfig()
     return PropertyObject();
 }
 
+ErrCode TmsClientDeviceImpl::getParentActive(Bool* active)
+{
+    OPENDAQ_PARAM_NOT_NULL(active);
+
+    if (this->isRootDevice)
+    {
+        *active = True;
+        return OPENDAQ_SUCCESS;
+    }
+
+    return Super::getParentActive(active);
+}
+
 void TmsClientDeviceImpl::findAndCreateFunctionBlocks()
 {
     std::map<uint32_t, FunctionBlockPtr> orderedFunctionBlocks;

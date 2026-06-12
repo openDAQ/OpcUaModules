@@ -4,9 +4,20 @@
 #include <open62541/plugin/nodestore_default.h>
 #include <open62541/server_config_default.h>
 #include <open62541/plugin/log_stdout.h>
+#include <algorithm>
 #include <cassert>
+#include <chrono>
+#include <future>
 #include <coreobjects/authentication_provider_factory.h>
 #include <coreobjects/exceptions.h>
+#include "server/ua_server_internal.h"
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+#else
+    #include <sys/socket.h>
+    #include <netdb.h>
+#endif
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
@@ -58,6 +69,11 @@ void OpcUaServer::setAuthenticationProvider(const AuthenticationProviderPtr& aut
 void OpcUaServer::setClientConnectedHandler(const OnClientConnectedCallback& callback)
 {
     this->clientConnectedHandler = callback;
+}
+
+void OpcUaServer::setClientInfoHandler(const OnSetClientInfoCallback& callback)
+{
+    this->clientInfoHandler = callback;
 }
 
 void OpcUaServer::setClientDisconnectedHandler(const OnClientDisconnectedCallback& callback)
@@ -112,7 +128,51 @@ void OpcUaServer::start()
 void OpcUaServer::stop()
 {
     ThreadEx::stop();
+    waitForPendingClientInfoFutures();
     shutdownServer();
+}
+
+void OpcUaServer::waitForPendingClientInfoFutures()
+{
+    std::lock_guard<std::mutex> lock(pendingClientInfoFuturesMutex);
+    for (auto& future : pendingClientInfoFutures)
+    {
+        if (future.valid())
+            future.wait();
+    }
+    pendingClientInfoFutures.clear();
+}
+
+void OpcUaServer::scheduleClientInfoAsync(ClientConnectionInfo info,
+                                          const sockaddr_storage& addr,
+                                          socklen_t addrLen)
+{
+    const OnSetClientInfoCallback handler = clientInfoHandler;
+    if (!handler)
+        return;
+
+    std::lock_guard<std::mutex> lock(pendingClientInfoFuturesMutex);
+
+    pendingClientInfoFutures.erase(
+        std::remove_if(pendingClientInfoFutures.begin(),
+                       pendingClientInfoFutures.end(),
+                       [](std::future<void>& f) {
+                           return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+                       }),
+        pendingClientInfoFutures.end());
+    
+    pendingClientInfoFutures.push_back(
+        std::async(std::launch::async, [handler, info = std::move(info), addr, addrLen]() mutable
+        {
+            const auto* sockAddr = reinterpret_cast<const struct sockaddr*>(&addr);
+            char ipBuf[NI_MAXHOST] = {};
+            char hostBuf[NI_MAXHOST] = {};
+            if (getnameinfo(sockAddr, addrLen, ipBuf, sizeof(ipBuf), nullptr, 0, NI_NUMERICHOST) == 0)
+                info.address = ipBuf;
+            if (getnameinfo(sockAddr, addrLen, hostBuf, sizeof(hostBuf), nullptr, 0, 0) == 0)
+                info.hostname = hostBuf;
+            handler(info);
+        }));
 }
 
 void OpcUaServer::prepare()
@@ -626,8 +686,38 @@ UA_StatusCode OpcUaServer::activateSession(UA_Server* server,
     if (status == UA_STATUSCODE_GOOD)
     {
         serverInstance->createSession(*sessionId, authorizedUser, sessionContext);
+
+        const std::string clientId = OpcUaNodeId::getIdentifier(*sessionId);
         if (serverInstance->clientConnectedHandler)
-            serverInstance->clientConnectedHandler(OpcUaNodeId::getIdentifier(*sessionId));
+            serverInstance->clientConnectedHandler(clientId);
+
+        if (serverInstance->clientInfoHandler)
+        {
+            // UA_Server_getSessionById requires the server mutex to be held,
+            // but activateSession is called with it released — reacquire briefly
+            // to read the socket fd and peer address (reverse DNS is done asynchronously).
+            UA_SOCKET sockfd = UA_INVALID_SOCKET;
+            {
+                UA_LOCK(&server->serviceMutex);
+                Finally finallyUnlock([&]() { UA_UNLOCK(&server->serviceMutex); });
+
+                UA_Session* session = UA_Server_getSessionById(server, sessionId);
+                if (session && session->header.channel && session->header.channel->connection)
+                    sockfd = session->header.channel->connection->sockfd;
+            }
+
+            if (sockfd != UA_INVALID_SOCKET)
+            {
+                struct sockaddr_storage addr{};
+                socklen_t addrLen = sizeof(addr);
+                if (getpeername(sockfd, reinterpret_cast<struct sockaddr*>(&addr), &addrLen) == 0)
+                {
+                    ClientConnectionInfo connInfo;
+                    connInfo.clientId = clientId;
+                    serverInstance->scheduleClientInfoAsync(std::move(connInfo), addr, addrLen);
+                }
+            }
+        }
     }
 
     return status;

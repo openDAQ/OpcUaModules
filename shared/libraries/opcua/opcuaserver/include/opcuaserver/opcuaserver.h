@@ -16,6 +16,11 @@
 
 #pragma once
 
+#include <functional>
+#include <future>
+#include <mutex>
+#include <string>
+#include <vector>
 #include <opendaq/utils/thread_ex.h>
 #include <unordered_set>
 
@@ -37,7 +42,15 @@ BEGIN_NAMESPACE_OPENDAQ_OPCUA
 class OpcUaServer final : public daq::utils::ThreadEx
 {
 public:
+    struct ClientConnectionInfo
+    {
+        std::string clientId;
+        std::string address;
+        std::string hostname;
+    };
+
     using OnClientConnectedCallback = std::function<void(const std::string& clientId)>;
+    using OnSetClientInfoCallback = std::function<void(const ClientConnectionInfo& info)>;
     using OnClientDisconnectedCallback = std::function<void(const std::string& clientId)>;
     using OnAllowBrowsingNodeCallback = UA_Boolean (*)(UA_Server* server,
                                                        UA_AccessControl* ac,
@@ -74,6 +87,7 @@ public:
     void setPort(uint16_t port);
     void setAuthenticationProvider(const AuthenticationProviderPtr& authenticationProvider);
     void setClientConnectedHandler(const OnClientConnectedCallback& callback);
+    void setClientInfoHandler(const OnSetClientInfoCallback& callback);
     void setClientDisconnectedHandler(const OnClientDisconnectedCallback& callback);
     void setAllowBrowsingNodeCallback(const OnAllowBrowsingNodeCallback& callback);
     void setGetUserRightsMaskCallback(const OnGetUserRightsMaskCallback& callback);
@@ -168,6 +182,10 @@ private:
     bool isUsernameIdentityTokenValid(const UA_UserNameIdentityToken* token, UserPtr& authorizedUser);
     bool isAnonymousIdentityTokenValid(const UA_AnonymousIdentityToken* token, UserPtr& authorizedUser);
     void createSession(const OpcUaNodeId& sessionId, const UserPtr authorizedUser, void** sessionContext);
+    void scheduleClientInfoAsync(ClientConnectionInfo info,
+                                 const sockaddr_storage& addr,
+                                 socklen_t addrLen);
+    void waitForPendingClientInfoFutures();
 
     static UA_StatusCode activateSession(UA_Server* server,
                                          UA_AccessControl* ac,
@@ -202,7 +220,10 @@ private:
     ServerEventManagerPtr eventManager;
     AuthenticationProviderPtr authenticationProvider;
     OnClientConnectedCallback clientConnectedHandler;
+    OnSetClientInfoCallback clientInfoHandler;
     OnClientDisconnectedCallback clientDisconnectedHandler;
+    std::vector<std::future<void>> pendingClientInfoFutures;
+    std::mutex pendingClientInfoFuturesMutex;
     bool addCustomTypes;
 };
 
