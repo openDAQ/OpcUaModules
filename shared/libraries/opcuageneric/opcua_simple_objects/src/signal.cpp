@@ -125,7 +125,7 @@ void SignalNode::process()
 
     try {
         server->writeDataValue(variableNodeId, dataValue);
-    } catch (OpcUaException& ex) {
+    } catch (OpcUaException& /*ex*/) {
 
     }
 }
