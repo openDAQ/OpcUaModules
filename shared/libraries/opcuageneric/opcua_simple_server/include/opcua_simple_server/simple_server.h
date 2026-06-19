@@ -20,6 +20,7 @@
 #include <opendaq/device_ptr.h>
 #include <opendaq/instance_ptr.h>
 #include <condition_variable>
+#include <memory>
 #include <vector>
 #include <thread>
 #include <mutex>
@@ -48,7 +49,7 @@ protected:
     std::string opcUaPath = "/";
     OpcUaNodeId rootDeviceNodeId;
 
-    std::vector<simple_objects::SignalNode> signalNodes;
+    std::vector<std::unique_ptr<simple_objects::SignalNode>> signalNodes;
     std::unordered_map<std::string, SizeT> registeredClientIds;
     std::mutex connectedClientsMutex;
 

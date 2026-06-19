@@ -192,7 +192,7 @@ void GenericServer::addSignalNodes()
         auto config = simple_objects::SignalNode::createDefaultConfig();
         config.setPropertyValue("BrowseName", "");
         try {
-            simple_objects::SignalNode node(server, rootDeviceNodeId, sig, config);
+            auto node = std::make_unique<simple_objects::SignalNode>(server, rootDeviceNodeId, sig, config);
             signalNodes.push_back(std::move(node));
         } catch (const DaqException& e) {
             const auto loggerComponent = context.getLogger().getOrAddComponent(LOGGER_COMPONENT_NAME);
@@ -233,7 +233,7 @@ void GenericServer::readingLoop()
             const auto nextTimePoint = prewPoint + std::chrono::milliseconds(readingIntervalMs);
             for (auto& signalNode : signalNodes)
             {
-                signalNode.process();
+                signalNode->process();
             }
             prewPoint = nextTimePoint;
             interruptibleSleep(nextTimePoint);
