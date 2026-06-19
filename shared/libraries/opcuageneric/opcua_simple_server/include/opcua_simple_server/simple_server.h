@@ -50,6 +50,7 @@ protected:
 
     std::vector<simple_objects::SignalNode> signalNodes;
     std::unordered_map<std::string, SizeT> registeredClientIds;
+    std::mutex connectedClientsMutex;
 
     uint64_t readingIntervalMs;
     std::thread readingThread;

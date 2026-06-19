@@ -59,6 +59,7 @@ void GenericServer::start()
     server->setClientConnectedHandler(
         [this](const std::string& clientId)
         {
+            std::lock_guard<std::mutex> lock(connectedClientsMutex);
             const auto loggerComponent = context.getLogger().getOrAddComponent(LOGGER_COMPONENT_NAME);
             LOG_I("New client connected, ID: {}", clientId);
             SizeT clientNumber = 0;
@@ -74,6 +75,7 @@ void GenericServer::start()
     server->setClientDisconnectedHandler(
         [this](const std::string& clientId)
         {
+            std::lock_guard<std::mutex> lock(connectedClientsMutex);
             if (auto it = registeredClientIds.find(clientId); it != registeredClientIds.end())
             {
                 const auto loggerComponent = context.getLogger().getOrAddComponent(LOGGER_COMPONENT_NAME);
@@ -131,19 +133,22 @@ void GenericServer::start()
 
 void GenericServer::stop()
 {
-    if (device.assigned() && !device.isRemoved())
     {
-        const auto info = device.getInfo();
-        const auto infoInternal = info.asPtr<IDeviceInfoInternal>();
-        if (info.hasServerCapability(PROTOCOL_ID))
-            infoInternal.removeServerCapability(PROTOCOL_ID);
-        for (const auto& [_, clientNumber] : registeredClientIds)
+        std::lock_guard<std::mutex> lock(connectedClientsMutex);
+        if (device.assigned() && !device.isRemoved())
         {
-            if (clientNumber != 0)
-                infoInternal.removeConnectedClient(clientNumber);
+            const auto info = device.getInfo();
+            const auto infoInternal = info.asPtr<IDeviceInfoInternal>();
+            if (info.hasServerCapability(PROTOCOL_ID))
+                infoInternal.removeServerCapability(PROTOCOL_ID);
+            for (const auto& [_, clientNumber] : registeredClientIds)
+            {
+                if (clientNumber != 0)
+                    infoInternal.removeConnectedClient(clientNumber);
+            }
         }
+        registeredClientIds.clear();
     }
-    registeredClientIds.clear();
     stopReadingThread();
 
     if (server)
