@@ -46,6 +46,8 @@ void GenericServer::setOpcUaPath(const std::string& path)
 
 void GenericServer::start()
 {
+    if (server)
+        DAQ_THROW_EXCEPTION(InvalidStateException, "Server is already started.");
     if (!device.assigned())
         DAQ_THROW_EXCEPTION(InvalidStateException, "Device is not set.");
     if (!context.assigned())

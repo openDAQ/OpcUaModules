@@ -58,7 +58,7 @@ void SignalNode::addVariableNode(const PropertyObjectPtr& config)
     if (browseName.empty())
     {
         browseName = signal.getGlobalId().toStdString();
-        if (browseName.front() == '/')
+        if (!browseName.empty() && browseName.front() == '/')
             browseName.erase(0, 1);
         std::replace(browseName.begin(), browseName.end(), '/', '-');
     }

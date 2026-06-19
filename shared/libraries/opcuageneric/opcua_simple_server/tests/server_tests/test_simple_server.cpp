@@ -65,6 +65,15 @@ TEST_F(SimpleServerTest, DoubleStop)
     ASSERT_NO_THROW(server.stop());
 }
 
+TEST_F(SimpleServerTest, DoubleStart)
+{
+    auto daqInstance = SetupInstance();
+    GenericServer server(daqInstance);
+    server.start();
+    ASSERT_THROW(server.start(), std::exception);
+    ASSERT_NO_THROW(server.stop());
+}
+
 TEST_F(SimpleServerTest, Connect)
 {
     auto daqInstance = SetupInstance();

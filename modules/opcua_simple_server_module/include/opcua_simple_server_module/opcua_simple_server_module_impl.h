@@ -27,9 +27,6 @@ public:
 
     DictPtr<IString, IServerType> onGetAvailableServerTypes() override;
     ServerPtr onCreateServer(const StringPtr& serverType, const PropertyObjectPtr& serverConfig, const DevicePtr& rootDevice) override;
-
-private:
-    std::mutex sync;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_SIMPLE_SERVER_MODULE
