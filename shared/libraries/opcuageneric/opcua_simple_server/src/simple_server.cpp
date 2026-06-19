@@ -135,6 +135,11 @@ void GenericServer::start()
 
 void GenericServer::stop()
 {
+    stopReadingThread();
+
+    if (server)
+        server->stop();
+
     {
         std::lock_guard<std::mutex> lock(connectedClientsMutex);
         if (device.assigned() && !device.isRemoved())
@@ -151,10 +156,6 @@ void GenericServer::stop()
         }
         registeredClientIds.clear();
     }
-    stopReadingThread();
-
-    if (server)
-        server->stop();
 
     server.reset();
     signalNodes.clear();
