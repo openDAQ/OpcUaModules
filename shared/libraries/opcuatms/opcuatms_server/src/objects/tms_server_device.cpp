@@ -580,6 +580,8 @@ void TmsServerDevice::addChildNodes()
 
     tmsPropertyObject->ignoredProps.emplace("userName");
     tmsPropertyObject->ignoredProps.emplace("location");
+    // DeviceInfo is mirrored via populateDeviceInfo; do not expose the nested ObjectProperty over OPC UA.
+    tmsPropertyObject->ignoredProps.emplace("DaqDeviceInfo");
 
     numberInList = 0;
     for (auto component : object.getItems(search::Any()))

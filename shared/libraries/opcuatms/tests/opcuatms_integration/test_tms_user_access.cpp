@@ -316,7 +316,11 @@ TEST_P(TmsUserAccessPTest, CommonChecks)
     FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
 
     // one private signal in MockFunctionBlockImpl. and one in MockPhysicalDeviceImpl
-    EXPECT_EQ(device.getAllProperties().getCount() - 1, mockDevice.getAllProperties().getCount());
+    // Server Device may also expose nested DaqDeviceInfo, which is not mirrored over OPC UA TMS.
+    SizeT serverPropCount = device.getAllProperties().getCount();
+    if (device.hasProperty("DaqDeviceInfo"))
+        --serverPropCount;
+    EXPECT_EQ(serverPropCount - 1, mockDevice.getAllProperties().getCount());
     EXPECT_EQ(fb.getAllProperties().getCount(), mockFb.getAllProperties().getCount());
 
     EXPECT_EQ(device.getSignals().getCount() - 1, mockDevice.getSignals().getCount());
