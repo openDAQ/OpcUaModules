@@ -315,6 +315,7 @@ TEST_P(TmsUserAccessPTest, CommonChecks)
     DevicePtr mockDevice = clientDevice.getDevices()[1];
     FunctionBlockPtr mockFb = clientDevice.getFunctionBlocks()[0];
 
+    // one private signal in MockFunctionBlockImpl. and one in MockPhysicalDeviceImpl
     EXPECT_EQ(device.getAllProperties().getCount() - 1, mockDevice.getAllProperties().getCount());
     EXPECT_EQ(fb.getAllProperties().getCount(), mockFb.getAllProperties().getCount());
 

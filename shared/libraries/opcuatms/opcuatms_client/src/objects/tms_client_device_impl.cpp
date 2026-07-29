@@ -416,49 +416,7 @@ DeviceInfoPtr TmsClientDeviceImpl::onGetInfo()
         }
     }
 
-    // Always attach live reads for userName/location, including when the server exposes them as read-only.
-    for (const auto& [browseName, propName] : std::initializer_list<std::pair<const char*, const char*>>{{"UserName", "userName"}, {"Location", "location"}})
-    {
-        if (deviceInfoChangeableFields.count(propName) || !deviceInfo.hasProperty(propName))
-            continue;
-        if (!this->hasReference(browseName))
-            continue;
-
-        try
-        {
-            const auto refNodeId = getNodeId(browseName);
-            deviceInfo.getOnPropertyValueRead(propName) += [this, refNodeId](PropertyObjectPtr&, PropertyValueEventArgsPtr& args)
-            {
-                const auto variant = client->readValue(refNodeId);
-                const auto daqValue = VariantConverter<IBaseObject>::ToDaqObject(variant, daqContext);
-                args.setValue(daqValue);
-            };
-        }
-        catch (...)
-        {
-        }
-    }
-
     findAndCreateServerCapabilities(deviceInfo);
-
-    // userName/location are also mapped onto the device via propBrowseName. DeviceInfo cannot be
-    // nested as ObjectProperty on TMS client objects (addProperty is unsupported), so mirror the
-    // device values into DeviceInfo for consistent getInfo() reads.
-    for (const char* name : {"userName", "location"})
-    {
-        if (!this->objPtr.hasProperty(name) || !deviceInfo.hasProperty(name))
-            continue;
-
-        try
-        {
-            const BaseObjectPtr value = this->objPtr.getPropertyValue(name);
-            if (value.assigned())
-                deviceInfo.asPtr<IPropertyObjectProtected>(true).setProtectedPropertyValue(name, value);
-        }
-        catch (...)
-        {
-        }
-    }
 
     return deviceInfo;
 }
