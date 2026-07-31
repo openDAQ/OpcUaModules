@@ -640,9 +640,9 @@ void TmsClientPropertyObjectBaseImpl<Impl>::browseRawProperties()
     auto addPropertyIgnoreDuplicates = [this](const daq::PropertyPtr& prop)
     {
         auto ec = Impl::addProperty(prop);
-        if (ec != OPENDAQ_ERR_ALREADYEXISTS)
-            return ec;
-        LOG_W("OPC UA exposes two properties with the same name \"{}\". The duplicate property will be ignored.", prop.getName())
+        OPENDAQ_RETURN_IF_FAILED_EXCEPT(ec, OPENDAQ_ERR_ALREADYEXISTS);
+        if (ec == OPENDAQ_ERR_ALREADYEXISTS)
+            LOG_W("OPC UA exposes two properties with the same name \"{}\". The duplicate property will be ignored.", prop.getName())
         return OPENDAQ_SUCCESS;
     };
 
