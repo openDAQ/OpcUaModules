@@ -417,6 +417,7 @@ DeviceInfoPtr TmsClientDeviceImpl::onGetInfo()
     }
 
     findAndCreateServerCapabilities(deviceInfo);
+
     return deviceInfo;
 }
 
