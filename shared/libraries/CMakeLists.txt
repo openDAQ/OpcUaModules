@@ -6,7 +6,5 @@ if (${REPO_OPTION_PREFIX}_ENABLE_CLIENT OR ${REPO_OPTION_PREFIX}_ENABLE_SERVER)
     add_subdirectory(opcuatms)
 endif()
 
-if (${REPO_OPTION_PREFIX}_ENABLE_GENERIC_CLIENT)
-    add_subdirectory(opcuageneric)
-endif()
+add_subdirectory(opcuageneric)
 

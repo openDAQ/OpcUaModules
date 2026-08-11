@@ -21,8 +21,9 @@
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA
 
-OpcUaServer::OpcUaServer()
+OpcUaServer::OpcUaServer(bool addCustomTypes)
     : eventManager(std::make_shared<ServerEventManager>(this))
+    , addCustomTypes(addCustomTypes)
 {
     setPort(OPCUA_DEFAULT_PORT);
     createSessionContextCallback = [this](const OpcUaNodeId& sessionId, const UserPtr& authorizedUser) { return createSessionContextCallbackImp(sessionId, authorizedUser); };
@@ -217,7 +218,8 @@ void OpcUaServer::prepareServer()
     config->nodeLifecycle.generateChildNodeId = generateChildId;
 
     prepareAccessControl(config);
-    addTmsTypes(server);
+    if (addCustomTypes)
+        addTmsTypes(server);
 
     eventManager->registerEvents();
 }
@@ -572,6 +574,11 @@ void OpcUaServer::setAccessLevel(const OpcUaNodeId& nodeId, UA_Byte accessLevel)
 void OpcUaServer::writeValue(const OpcUaNodeId& nodeId, const OpcUaVariant& value)
 {
     CheckStatusCodeException(UA_Server_writeValue(server, *nodeId, *value));
+}
+
+void OpcUaServer::writeDataValue(const OpcUaNodeId& nodeId, const OpcUaDataValue& value)
+{
+    CheckStatusCodeException(UA_Server_writeDataValue(server, *nodeId, *value));
 }
 
 OpcUaVariant OpcUaServer::readValue(const OpcUaNodeId& nodeId)

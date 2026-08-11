@@ -25,6 +25,7 @@
 #include <unordered_set>
 
 #include <opcuashared/node/opcuanodeobject.h>
+#include <opcuashared/opcuadatavalue.h>
 #include <opcuashared/opcuasecurity_config.h>
 
 #include <opcuaserver/opcuaaddnodeparams.h>
@@ -77,7 +78,7 @@ public:
                                                        const UA_NodeId* methodId,
                                                        void* methodContext);
 
-    OpcUaServer();
+    OpcUaServer(bool addCustomTypes = true);
     ~OpcUaServer();
 
     static constexpr uint16_t OPCUA_DEFAULT_PORT = 4840;
@@ -142,6 +143,7 @@ public:
     void setAccessLevel(const OpcUaNodeId& nodeId, UA_Byte accessLevel);
 
     void writeValue(const OpcUaNodeId& nodeId, const OpcUaVariant& var);
+    void writeDataValue(const OpcUaNodeId& nodeId, const OpcUaDataValue& value);
     OpcUaVariant readValue(const OpcUaNodeId& nodeId);
     OpcUaNodeId readDataType(const OpcUaNodeId& typeNodeId);
 
@@ -222,6 +224,7 @@ private:
     OnClientDisconnectedCallback clientDisconnectedHandler;
     std::vector<std::future<void>> pendingClientInfoFutures;
     std::mutex pendingClientInfoFuturesMutex;
+    bool addCustomTypes;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA

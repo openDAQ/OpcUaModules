@@ -16,3 +16,7 @@ endif()
 if (${REPO_OPTION_PREFIX}_ENABLE_SERVER)
     add_subdirectory(opcua_server_module)
 endif()
+
+if (${REPO_OPTION_PREFIX}_ENABLE_SIMPLE_SERVER)
+    add_subdirectory(opcua_simple_server_module)
+endif()
