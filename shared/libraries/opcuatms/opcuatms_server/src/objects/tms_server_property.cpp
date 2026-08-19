@@ -221,10 +221,9 @@ opcua::OpcUaNodeId TmsServerProperty::getDataTypeId()
 bool TmsServerProperty::checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext)
 {
     bool allow = true;
-    if (auto tmsNodeAsProp = getObject().asPtrOrNull<daq::IProperty>(); tmsNodeAsProp.assigned() && sessionContext)
+    if (auto tmsNodeAsProp = getObject().asPtrOrNull<daq::IPropertyInternal>(); tmsNodeAsProp.assigned() && sessionContext)
     {
-        const auto propObj = static_cast<PropertyImpl*>(tmsNodeAsProp.getObject())->getOwner();
-        if (propObj.assigned())
+        if (const auto propObj = tmsNodeAsProp.getOwner(); propObj.assigned())
             allow = propObj.getPermissionManager().isAuthorized(sessionContext->getUser(), permission);
     }
     return allow;
