@@ -24,6 +24,8 @@
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
+bool GetExecutePermission(const TmsClientContextPtr& clientContext, const ContextPtr& daqContext, const opcua::OpcUaNodeId& nodeId);
+
 class TmsClientObjectImpl
 {
 public:
