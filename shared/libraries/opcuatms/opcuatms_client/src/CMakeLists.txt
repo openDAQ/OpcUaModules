@@ -30,7 +30,6 @@ set(SRC_Objects_Headers ${OBJECT_SRC_DIR}/tms_client_object_impl.h
                         ${OBJECT_SRC_DIR}/tms_client_channel_impl.h
                         ${OBJECT_SRC_DIR}/tms_client_channel_factory.h
 
-                        ${OBJECT_SRC_DIR}/tms_client_property_impl.h
                         ${OBJECT_SRC_DIR}/tms_client_property_factory.h
 
                         ${OBJECT_SRC_DIR}/tms_client_input_port_impl.h
@@ -77,7 +76,7 @@ set(SRC_Objects ${OBJECT_SRC_DIR}/tms_client_object_impl.cpp
                 ${OBJECT_SRC_DIR}/tms_client_function_block_impl.cpp
                 ${OBJECT_SRC_DIR}/tms_client_channel_impl.cpp
                 ${OBJECT_SRC_DIR}/tms_client_input_port_impl.cpp
-                ${OBJECT_SRC_DIR}/tms_client_property_impl.cpp
+                ${OBJECT_SRC_DIR}/tms_client_property_factory.cpp
                 ${OBJECT_SRC_DIR}/tms_client_property_object_impl.cpp
                 ${OBJECT_SRC_DIR}/tms_client_device_impl.cpp
                 ${OBJECT_SRC_DIR}/tms_client_folder_impl.cpp

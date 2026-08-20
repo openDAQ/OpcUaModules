@@ -132,8 +132,13 @@ bool TmsClientObjectImpl::getAttributeWritePermission(const opcua::OpcUaNodeId& 
 
 bool TmsClientObjectImpl::getExecutePermission(const opcua::OpcUaNodeId& nodeId)
 {
-    // Note: This method is used to determine if a method node is executable.
-    // Other nodes don't have executable attributes and this method will return true for them.
+    return GetExecutePermission(clientContext, daqContext, nodeId);
+}
+
+bool GetExecutePermission(const TmsClientContextPtr& clientContext, const ContextPtr& daqContext, const opcua::OpcUaNodeId& nodeId)
+{
+    // Note: This function is used to determine if a method node is executable.
+    // Other nodes don't have executable attributes and this function will return true for them.
     bool commonExecutable = true;
     try
     {
@@ -144,9 +149,9 @@ bool TmsClientObjectImpl::getExecutePermission(const opcua::OpcUaNodeId& nodeId)
     }
     catch (...)
     {
-        if (this->daqContext.getLogger().assigned())
+        if (daqContext.getLogger().assigned())
         {
-            auto loggerComponent = this->daqContext.getLogger().getOrAddComponent("OpcUaClientObject");
+            auto loggerComponent = daqContext.getLogger().getOrAddComponent("OpcUaClientObject");
             LOG_W("Cannot read executable mask attributes for OpcUA node");
         }
     }
