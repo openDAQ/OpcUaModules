@@ -224,6 +224,18 @@
             "cacheVariables": {
                 "DAQMODULES_OPCUA_ENABLE_TESTS": "ON"
             }
+        },
+        {
+            "name": "stage",
+            "hidden": true,
+            "cacheVariables": {
+                "DAQMODULES_OPCUA_ENABLE_CLIENT": "ON",
+                "DAQMODULES_OPCUA_ENABLE_SERVER": "ON",
+                "DAQMODULES_OPCUA_ENABLE_GENERIC_CLIENT": "OFF",
+                "DAQMODULES_OPCUA_ENABLE_EXAMPLE_APP": "OFF",
+                "DAQMODULES_OPCUA_ENABLE_TESTS": "OFF",
+                "CPACK_COMPONENTS_ALL": "openDAQ_opcua_client_module_Runtime;openDAQ_opcua_server_module_Runtime"
+            }
         }
     ],
     "testPresets": [
