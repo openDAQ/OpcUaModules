@@ -10,6 +10,8 @@
 #include "opendaq/reader_factory.h"
 #include "test_daq_test_helper.h"
 #include "timer.h"
+#include <chrono>
+#include <limits>
 
 #define ASSERT_DOUBLE_NE(val1, val2) ASSERT_GT(std::abs((val1) - (val2)), 1e-9)
 
@@ -954,6 +956,42 @@ TEST_F(GenericOpcuaMonitoredItemTest, ZeroSamplingInterval)
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
     fb.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 0);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, NegativeSamplingInterval)
+{
+    StartUp();
+
+    auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, -5);
+
+    CreateMonitoredItemFB(config);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
+
+    // The negative value must not wrap into a huge unsigned interval: removing the FB has to
+    // join the reader thread promptly instead of waiting out a weeks-long sleep.
+    const auto t0 = std::chrono::steady_clock::now();
+    ASSERT_NO_THROW(device.removeFunctionBlock(fb));
+    fb = nullptr;
+    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    EXPECT_LT(elapsedMs, 2 * DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, TooLargeSamplingInterval)
+{
+    StartUp();
+
+    auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, static_cast<Int>(std::numeric_limits<uint32_t>::max()) + 1);
+
+    CreateMonitoredItemFB(config);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
 }

@@ -4,6 +4,7 @@
 #include "opendaq/binary_data_packet_factory.h"
 #include "opendaq/packet_factory.h"
 #include <chrono>
+#include <limits>
 
 #define DISABLE_NODE_DATATYPE_VALIDATION
 
@@ -256,13 +257,19 @@ void OpcUaMonitoredItemFbImpl::readProperties()
         config.nodeId = OpcUaNodeId{static_cast<uint16_t>(namespaceIndex), nodeIdNumeric};
     }
 
-    config.samplingInterval =
-        readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
-    if (config.samplingInterval <= 0)
+    // Read into a signed type and range-check before narrowing: samplingInterval is unsigned, so a negative
+    // property value would wrap to a huge interval and the reader thread would sleep for weeks.
+    const auto samplingInterval =
+        readProperty<Int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
+    if (samplingInterval <= 0 || samplingInterval > static_cast<Int>(std::numeric_limits<uint32_t>::max()))
     {
         configErr.add(fmt::format("Invalid value for the \"{}\" property! Sampling interval must be a positive integer.",
                                   PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL));
         config.samplingInterval = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
+    }
+    else
+    {
+        config.samplingInterval = static_cast<uint32_t>(samplingInterval);
     }
 
     updateStatuses();

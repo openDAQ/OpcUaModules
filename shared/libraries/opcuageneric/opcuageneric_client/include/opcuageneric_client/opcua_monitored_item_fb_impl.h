@@ -18,6 +18,7 @@
 #include <opcuageneric_client/opcuageneric.h>
 #include <opcuageneric_client/status_container.h>
 #include <opcuageneric_client/common.h>
+#include <opcuageneric_client/constants.h>
 #include <opendaq/data_packet_ptr.h>
 #include <opendaq/function_block_impl.h>
 #include "opcuaclient/opcuaclient.h"
@@ -51,7 +52,7 @@ protected:
     struct FbConfig
     {
         OpcUaNodeId nodeId;
-        uint32_t samplingInterval;
+        uint32_t samplingInterval = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
         DomainSource domainSource;
     };
 
