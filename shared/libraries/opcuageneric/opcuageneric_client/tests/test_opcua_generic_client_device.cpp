@@ -386,6 +386,85 @@ TEST_F(GenericOpcuaClientDeviceTest, RemovedFBIsIgnoredOnSubsequentTimestampMode
     ASSERT_NO_THROW(device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::None)));    
 }
 
+TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithDefaultAddDeviceConfig)
+{
+    const auto instance = DaqInstanceInit();
+
+    PropertyObjectPtr config;
+    ASSERT_NO_THROW(config = instance.createDefaultAddDeviceConfig());
+    ASSERT_TRUE(config.assigned());
+
+    PropertyObjectPtr deviceTypeConfigs = config.getPropertyValue("Device");
+    ASSERT_TRUE(deviceTypeConfigs.hasProperty("OPCUAGeneric"));
+
+    PropertyObjectPtr ourConfig = deviceTypeConfigs.getPropertyValue("OPCUAGeneric");
+    ourConfig.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::ServerTimestamp));
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+
+    // the value set in the nested section must reach the device
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::ServerTimestamp));
+}
+
+// A config that is not derived from the device type and carries only a subset of the properties.
+TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithPlainPartialConfig)
+{
+    const auto instance = DaqInstanceInit();
+
+    auto config = PropertyObject();
+    config.addProperty(IntProperty(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::LocalSystemTimestamp)));
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::LocalSystemTimestamp));
+}
+
+// Properties the module knows nothing about must be ignored, not rejected.
+TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithUnknownPropertiesInConfig)
+{
+    const auto module = CreateModule();
+    const auto instance = DaqInstanceInit();
+
+    auto config = module.getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
+    config.addProperty(StringProperty("SomeForeignProperty", "value"));
+    config.addProperty(IntProperty("AnotherForeignProperty", 42));
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+
+    EXPECT_FALSE(device.hasProperty("SomeForeignProperty"));
+    EXPECT_FALSE(device.hasProperty("AnotherForeignProperty"));
+}
+
+// Adding with an explicit config must behave the same as adding with a null config.
+TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithConfigMatchesNullConfig)
+{
+    const auto module = CreateModule();
+    const auto instance = DaqInstanceInit();
+    const auto okStatus = Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager());
+
+    daq::DevicePtr withNullConfig;
+    ASSERT_NO_THROW(withNullConfig = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", nullptr));
+    ASSERT_EQ(withNullConfig.getStatusContainer().getStatus("ComponentStatus"), okStatus);
+
+    auto config = module.getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
+    daq::DevicePtr withConfig;
+    ASSERT_NO_THROW(withConfig = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(withConfig.getStatusContainer().getStatus("ComponentStatus"), okStatus);
+
+    EXPECT_EQ(withConfig.getInfo().getName(), withNullConfig.getInfo().getName());
+    EXPECT_EQ(withConfig.getAllProperties().getCount(), withNullConfig.getAllProperties().getCount());
+}
+
 TEST_F(GenericOpcuaClientDeviceTest, DeviceInfoFilledFromDeviceTypeNode)
 {
     using NT = NodeIDType;

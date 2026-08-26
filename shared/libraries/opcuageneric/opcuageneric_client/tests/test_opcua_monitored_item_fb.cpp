@@ -323,6 +323,39 @@ TEST_F(GenericOpcuaMonitoredItemTest, CreationWithCustomConfig)
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 }
 
+// The caller may hand the very same config object to several addFunctionBlock calls.
+TEST_F(GenericOpcuaMonitoredItemTest, AddFbWithReusedConfigObject)
+{
+    StartUp();
+    auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32");
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+
+    daq::FunctionBlockPtr first;
+    ASSERT_NO_THROW(first = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
+    ASSERT_EQ(first.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    EXPECT_NE(fb.getLocalId(), first.getLocalId());
+
+    device.removeFunctionBlock(first);
+}
+
+// Properties the function block knows nothing about must be ignored, not rejected.
+TEST_F(GenericOpcuaMonitoredItemTest, AddFbWithUnknownPropertiesInConfig)
+{
+    StartUp();
+    auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32");
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+    config.addProperty(StringProperty("SomeForeignProperty", "value"));
+
+    ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    EXPECT_FALSE(fb.hasProperty("SomeForeignProperty"));
+}
+
 TEST_F(GenericOpcuaMonitoredItemTest, TwoFbCreation)
 {
     StartUp();
