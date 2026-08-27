@@ -97,4 +97,37 @@ TEST_F(OpcUaDataValueTest, TestCopyBehaviour)
     ASSERT_EQ(value.toInteger(), 5);
 }
 
+static bool isDateTimeOf(const void* val, const UA_DataType* type)
+{
+    UA_DataValue dataValue;
+    UA_DataValue_init(&dataValue);
+
+    UA_Variant_setScalarCopy(&dataValue.value, val, type);
+    dataValue.hasValue = true;
+
+    OpcUaDataValue value(dataValue, true);
+    const bool result = value.isDateTime();
+
+    UA_DataValue_clear(&dataValue);
+    return result;
+}
+
+TEST_F(OpcUaDataValueTest, IsDateTime)
+{
+    const UA_DateTime dateTime = UA_DateTime_fromUnixTime(1700000000);
+    ASSERT_TRUE(isDateTimeOf(&dateTime, &UA_TYPES[UA_TYPES_DATETIME]));
+
+    // UtcTime is a subtype of DateTime carrying its own UA_DataType entry
+    const UA_UtcTime utcTime = UA_DateTime_fromUnixTime(1700000001);
+    ASSERT_TRUE(isDateTimeOf(&utcTime, &UA_TYPES[UA_TYPES_UTCTIME]));
+
+    const UA_Int64 int64Value = 1700000000;
+    ASSERT_FALSE(isDateTimeOf(&int64Value, &UA_TYPES[UA_TYPES_INT64]));
+
+    const UA_Double doubleValue = 1.5;
+    ASSERT_FALSE(isDateTimeOf(&doubleValue, &UA_TYPES[UA_TYPES_DOUBLE]));
+
+    ASSERT_FALSE(OpcUaDataValue().isDateTime());
+}
+
 END_NAMESPACE_OPENDAQ_OPCUA

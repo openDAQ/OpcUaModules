@@ -92,6 +92,13 @@ bool OpcUaDataValue::isNumber() const
     return isInteger() || isReal();
 }
 
+bool OpcUaDataValue::isDateTime() const
+{
+    const UA_Variant& variant = value.value;
+    return VariantUtils::IsScalar(variant) && variant.type != nullptr &&
+           variant.type->typeKind == UA_DATATYPEKIND_DATETIME;
+}
+
 std::string OpcUaDataValue::toString() const
 {
     return VariantUtils::ToString(value.value);

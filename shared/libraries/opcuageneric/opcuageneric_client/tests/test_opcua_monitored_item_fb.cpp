@@ -868,6 +868,8 @@ TEST_F(GenericOpcuaMonitoredItemTest, SignalDescriptorSampleTypeMatchesOpcUaData
         {OpcUaNodeId(1, ".i32"), SampleType::Int32},
         {OpcUaNodeId(1, ".i64"), SampleType::Int64},
         {OpcUaNodeId(1, ".s"),   SampleType::String},
+        {OpcUaNodeId(1, ".dt"),  SampleType::Int64},
+        {OpcUaNodeId(1, ".utc"), SampleType::Int64},
     };
 
     for (const auto& [nodeId, expectedType] : cases)
@@ -876,6 +878,35 @@ TEST_F(GenericOpcuaMonitoredItemTest, SignalDescriptorSampleTypeMatchesOpcUaData
         ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
         readValueWithTout(fb.getSignals()[0], 150);
         EXPECT_EQ(fb.getSignals()[0].getDescriptor().getSampleType(), expectedType);
+        device.removeFunctionBlock(fb);
+        fb = nullptr;
+    }
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, ReadDateTimeValue)
+{
+    StartUp();
+
+    const std::vector<std::pair<OpcUaNodeId, UA_DateTime>> cases = {
+        {OpcUaNodeId(1, ".dt"),  UA_DateTime_fromUnixTime(1700000000)},
+        {OpcUaNodeId(1, ".utc"), UA_DateTime_fromUnixTime(1700000001)},
+    };
+
+    for (const auto& [nodeId, expected] : cases)
+    {
+        CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), 50);
+
+        EXPECT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+        const daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], 300);
+        ASSERT_TRUE(val.assigned());
+
+        // the descriptor is adjusted only once the first value has been read
+        EXPECT_EQ(fb.getSignals()[0].getDescriptor().getSampleType(), SampleType::Int64);
+
+        // the value is forwarded as-is: 100 ns ticks since 1601-01-01
+        EXPECT_EQ(val.asPtr<INumber>().getValue<int64_t>(int64_t(0)), static_cast<int64_t>(expected));
+
         device.removeFunctionBlock(fb);
         fb = nullptr;
     }

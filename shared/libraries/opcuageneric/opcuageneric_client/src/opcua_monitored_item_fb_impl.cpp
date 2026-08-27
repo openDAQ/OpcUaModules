@@ -366,6 +366,11 @@ bool OpcUaMonitoredItemFbImpl::validateResponse(const OpcUaDataValue& value)
         responseValidationErr.set(std::string("Reading value error: response without a value."));
         return false;
     }
+    if (value.isNull())
+    {
+        responseValidationErr.set(std::string("Reading value error: response with an empty value."));
+        return false;
+    }
     if (config.domainSource == DomainSource::ServerTimestamp && (!value.getValue().hasServerTimestamp || value.getValue().serverTimestamp == 0))
     {
         responseValidationErr.set(std::string("Reading value error: there is no required server timestamp"));
@@ -483,14 +488,30 @@ void OpcUaMonitoredItemFbImpl::readerLoop()
                     if (validateResponse(dataValue) && validateValueDataType(dataValue))
                     {
                         const auto dps = buildDataPacket(dataValue);
-                        if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
-                            outputDomainSignal.sendPacket(dps.domainDataPacket);
-                        outputSignal.sendPacket(dps.dataPacket);
+                        if (dps.dataPacket.assigned())
+                        {
+                            if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
+                                outputDomainSignal.sendPacket(dps.domainDataPacket);
+                            outputSignal.sendPacket(dps.dataPacket);
+                        }
+                        else
+                        {
+                            valueValidationErr.set(fmt::format("Failed to build a packet for value type ({}).",
+                                                               static_cast<int>(dataValue.getValue().value.type->typeKind)));
+                        }
                     }
                 }
-                catch (OpcUaException&)
+                catch (const OpcUaException&)
                 {
                     exceptionErr.set("Exception while reading.");
+                }
+                catch (const std::exception& e)
+                {
+                    exceptionErr.set(fmt::format("Exception while reading: {}", e.what()));
+                }
+                catch (...)
+                {
+                    exceptionErr.set("Unknown exception while reading.");
                 }
             }
         }
@@ -515,7 +536,7 @@ OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(
         dps.dataPacket = daq::BinaryDataPacket(dps.domainDataPacket, outputSignalDescriptor, convertedValue.size());
         std::memcpy(dps.dataPacket.getRawData(), convertedValue.data(), convertedValue.size());
     }
-    else if (value.isInteger() || value.isReal())
+    else if (value.isInteger() || value.isReal() || value.isDateTime())
     {
         if (dps.domainDataPacket.assigned())
             dps.dataPacket = daq::DataPacketWithDomain(dps.domainDataPacket, outputSignalDescriptor, 1);
@@ -549,7 +570,8 @@ OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(
                 *(static_cast<uint64_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_UInt64>();
                 break;
             case UA_DATATYPEKIND_DATETIME:
-                *(static_cast<int64_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Int64>();
+                *(static_cast<int64_t*>(dps.dataPacket.getRawData())) =
+                    *static_cast<const UA_DateTime*>(value.getValue().value.data);
                 break;
             case UA_DATATYPEKIND_FLOAT:
                 *(static_cast<float*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Float>();

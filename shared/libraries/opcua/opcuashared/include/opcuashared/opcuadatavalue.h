@@ -51,6 +51,7 @@ public:
     bool isNull() const;
     bool isReal() const;
     bool isNumber() const;
+    bool isDateTime() const;
 
     std::string toString() const;
     int64_t toInteger() const;
