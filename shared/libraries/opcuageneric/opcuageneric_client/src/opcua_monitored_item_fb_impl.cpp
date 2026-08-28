@@ -5,6 +5,7 @@
 #include "opendaq/packet_factory.h"
 #include <chrono>
 #include <limits>
+#include <utility>
 
 #define DISABLE_NODE_DATATYPE_VALIDATION
 
@@ -67,10 +68,11 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
                                                    daq::opcua::OpcUaClientPtr client,
                                                    const std::string& localId,
                                                    DomainSource defaultDomainSource,
+                                                   SamplingScheduler* scheduler,
                                                    const PropertyObjectPtr& config)
     : FunctionBlock(type, ctx, parent, localId.empty() ? generateLocalId() : localId)
     , client(client)
-    , running(false)
+    , scheduler(scheduler)
     , statuses(std::make_shared<utils::StatusContainer>())
 {
     initComponentStatus();
@@ -86,26 +88,25 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
     adjustSignalDescriptor();
     createSignal();
     updateStatuses();
-    runReaderThread();
 }
 
 OpcUaMonitoredItemFbImpl::~OpcUaMonitoredItemFbImpl()
 {
-    if (readerThread.joinable())
-    {
-        running = false;
-        readerThread.join();
-    }
+    detachFromScheduler();
 }
 
 void OpcUaMonitoredItemFbImpl::removed()
 {
-    if (readerThread.joinable())
-    {
-        running = false;
-        readerThread.join();
-    }
+    detachFromScheduler();
     FunctionBlock::removed();
+}
+
+void OpcUaMonitoredItemFbImpl::detachFromScheduler()
+{
+    // Returns only once an in-progress processSample() on this item has finished, so the object can
+    // be torn down afterwards.
+    if (auto* sched = std::exchange(scheduler, nullptr); sched != nullptr)
+        sched->unregisterItem(this);
 }
 
 void OpcUaMonitoredItemFbImpl::initStatusContainer()
@@ -257,19 +258,17 @@ void OpcUaMonitoredItemFbImpl::readProperties()
         config.nodeId = OpcUaNodeId{static_cast<uint16_t>(namespaceIndex), nodeIdNumeric};
     }
 
-    // Read into a signed type and range-check before narrowing: samplingInterval is unsigned, so a negative
-    // property value would wrap to a huge interval and the reader thread would sleep for weeks.
     const auto samplingInterval =
         readProperty<Int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
     if (samplingInterval <= 0 || samplingInterval > static_cast<Int>(std::numeric_limits<uint32_t>::max()))
     {
         configErr.add(fmt::format("Invalid value for the \"{}\" property! Sampling interval must be a positive integer.",
                                   PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL));
-        config.samplingInterval = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
+        samplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
     }
     else
     {
-        config.samplingInterval = static_cast<uint32_t>(samplingInterval);
+        samplingIntervalMs = static_cast<uint32_t>(samplingInterval);
     }
 
     updateStatuses();
@@ -469,67 +468,69 @@ SignalConfigPtr OpcUaMonitoredItemFbImpl::createDomainSignal()
     return outputDomainSignal;
 }
 
-void OpcUaMonitoredItemFbImpl::runReaderThread()
+uint32_t OpcUaMonitoredItemFbImpl::getSamplingInterval() const
 {
-    running = true;
-    readerThread = std::thread([this] { readerLoop(); });
+    return samplingIntervalMs.load();
 }
 
-void OpcUaMonitoredItemFbImpl::readerLoop()
+void OpcUaMonitoredItemFbImpl::processSample()
 {
-    auto start = std::chrono::high_resolution_clock::now();
-    while (running)
     {
-        auto nextTP = start;
+        auto lockProcessing = std::scoped_lock(processingMutex);
+        if (configErr.ok() && nodeValidationErr.ok())
         {
-            auto lockProcessing = std::scoped_lock(processingMutex);
-            nextTP += std::chrono::milliseconds(config.samplingInterval);
-            if (configErr.ok() && nodeValidationErr.ok())
+            OpcUaDataValue dataValue;
+            try
             {
-                OpcUaDataValue dataValue;
-                try
-                {
-                    dataValue = client->readDataValue(config.nodeId);
+                dataValue = client->readDataValue(config.nodeId);
 
-                    exceptionErr.reset();
-                    if (validateResponse(dataValue) && validateValueDataType(dataValue))
+                exceptionErr.reset();
+                if (validateResponse(dataValue) && validateValueDataType(dataValue))
+                {
+                    const auto dps = buildDataPacket(dataValue);
+                    if (dps.dataPacket.assigned())
                     {
-                        const auto dps = buildDataPacket(dataValue);
-                        if (dps.dataPacket.assigned())
-                        {
-                            if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
-                                outputDomainSignal.sendPacket(dps.domainDataPacket);
-                            outputSignal.sendPacket(dps.dataPacket);
-                        }
-                        else
-                        {
-                            valueValidationErr.set(fmt::format("Failed to build a packet for value type ({}).",
-                                                               static_cast<int>(dataValue.getValue().value.type->typeKind)));
-                        }
+                        if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
+                            outputDomainSignal.sendPacket(dps.domainDataPacket);
+                        outputSignal.sendPacket(dps.dataPacket);
+                    }
+                    else
+                    {
+                        valueValidationErr.set(fmt::format("Failed to build a packet for value type ({}).",
+                                                           static_cast<int>(dataValue.getValue().value.type->typeKind)));
                     }
                 }
-                catch (const OpcUaException&)
-                {
-                    exceptionErr.set("Exception while reading.");
-                }
-                catch (const std::exception& e)
-                {
-                    exceptionErr.set(fmt::format("Exception while reading: {}", e.what()));
-                }
-                catch (...)
-                {
-                    exceptionErr.set("Unknown exception while reading.");
-                }
+            }
+            catch (const OpcUaException&)
+            {
+                exceptionErr.set("Exception while reading.");
+            }
+            catch (const std::exception& e)
+            {
+                exceptionErr.set(fmt::format("Exception while reading: {}", e.what()));
+            }
+            catch (...)
+            {
+                exceptionErr.set("Unknown exception while reading.");
             }
         }
-        updateStatuses();
-        auto now = std::chrono::high_resolution_clock::now();
-        std::chrono::microseconds sleepTime(0);
-        if (now < nextTP)
-            sleepTime = std::chrono::duration_cast<std::chrono::microseconds>(nextTP - now);
-        start = nextTP;
-        std::this_thread::sleep_for(sleepTime);
     }
+    updateStatuses();
+}
+
+void OpcUaMonitoredItemFbImpl::onConnectionRestored()
+{
+    auto lock = this->getRecursiveConfigLock();
+    auto lockProcessing = std::scoped_lock(processingMutex);
+
+    // The node may have disappeared or changed its data type while the connection was down, so the
+    // validation done at construction time is redone against the reconnected server.
+    statuses->resetAll();
+
+    validateNode();
+    adjustSignalDescriptor();
+    reconfigureSignal(config);
+    updateStatuses();
 }
 
 OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(const OpcUaDataValue& value)

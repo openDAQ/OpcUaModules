@@ -10,6 +10,7 @@
 #include "opcuageneric_client/constants.h"
 #include "opcuageneric_client/generic_client_device_impl.h"
 #include "opcuaservertesthelper.h"
+#include "opendaq/reader_factory.h"
 #include "test_daq_test_helper.h"
 #include <chrono>
 #include <thread>
@@ -316,6 +317,51 @@ TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_ReconnectsAfterServerResta
 
     testHelper.startServer();
     ASSERT_TRUE(waitForConnectionStatus("Connected"));
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, SamplingPausesWhileServerIsDownAndResumesWithoutBurst)
+{
+    constexpr uint32_t interval = 20;
+    constexpr auto downtime = std::chrono::milliseconds(600);
+    constexpr auto window = std::chrono::milliseconds(400);
+
+    DaqInstanceInit();
+    createDeviceWithShortInterval(testHelper.getServerUrl());
+    ASSERT_TRUE(waitForConnectionStatus("Connected"));
+
+    daq::FunctionBlockPtr fb;
+    ASSERT_NO_THROW(fb = addMonitoredItemFB(".i32", 1, interval));
+
+    auto reader = daq::StreamReaderBuilder()
+                      .setSignal(fb.getSignals()[0])
+                      .setValueReadType(daq::SampleType::Int64)
+                      .setDomainReadType(daq::SampleType::UInt64)
+                      .setSkipEvents(true)
+                      .build();
+
+    std::this_thread::sleep_for(window);
+    const auto whileConnected = reader.getAvailableCount();
+    ASSERT_GT(whileConnected, 5u);
+
+    testHelper.stop();
+    ASSERT_TRUE(waitForConnectionStatus("Reconnecting"));
+
+    const auto afterDisconnect = reader.getAvailableCount();
+    std::this_thread::sleep_for(downtime);
+    // Nothing is sampled while the client is down, so no packets appear.
+    EXPECT_LE(reader.getAvailableCount(), afterDisconnect + 1u);
+
+    testHelper.startServer();
+    ASSERT_TRUE(waitForConnectionStatus("Connected"));
+
+    const auto atReconnect = reader.getAvailableCount();
+    std::this_thread::sleep_for(window);
+    const auto afterReconnect = reader.getAvailableCount();
+
+    EXPECT_GT(afterReconnect, atReconnect + 5u);
+    EXPECT_LT(afterReconnect - atReconnect, 2u * (window.count() / interval));
+
+    ASSERT_NO_THROW(device.removeFunctionBlock(fb));
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_StopsCleanlyOnDeviceRemoval)

@@ -122,7 +122,7 @@ void SamplingScheduler::loop()
         if (isConnected && !isConnected())
         {
             std::unique_lock lock(mutex);
-            cv.wait_for(lock, DISCONNECTED_POLL_INTERVAL, [this] { return !running.load(); });
+            cv.wait_for(lock, DISCONNECTED_POLL_INTERVAL, [this] { return !running.load() || revalidatePending.load(); });
             continue;
         }
 

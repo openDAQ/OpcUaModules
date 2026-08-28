@@ -12,6 +12,7 @@
 #include "timer.h"
 #include <chrono>
 #include <limits>
+#include <thread>
 
 #define ASSERT_DOUBLE_NE(val1, val2) ASSERT_GT(std::abs((val1) - (val2)), 1e-9)
 
@@ -1007,7 +1008,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, NegativeSamplingInterval)
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
 
     // The negative value must not wrap into a huge unsigned interval: removing the FB has to
-    // join the reader thread promptly instead of waiting out a weeks-long sleep.
+    // detach it from the scheduler promptly instead of waiting out a weeks-long deadline.
     const auto t0 = std::chrono::steady_clock::now();
     ASSERT_NO_THROW(device.removeFunctionBlock(fb));
     fb = nullptr;
@@ -1112,4 +1113,63 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdTypeNumericToString)
     fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+}
+
+
+namespace
+{
+// Number of samples delivered on a signal, counted without draining the reader.
+daq::StreamReaderPtr makeCountingReader(const daq::SignalPtr& signal)
+{
+    return daq::StreamReaderBuilder()
+        .setSignal(signal)
+        .setValueReadType(daq::SampleType::Int64)
+        .setDomainReadType(daq::SampleType::UInt64)
+        .setSkipEvents(true)
+        .build();
+}
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockWhileSampling)
+{
+    StartUp();
+
+    // A short interval keeps the scheduler busy on this item, so removal is likely to land while a
+    // sample is in progress.
+    for (int i = 0; i < 10; ++i)
+    {
+        daq::FunctionBlockPtr localFb;
+        auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 1);
+
+        ASSERT_NO_THROW(localFb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        ASSERT_NO_THROW(device.removeFunctionBlock(localFb));
+    }
+
+    EXPECT_EQ(device.getFunctionBlocks().getCount(), 0u);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
+{
+    constexpr uint32_t slowInterval = 400;
+    constexpr uint32_t fastInterval = 20;
+    StartUp();
+
+    CreateMonitoredItemFB(std::string(".i32"), 1, slowInterval);
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    auto reader = makeCountingReader(fb.getSignals()[0]);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    const auto slowCount = reader.getAvailableCount();
+    EXPECT_LE(slowCount, 4u);
+
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, fastInterval);
+
+    // The new interval is picked up at the next deadline shift, so within one old interval.
+    std::this_thread::sleep_for(std::chrono::milliseconds(slowInterval + 500));
+    EXPECT_GE(reader.getAvailableCount(), slowCount + 10u);
 }

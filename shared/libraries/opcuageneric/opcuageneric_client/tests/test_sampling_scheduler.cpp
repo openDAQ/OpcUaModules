@@ -258,7 +258,7 @@ TEST(SamplingSchedulerTest, DoesNotSampleWhileDisconnected)
     connected = true;
     scheduler.onReconnected();  // also wakes the loop out of its disconnected wait
 
-    EXPECT_TRUE(item.waitForSamples(3, 2s));
+    EXPECT_TRUE(item.waitForSamples(3, 300ms));
     scheduler.stop();
 }
 

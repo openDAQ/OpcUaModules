@@ -19,13 +19,14 @@
 #include <opcuageneric_client/status_container.h>
 #include <opcuageneric_client/common.h>
 #include <opcuageneric_client/constants.h>
+#include <opcuageneric_client/sampling_scheduler.h>
 #include <opendaq/data_packet_ptr.h>
 #include <opendaq/function_block_impl.h>
 #include "opcuaclient/opcuaclient.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
-class OpcUaMonitoredItemFbImpl final : public FunctionBlock
+class OpcUaMonitoredItemFbImpl final : public FunctionBlock, public ISampledItem
 {
     friend class GenericOpcuaMonitoredItemTest;
 
@@ -36,11 +37,16 @@ public:
                                       daq::opcua::OpcUaClientPtr client,
                                       const std::string& localId,
                                       DomainSource defaultDomainSource,
+                                      SamplingScheduler* scheduler = nullptr,
                                       const PropertyObjectPtr& config = nullptr);
     ~OpcUaMonitoredItemFbImpl();
     DAQ_OPCUA_GENERIC_MODULE_API static FunctionBlockTypePtr CreateType();
 
     void setDomainSource(DomainSource domainSource);
+
+    uint32_t getSamplingInterval() const override;
+    void processSample() override;
+    void onConnectionRestored() override;
 
 protected:
     struct DataPackets
@@ -52,7 +58,6 @@ protected:
     struct FbConfig
     {
         OpcUaNodeId nodeId;
-        uint32_t samplingInterval = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
         DomainSource domainSource;
     };
 
@@ -69,8 +74,9 @@ protected:
     daq::opcua::OpcUaClientPtr client;
     OpcUaNodeId nodeDataType;
 
-    std::thread readerThread;
-    std::atomic<bool> running;
+    std::atomic<uint32_t> samplingIntervalMs{DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL};
+
+    SamplingScheduler* scheduler;
     std::recursive_mutex processingMutex;
 
     std::shared_ptr<utils::StatusContainer> statuses;
@@ -99,8 +105,7 @@ protected:
     bool validateResponse(const OpcUaDataValue& value);
     bool validateValueDataType(const OpcUaDataValue& value);
 
-    void runReaderThread();
-    void readerLoop();
+    void detachFromScheduler();
 
     DataPackets buildDataPacket(const OpcUaDataValue& value);
     daq::DataPacketPtr buildDomainDataPacket(const OpcUaDataValue& value);
