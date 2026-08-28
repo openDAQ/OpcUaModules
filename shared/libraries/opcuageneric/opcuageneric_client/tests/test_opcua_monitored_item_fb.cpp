@@ -14,12 +14,6 @@
 #include <limits>
 #include <thread>
 
-#if defined(__APPLE__)
-#define SKIP_TEST_MAC_CI GTEST_SKIP() << "Skipping timing-sensitive test on macOS CI"
-#else
-#define SKIP_TEST_MAC_CI
-#endif
-
 #define ASSERT_DOUBLE_NE(val1, val2) ASSERT_GT(std::abs((val1) - (val2)), 1e-9)
 
 #define ASSERT_FLOAT_NE(val1, val2) ASSERT_GT(std::fabs((val1) - (val2)), 1e-6f)
@@ -1160,12 +1154,9 @@ TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockWhileSampling)
 
 TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
 {
-    // Counting packets over a fixed window assumes the requested sampling rate is actually achieved,
-    // which does not hold on the macOS CI runners.
-    SKIP_TEST_MAC_CI;
-
-    constexpr uint32_t slowInterval = 400;
+    constexpr uint32_t slowInterval = 500;
     constexpr uint32_t fastInterval = 20;
+    constexpr daq::SizeT packets = 6;
     StartUp();
 
     CreateMonitoredItemFB(std::string(".i32"), 1, slowInterval);
@@ -1175,11 +1166,17 @@ TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     const auto slowCount = reader.getAvailableCount();
-    EXPECT_LE(slowCount, 4u);
+    EXPECT_LE(slowCount, 3u);
 
     fb.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, fastInterval);
 
-    // The new interval is picked up at the next deadline shift, so within one old interval.
-    std::this_thread::sleep_for(std::chrono::milliseconds(slowInterval + 500));
-    EXPECT_GE(reader.getAvailableCount(), slowCount + 10u);
+    // Time the same packets at the new interval. At the old one they would need six times 500 ms, and
+    // the first of them still waits out the pending old deadline. Comparing the measured time against
+    // the old interval pits the runner against itself, so a slow machine cannot fail this spuriously.
+    const auto start = std::chrono::steady_clock::now();
+    const bool arrived = waitForPackets(reader, slowCount + packets, std::chrono::seconds(20));
+    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+
+    ASSERT_TRUE(arrived);
+    EXPECT_LT(elapsedMs, packets * slowInterval);
 }

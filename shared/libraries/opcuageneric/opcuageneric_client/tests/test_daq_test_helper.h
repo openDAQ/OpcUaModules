@@ -5,6 +5,8 @@
 #include "opcuageneric_client/common.h"
 #include "opcuageneric_client/constants.h"
 #include <opcuageneric_client/generic_client_device_impl.h>
+#include <chrono>
+#include <thread>
 
 namespace daq::opcua::generic
 {
@@ -40,6 +42,22 @@ public:
             device = daqInstance.addDevice(connectionStr, config);
 
         return device;
+    }
+
+    // Waits until the reader holds at least `count` packets. Tests wait for the evidence instead of
+    // assuming a sampling rate: a slow runner takes longer to deliver the packets, it does not deliver
+    // fewer of them, so a generous timeout keeps the assertion meaningful everywhere.
+    template <typename ReaderPtr>
+    static bool waitForPackets(const ReaderPtr& reader, daq::SizeT count, std::chrono::milliseconds timeout)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (reader.getAvailableCount() < count)
+        {
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return true;
     }
 
     static daq::ModulePtr CreateModule()

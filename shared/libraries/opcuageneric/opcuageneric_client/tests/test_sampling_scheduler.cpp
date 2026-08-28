@@ -1,18 +1,15 @@
 #include <gtest/gtest.h>
 #include <opcuageneric_client/sampling_scheduler.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
+#include <limits>
 #include <mutex>
 #include <thread>
 #include <vector>
-
-#if defined(__APPLE__)
-#define SKIP_TEST_MAC_CI GTEST_SKIP() << "Skipping timing-sensitive test on macOS CI"
-#else
-#define SKIP_TEST_MAC_CI
-#endif
 
 using namespace daq::opcua::generic;
 using namespace std::chrono_literals;
@@ -52,6 +49,7 @@ namespace
             {
                 sampleDelay = 0ms;
                 std::this_thread::sleep_for(delay);
+                slowSampleReturnedAt = Clock::now();
             }
         }
 
@@ -87,6 +85,8 @@ namespace
         }
 
         std::atomic<std::chrono::milliseconds> sampleDelay{0ms};
+        // Set when a delayed sample returned: the catch-up window after the stall starts there.
+        std::atomic<Clock::time_point> slowSampleReturnedAt{Clock::time_point{}};
         std::atomic<size_t> revalidations{0};
         std::atomic<size_t> schedulerDestroyedCalls{0};
 
@@ -97,16 +97,28 @@ namespace
         std::vector<Clock::time_point> sampleTimes;
     };
 
-    // Counts samples that followed the previous one almost immediately, i.e. catch-up reads.
-    size_t countBackToBack(const std::vector<Clock::time_point>& times, std::chrono::milliseconds interval)
+    // Median gap between consecutive samples, ignoring the first `from` samples. A slow runner can
+    // only stretch gaps, and the median absorbs the odd stalled wakeup, so bounding it from below
+    // holds however loaded the machine is.
+    int64_t medianGapMs(const std::vector<Clock::time_point>& times, size_t from = 0)
     {
-        size_t count = 0;
-        for (size_t i = 1; i < times.size(); ++i)
-        {
-            if (times[i] - times[i - 1] < interval / 2)
-                count++;
-        }
-        return count;
+        std::vector<int64_t> gaps;
+        for (size_t i = std::max<size_t>(from, 1); i < times.size(); ++i)
+            gaps.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(times[i] - times[i - 1]).count());
+
+        if (gaps.empty())
+            return std::numeric_limits<int64_t>::max();
+
+        std::sort(gaps.begin(), gaps.end());
+        return gaps[gaps.size() / 2];
+    }
+
+    // Samples taken in [from, from + window). Bounding this from above is safe on any runner: being
+    // slow can only move samples out of the window, never into it.
+    size_t countWithin(const std::vector<Clock::time_point>& times, Clock::time_point from, std::chrono::milliseconds window)
+    {
+        return static_cast<size_t>(
+            std::count_if(times.begin(), times.end(), [&](Clock::time_point t) { return t >= from && t < from + window; }));
     }
 
 }
@@ -178,12 +190,9 @@ TEST(SamplingSchedulerTest, SamplesItemUntilStopped)
 
 TEST(SamplingSchedulerTest, IndependentIntervalsAreHonoured)
 {
-    // The bounds below assert on the achieved sampling rate, which the macOS CI runners cannot hold.
-    SKIP_TEST_MAC_CI;
-
     FakeItem fast(20);
     FakeItem medium(50);
-    FakeItem slow(200);
+    FakeItem slow(500);
 
     SamplingScheduler scheduler(nullptr);
     scheduler.start();
@@ -191,16 +200,19 @@ TEST(SamplingSchedulerTest, IndependentIntervalsAreHonoured)
     scheduler.registerItem(&medium);
     scheduler.registerItem(&slow);
 
-    std::this_thread::sleep_for(1s);
+    // The slow item sets how long the run has to be; waiting for it beats a fixed window, which would
+    // assume the runner keeps up with the fast one.
+    ASSERT_TRUE(slow.waitForSamples(4, 10s));
     scheduler.stop();
 
-    // Generous bounds: the point is that every item keeps its own rate, not that timing is exact.
-    EXPECT_GE(fast.sampleCount(), 35u);
-    EXPECT_LE(fast.sampleCount(), 65u);
-    EXPECT_GE(medium.sampleCount(), 14u);
-    EXPECT_LE(medium.sampleCount(), 26u);
-    EXPECT_GE(slow.sampleCount(), 3u);
-    EXPECT_LE(slow.sampleCount(), 8u);
+    // Every item stays on its own deadline: none of them is sampled faster than its own interval. If
+    // the items shared one deadline, the slow ones would run at the fast item's rate.
+    EXPECT_GE(medianGapMs(fast.takeSampleTimes()), 15);
+    EXPECT_GE(medianGapMs(medium.takeSampleTimes()), 40);
+    EXPECT_GE(medianGapMs(slow.takeSampleTimes()), 400);
+
+    // And the fast item really does get more turns, whatever pace the runner manages overall.
+    EXPECT_GT(fast.sampleCount(), slow.sampleCount() + 2);
 }
 
 TEST(SamplingSchedulerTest, SingleSlowSampleCatchesUpByOneTickOnly)
@@ -213,25 +225,41 @@ TEST(SamplingSchedulerTest, SingleSlowSampleCatchesUpByOneTickOnly)
     ASSERT_TRUE(item.waitForSamples(1, 1s));
     item.sampleDelay = 200ms;  // stalls for four intervals, consumed by the next sample
 
-    std::this_thread::sleep_for(1s);
+    ASSERT_TRUE(item.waitForSamples(4, 10s));
     scheduler.stop();
 
-    // The stall costs at most one catch-up read; without the backlog drop there would be four.
-    EXPECT_LE(countBackToBack(item.takeSampleTimes(), 50ms), 1u);
+    // The stall costs at most one catch-up read. Without the backlog drop the four missed reads would
+    // all fire the moment the slow sample returns, i.e. within microseconds of that catch-up read, so
+    // measuring the window from the read itself makes the bound independent of the runner's speed.
+    const auto times = item.takeSampleTimes();
+    const auto caughtUp =
+        std::find_if(times.begin(), times.end(), [&](Clock::time_point t) { return t >= item.slowSampleReturnedAt.load(); });
+    ASSERT_NE(caughtUp, times.end());
+    EXPECT_EQ(countWithin(times, *caughtUp, 25ms), 1u);
 }
 
 TEST(SamplingSchedulerTest, ChangedIntervalTakesEffect)
 {
-    FakeItem item(200);
+    constexpr auto slowInterval = 500ms;
+
+    FakeItem item(static_cast<uint32_t>(slowInterval.count()));
     SamplingScheduler scheduler(nullptr);
     scheduler.start();
     scheduler.registerItem(&item);
 
     ASSERT_TRUE(item.waitForSamples(1, 1s));
+    const auto beforeChange = item.sampleCount();
     item.setSamplingInterval(20);
 
-    // The new interval applies from the next deadline shift, so within one old interval.
-    EXPECT_TRUE(item.waitForSamples(10, 1s));
+    // The timeout only has to be generous; it is the gaps that carry the assertion.
+    ASSERT_TRUE(item.waitForSamples(beforeChange + 6, 10s));
+    scheduler.stop();
+
+    // The new interval applies from the next deadline shift, so the first gap still carries the
+    // pending old deadline and is skipped. From there the gaps must sit well below the old interval -
+    // a scheduler that ignored the change would still be a full 500 ms apart. This compares the runner
+    // with itself instead of assuming it achieves the requested 20 ms.
+    EXPECT_LT(medianGapMs(item.takeSampleTimes(), beforeChange + 1), slowInterval.count() / 2);
 }
 
 TEST(SamplingSchedulerTest, UnregisterWaitsForSampleInProgress)
@@ -274,16 +302,13 @@ TEST(SamplingSchedulerTest, DoesNotSampleWhileDisconnected)
     connected = true;
     scheduler.onReconnected();  // also wakes the loop out of its disconnected wait
 
-    EXPECT_TRUE(item.waitForSamples(3, 300ms));
+    // How long the three samples take is up to the runner; that they arrive at all is the assertion.
+    EXPECT_TRUE(item.waitForSamples(3, 5s));
     scheduler.stop();
 }
 
 TEST(SamplingSchedulerTest, ResumingAfterPauseDoesNotBurst)
 {
-    // Counting back-to-back samples tolerates the one-tick catch-up of advanceDeadline() only once,
-    // which assumes the loop is not starved; the macOS CI runners cannot hold that.
-    SKIP_TEST_MAC_CI;
-
     std::atomic<bool> connected{true};
     FakeItem item(20);
 
@@ -296,17 +321,18 @@ TEST(SamplingSchedulerTest, ResumingAfterPauseDoesNotBurst)
     std::this_thread::sleep_for(600ms);  // ~30 missed ticks
 
     const auto beforeResume = item.sampleCount();
+    const auto resumedAt = Clock::now();
     connected = true;
     scheduler.onReconnected();
 
-    ASSERT_TRUE(item.waitForSamples(beforeResume + 3, 2s));
-    std::this_thread::sleep_for(200ms);
+    ASSERT_TRUE(item.waitForSamples(beforeResume + 3, 5s));
     scheduler.stop();
 
-    // The backlog is dropped, so the resumed item samples at its normal rate instead of firing ~30
-    // reads back to back.
+    // The backlog is dropped, so the resumed item samples at its normal rate instead of firing the ~30
+    // missed reads at once. Two intervals' worth of window holds three samples at the normal rate and
+    // all thirty of a burst; counting inside it cannot overcount on a slow runner.
     const auto times = item.takeSampleTimes();
-    EXPECT_LE(countBackToBack(times, 20ms), 1u);
+    EXPECT_LE(countWithin(times, resumedAt, 40ms), 3u);
 }
 
 TEST(SamplingSchedulerTest, OnReconnectedRevalidatesEveryItem)

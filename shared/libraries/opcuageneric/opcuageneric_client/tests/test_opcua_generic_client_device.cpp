@@ -15,12 +15,6 @@
 #include <chrono>
 #include <thread>
 
-#if defined(__APPLE__)
-#define SKIP_TEST_MAC_CI GTEST_SKIP() << "Skipping timing-sensitive test on macOS CI"
-#else
-#define SKIP_TEST_MAC_CI
-#endif
-
 namespace daq::opcua::generic
 {
 class GenericOpcuaClientDeviceTest : public testing::Test, public DaqTestHelper
@@ -327,13 +321,10 @@ TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_ReconnectsAfterServerResta
 
 TEST_F(GenericOpcuaClientDeviceTest, SamplingPausesWhileServerIsDownAndResumesWithoutBurst)
 {
-    // Counting packets over a fixed window assumes the requested sampling rate is actually achieved,
-    // which does not hold on the macOS CI runners.
-    SKIP_TEST_MAC_CI;
-
     constexpr uint32_t interval = 20;
     constexpr auto downtime = std::chrono::milliseconds(600);
-    constexpr auto window = std::chrono::milliseconds(400);
+    constexpr auto burstWindow = std::chrono::milliseconds(100);  // five intervals
+    constexpr auto patience = std::chrono::seconds(10);
 
     DaqInstanceInit();
     createDeviceWithShortInterval(testHelper.getServerUrl());
@@ -349,9 +340,9 @@ TEST_F(GenericOpcuaClientDeviceTest, SamplingPausesWhileServerIsDownAndResumesWi
                       .setSkipEvents(true)
                       .build();
 
-    std::this_thread::sleep_for(window);
-    const auto whileConnected = reader.getAvailableCount();
-    ASSERT_GT(whileConnected, 5u);
+    // Wait for the packets rather than for a deadline: a slow runner needs longer, but it still gets
+    // there, so the assertion keeps its meaning without assuming the 20 ms rate is achieved.
+    ASSERT_TRUE(waitForPackets(reader, 6u, patience));
 
     testHelper.stop();
     ASSERT_TRUE(waitForConnectionStatus("Reconnecting"));
@@ -361,15 +352,21 @@ TEST_F(GenericOpcuaClientDeviceTest, SamplingPausesWhileServerIsDownAndResumesWi
     // Nothing is sampled while the client is down, so no packets appear.
     EXPECT_LE(reader.getAvailableCount(), afterDisconnect + 1u);
 
+    const auto beforeRestart = reader.getAvailableCount();
+    const auto restartedAt = std::chrono::steady_clock::now();
     testHelper.startServer();
     ASSERT_TRUE(waitForConnectionStatus("Connected"));
+    std::this_thread::sleep_for(burstWindow);
 
-    const auto atReconnect = reader.getAvailableCount();
-    std::this_thread::sleep_for(window);
-    const auto afterReconnect = reader.getAvailableCount();
+    // The ~30 reads missed during the downtime must not arrive at once. Sampling resumes as soon as
+    // the client is back, which is slightly before the status property flips, so the span is measured
+    // from the restart itself and compared with what the interval allows over it. Being slow only
+    // lowers the packet count, never the span, so this cannot fail spuriously.
+    const auto span = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - restartedAt);
+    EXPECT_LE(reader.getAvailableCount() - beforeRestart, static_cast<daq::SizeT>(span.count() / interval) + 5u);
 
-    EXPECT_GT(afterReconnect, atReconnect + 5u);
-    EXPECT_LT(afterReconnect - atReconnect, 2u * (window.count() / interval));
+    // Sampling did resume, at whatever pace the runner manages.
+    EXPECT_TRUE(waitForPackets(reader, beforeRestart + 6u, patience));
 
     ASSERT_NO_THROW(device.removeFunctionBlock(fb));
 }
