@@ -15,6 +15,13 @@
 #include <chrono>
 #include <thread>
 
+
+#if defined(__APPLE__)
+#define SKIP_TEST_MAC_CI GTEST_SKIP() << "Skipping timing-sensitive test on macOS CI"
+#else
+#define SKIP_TEST_MAC_CI
+#endif
+
 namespace daq::opcua::generic
 {
 class GenericOpcuaClientDeviceTest : public testing::Test, public DaqTestHelper
@@ -321,6 +328,10 @@ TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_ReconnectsAfterServerResta
 
 TEST_F(GenericOpcuaClientDeviceTest, SamplingPausesWhileServerIsDownAndResumesWithoutBurst)
 {
+    // Counting packets over a fixed window assumes the requested sampling rate is actually achieved,
+    // which does not hold on the macOS CI runners.
+    SKIP_TEST_MAC_CI;
+
     constexpr uint32_t interval = 20;
     constexpr auto downtime = std::chrono::milliseconds(600);
     constexpr auto window = std::chrono::milliseconds(400);

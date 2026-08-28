@@ -8,6 +8,13 @@
 #include <thread>
 #include <vector>
 
+
+#if defined(__APPLE__)
+#define SKIP_TEST_MAC_CI GTEST_SKIP() << "Skipping timing-sensitive test on macOS CI"
+#else
+#define SKIP_TEST_MAC_CI
+#endif
+
 using namespace daq::opcua::generic;
 using namespace std::chrono_literals;
 
@@ -165,6 +172,9 @@ TEST(SamplingSchedulerTest, SamplesItemUntilStopped)
 
 TEST(SamplingSchedulerTest, IndependentIntervalsAreHonoured)
 {
+    // The bounds below assert on the achieved sampling rate, which the macOS CI runners cannot hold.
+    SKIP_TEST_MAC_CI;
+
     FakeItem fast(20);
     FakeItem medium(50);
     FakeItem slow(200);
