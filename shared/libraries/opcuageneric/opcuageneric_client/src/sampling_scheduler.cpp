@@ -11,6 +11,18 @@ SamplingScheduler::SamplingScheduler(std::function<bool()> isConnected)
 SamplingScheduler::~SamplingScheduler()
 {
     stop();
+
+    // stop() has joined the thread, so nothing else can touch `items` from here on. Anything still in
+    // the list belongs to a component that was never removed(), and it outlives this object - tell it
+    // to forget us before its own destructor tries to unregister from freed memory.
+    std::vector<Entry> leftover;
+    {
+        std::scoped_lock lock(mutex);
+        leftover.swap(items);
+    }
+
+    for (const auto& entry : leftover)
+        entry.item->onSchedulerDestroyed();
 }
 
 SamplingScheduler::TimePoint SamplingScheduler::advanceDeadline(TimePoint due, TimePoint now, std::chrono::milliseconds interval)

@@ -15,7 +15,6 @@
 #include <chrono>
 #include <thread>
 
-
 #if defined(__APPLE__)
 #define SKIP_TEST_MAC_CI GTEST_SKIP() << "Skipping timing-sensitive test on macOS CI"
 #else
@@ -373,6 +372,33 @@ TEST_F(GenericOpcuaClientDeviceTest, SamplingPausesWhileServerIsDownAndResumesWi
     EXPECT_LT(afterReconnect - atReconnect, 2u * (window.count() / interval));
 
     ASSERT_NO_THROW(device.removeFunctionBlock(fb));
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, DroppingDeviceWithLiveMonitoredItemDoesNotUseDestroyedScheduler)
+{
+    // The device here is standalone, so removed() never runs and teardown goes through the destructors:
+    // the device destroys its SamplingScheduler member, and only afterwards does the base Device release
+    // the function block. The block must not try to unregister from that dead scheduler.
+    DaqInstanceInit();
+    createDeviceWithShortInterval(testHelper.getServerUrl());
+    ASSERT_TRUE(waitForConnectionStatus("Connected"));
+
+    daq::FunctionBlockPtr fb;
+    ASSERT_NO_THROW(fb = addMonitoredItemFB(".i32", 1, 20));
+
+    auto reader = daq::StreamReaderBuilder()
+                      .setSignal(fb.getSignals()[0])
+                      .setValueReadType(daq::SampleType::Int64)
+                      .setDomainReadType(daq::SampleType::UInt64)
+                      .setSkipEvents(true)
+                      .build();
+
+    // Let the scheduler pick the item up, so it is still registered when the device goes away.
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    reader.release();
+    ASSERT_NO_THROW(fb.release());
+    ASSERT_NO_THROW(device.release());
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_StopsCleanlyOnDeviceRemoval)

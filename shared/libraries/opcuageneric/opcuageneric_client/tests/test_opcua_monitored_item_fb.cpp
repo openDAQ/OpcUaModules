@@ -14,6 +14,12 @@
 #include <limits>
 #include <thread>
 
+#if defined(__APPLE__)
+#define SKIP_TEST_MAC_CI GTEST_SKIP() << "Skipping timing-sensitive test on macOS CI"
+#else
+#define SKIP_TEST_MAC_CI
+#endif
+
 #define ASSERT_DOUBLE_NE(val1, val2) ASSERT_GT(std::abs((val1) - (val2)), 1e-9)
 
 #define ASSERT_FLOAT_NE(val1, val2) ASSERT_GT(std::fabs((val1) - (val2)), 1e-6f)
@@ -1154,6 +1160,10 @@ TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockWhileSampling)
 
 TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
 {
+    // Counting packets over a fixed window assumes the requested sampling rate is actually achieved,
+    // which does not hold on the macOS CI runners.
+    SKIP_TEST_MAC_CI;
+
     constexpr uint32_t slowInterval = 400;
     constexpr uint32_t fastInterval = 20;
     StartUp();

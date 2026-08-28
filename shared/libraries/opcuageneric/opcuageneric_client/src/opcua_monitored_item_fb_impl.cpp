@@ -105,8 +105,13 @@ void OpcUaMonitoredItemFbImpl::detachFromScheduler()
 {
     // Returns only once an in-progress processSample() on this item has finished, so the object can
     // be torn down afterwards.
-    if (auto* sched = std::exchange(scheduler, nullptr); sched != nullptr)
+    if (auto* sched = scheduler.exchange(nullptr); sched != nullptr)
         sched->unregisterItem(this);
+}
+
+void OpcUaMonitoredItemFbImpl::onSchedulerDestroyed()
+{
+    scheduler.store(nullptr);
 }
 
 void OpcUaMonitoredItemFbImpl::initStatusContainer()

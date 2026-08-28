@@ -47,6 +47,7 @@ public:
     uint32_t getSamplingInterval() const override;
     void processSample() override;
     void onConnectionRestored() override;
+    void onSchedulerDestroyed() override;
 
 protected:
     struct DataPackets
@@ -76,7 +77,10 @@ protected:
 
     std::atomic<uint32_t> samplingIntervalMs{DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL};
 
-    SamplingScheduler* scheduler;
+    // Not owned. The device owns the scheduler and destroys it before the component tree releases this
+    // block, so the scheduler clears this pointer from its destructor. Atomic because removed() and that
+    // teardown can reach it from different threads.
+    std::atomic<SamplingScheduler*> scheduler;
     std::recursive_mutex processingMutex;
 
     std::shared_ptr<utils::StatusContainer> statuses;

@@ -8,7 +8,6 @@
 #include <thread>
 #include <vector>
 
-
 #if defined(__APPLE__)
 #define SKIP_TEST_MAC_CI GTEST_SKIP() << "Skipping timing-sensitive test on macOS CI"
 #else
@@ -62,6 +61,12 @@ namespace
             cv.notify_all();
         }
 
+        void onSchedulerDestroyed() override
+        {
+            schedulerDestroyedCalls++;
+            cv.notify_all();
+        }
+
         size_t sampleCount() const
         {
             std::scoped_lock lock(mutex);
@@ -83,6 +88,7 @@ namespace
 
         std::atomic<std::chrono::milliseconds> sampleDelay{0ms};
         std::atomic<size_t> revalidations{0};
+        std::atomic<size_t> schedulerDestroyedCalls{0};
 
     private:
         std::atomic<uint32_t> interval;
@@ -274,6 +280,10 @@ TEST(SamplingSchedulerTest, DoesNotSampleWhileDisconnected)
 
 TEST(SamplingSchedulerTest, ResumingAfterPauseDoesNotBurst)
 {
+    // Counting back-to-back samples tolerates the one-tick catch-up of advanceDeadline() only once,
+    // which assumes the loop is not starved; the macOS CI runners cannot hold that.
+    SKIP_TEST_MAC_CI;
+
     std::atomic<bool> connected{true};
     FakeItem item(20);
 
@@ -330,4 +340,38 @@ TEST(SamplingSchedulerTest, StopIsIdempotentAndSafeWithoutStart)
     scheduler.start();
     EXPECT_NO_THROW(scheduler.stop());
     EXPECT_NO_THROW(scheduler.stop());
+}
+
+TEST(SamplingSchedulerTest, DestructorDetachesItemsThatAreStillRegistered)
+{
+    // Items outlive the scheduler whenever the owning device is destroyed without removed() running
+    // first: the device destroys its scheduler member, and only afterwards does the base class release
+    // the function blocks. Without this callback each of those blocks would unregister from a destroyed
+    // scheduler, which on macOS surfaces as "mutex lock failed: Invalid argument" and terminates.
+    FakeItem item(20);
+
+    {
+        SamplingScheduler scheduler(nullptr);
+        scheduler.start();
+        scheduler.registerItem(&item);
+        ASSERT_TRUE(item.waitForSamples(1, 1s));
+        EXPECT_EQ(item.schedulerDestroyedCalls.load(), 0u);
+    }
+
+    EXPECT_EQ(item.schedulerDestroyedCalls.load(), 1u);
+}
+
+TEST(SamplingSchedulerTest, DestructorDoesNotDetachItemsThatUnregisteredThemselves)
+{
+    FakeItem item(20);
+
+    {
+        SamplingScheduler scheduler(nullptr);
+        scheduler.start();
+        scheduler.registerItem(&item);
+        ASSERT_TRUE(item.waitForSamples(1, 1s));
+        scheduler.unregisterItem(&item);
+    }
+
+    EXPECT_EQ(item.schedulerDestroyedCalls.load(), 0u);
 }

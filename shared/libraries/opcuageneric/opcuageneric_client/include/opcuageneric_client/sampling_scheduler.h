@@ -24,6 +24,10 @@ public:
 
     // Called once per item after the connection has been re-established.
     virtual void onConnectionRestored() = 0;
+
+    // Called once for every still-registered item while the scheduler is being destroyed. The item
+    // must drop its back-pointer here: the scheduler is gone by the time the item itself is torn down.
+    virtual void onSchedulerDestroyed() = 0;
 };
 
 // Drives all monitored items of a device from a single thread. Each item keeps its own deadline.
