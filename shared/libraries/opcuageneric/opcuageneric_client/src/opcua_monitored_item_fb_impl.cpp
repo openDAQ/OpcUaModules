@@ -183,7 +183,7 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
 
 void OpcUaMonitoredItemFbImpl::setDomainSource(DomainSource domainSource)
 {
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
     auto lockProcessing = std::scoped_lock(processingMutex);
     if (config.domainSource != domainSource)
     {
@@ -240,7 +240,7 @@ void OpcUaMonitoredItemFbImpl::readProperties()
 {
     using namespace property_helper;
 
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
     auto lockProcessing = std::scoped_lock(processingMutex);
 
     configErr.reset();
@@ -281,7 +281,7 @@ void OpcUaMonitoredItemFbImpl::readProperties()
 
 void OpcUaMonitoredItemFbImpl::propertyChanged()
 {
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
     auto lockProcessing = std::scoped_lock(processingMutex);
 
     statuses->resetAll();
@@ -423,7 +423,7 @@ bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaDataValue& value
 
 void OpcUaMonitoredItemFbImpl::createSignal()
 {
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
     LOG_I("Creating a signal...");
 
     outputSignal = createAndAddSignal(OPCUA_VALUE_SIGNAL_LOCAL_ID, outputSignalDescriptor);
@@ -434,7 +434,7 @@ void OpcUaMonitoredItemFbImpl::createSignal()
 
 void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
 {
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
     auto lockProcessing = std::scoped_lock(processingMutex);
 
     if (config.domainSource == DomainSource::None)
@@ -458,7 +458,7 @@ void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
 
 SignalConfigPtr OpcUaMonitoredItemFbImpl::createDomainSignal()
 {
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
 
     const auto domainSignalDsc = DataDescriptorBuilder()
                                      .setSampleType(SampleType::UInt64)
@@ -525,7 +525,7 @@ void OpcUaMonitoredItemFbImpl::processSample()
 
 void OpcUaMonitoredItemFbImpl::onConnectionRestored()
 {
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
     auto lockProcessing = std::scoped_lock(processingMutex);
 
     // The node may have disappeared or changed its data type while the connection was down, so the
