@@ -94,6 +94,7 @@ protected:
     static std::string generateLocalId();
 
     void initStatusContainer();
+    static DataDescriptorPtr buildTimeDescriptor(daq::SampleType sampleType);
     void adjustSignalDescriptor();
     void createSignal();
     void reconfigureSignal(const FbConfig& prevConfig);

@@ -938,10 +938,17 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadDateTimeValue)
         ASSERT_TRUE(val.assigned());
 
         // the descriptor is adjusted only once the first value has been read
-        EXPECT_EQ(fb.getSignals()[0].getDescriptor().getSampleType(), SampleType::Int64);
+        const auto descriptor = fb.getSignals()[0].getDescriptor();
+        EXPECT_EQ(descriptor.getSampleType(), SampleType::Int64);
 
-        // the value is forwarded as-is: 100 ns ticks since 1601-01-01
-        EXPECT_EQ(val.asPtr<INumber>().getValue<int64_t>(int64_t(0)), static_cast<int64_t>(expected));
+        // a DateTime node gets openDAQ's time descriptor
+        EXPECT_EQ(descriptor.getUnit().getSymbol(), "s");
+        EXPECT_EQ(descriptor.getTickResolution(), Ratio(1, 1'000'000));
+        EXPECT_EQ(descriptor.getOrigin(), "1970-01-01T00:00:00Z");
+
+        // OPC UA 100 ns ticks since 1601-01-01 are rebased to us since the UNIX epoch
+        const int64_t expectedUnixUs = (expected - UA_DATETIME_UNIX_EPOCH) / UA_DATETIME_USEC;
+        EXPECT_EQ(val.asPtr<INumber>().getValue<int64_t>(int64_t(0)), expectedUnixUs);
 
         device.removeFunctionBlock(fb);
         fb = nullptr;

@@ -130,4 +130,34 @@ TEST_F(OpcUaDataValueTest, IsDateTime)
     ASSERT_FALSE(OpcUaDataValue().isDateTime());
 }
 
+TEST_F(OpcUaDataValueTest, DateTimeValueToUnixEpoch)
+{
+    const auto unixUsOf = [](UA_DateTime date, const UA_DataType* type)
+    {
+        UA_DataValue dataValue;
+        UA_DataValue_init(&dataValue);
+
+        UA_Variant_setScalarCopy(&dataValue.value, &date, type);
+        dataValue.hasValue = true;
+
+        OpcUaDataValue value(dataValue, true);
+        const int64_t result = value.getDateTimeValueUnixEpoch();
+
+        UA_DataValue_clear(&dataValue);
+        return result;
+    };
+
+    ASSERT_EQ(unixUsOf(UA_DateTime_fromUnixTime(1700000000), &UA_TYPES[UA_TYPES_DATETIME]), 1700000000LL * 1000000);
+    ASSERT_EQ(unixUsOf(UA_DateTime_fromUnixTime(1700000001), &UA_TYPES[UA_TYPES_UTCTIME]), 1700000001LL * 1000000);
+
+    // the UNIX epoch itself, and a date before it, which must stay negative rather than wrap
+    ASSERT_EQ(unixUsOf(UA_DATETIME_UNIX_EPOCH, &UA_TYPES[UA_TYPES_DATETIME]), 0);
+    ASSERT_EQ(unixUsOf(UA_DateTime_fromUnixTime(-1), &UA_TYPES[UA_TYPES_DATETIME]), -1000000);
+
+    // 0 ticks is 1601-01-01, not a null timestamp, when it comes from a node's value
+    ASSERT_EQ(unixUsOf(0, &UA_TYPES[UA_TYPES_DATETIME]), -11644473600LL * 1000000);
+
+    ASSERT_EQ(OpcUaDataValue().getDateTimeValueUnixEpoch(), 0);
+}
+
 END_NAMESPACE_OPENDAQ_OPCUA

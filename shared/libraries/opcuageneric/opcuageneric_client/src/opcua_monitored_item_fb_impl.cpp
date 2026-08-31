@@ -198,12 +198,27 @@ std::string OpcUaMonitoredItemFbImpl::generateLocalId()
     return std::string(OPCUA_LOCAL_MONITORED_ITEM_FB_ID_PREFIX + std::to_string(localIndex++));
 }
 
+DataDescriptorPtr OpcUaMonitoredItemFbImpl::buildTimeDescriptor(daq::SampleType sampleType)
+{
+    return DataDescriptorBuilder()
+        .setSampleType(sampleType)
+        .setRule(ExplicitDataRule())
+        .setUnit(Unit("s", -1, "seconds", "time"))
+        .setTickResolution(Ratio(1, 1'000'000))
+        .setOrigin("1970-01-01T00:00:00Z")
+        .setName("Time")
+        .build();
+}
+
 void OpcUaMonitoredItemFbImpl::adjustSignalDescriptor()
 {
     auto lockProcessing = std::scoped_lock(processingMutex);
     if (nodeValidationErr.ok() && supportedDataTypeNodeIds.count(nodeDataType) != 0)
     {
-        outputSignalDescriptor = DataDescriptorBuilder().setSampleType(supportedDataTypeNodeIds[nodeDataType]).build();
+        if (nodeDataType == OpcUaNodeId(0, UA_NS0ID_DATETIME))
+            outputSignalDescriptor = buildTimeDescriptor(supportedDataTypeNodeIds[nodeDataType]);
+        else
+            outputSignalDescriptor = DataDescriptorBuilder().setSampleType(supportedDataTypeNodeIds[nodeDataType]).build();
     }
     else
     {
@@ -460,14 +475,7 @@ SignalConfigPtr OpcUaMonitoredItemFbImpl::createDomainSignal()
 {
     auto lock = this->getRecursiveConfigLock2();
 
-    const auto domainSignalDsc = DataDescriptorBuilder()
-                                     .setSampleType(SampleType::UInt64)
-                                     .setRule(ExplicitDataRule())
-                                     .setUnit(Unit("s", -1, "seconds", "time"))
-                                     .setTickResolution(Ratio(1, 1'000'000))
-                                     .setOrigin("1970-01-01T00:00:00Z")
-                                     .setName("Time")
-                                     .build();
+    const auto domainSignalDsc = buildTimeDescriptor(SampleType::UInt64);
     outputDomainSignal = createAndAddSignal(OPCUA_TS_SIGNAL_LOCAL_ID, domainSignalDsc, false);
     outputDomainSignal.setName(localId.toStdString() + "DomainSignal");
     return outputDomainSignal;
@@ -583,8 +591,8 @@ OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(
                 *(static_cast<uint64_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_UInt64>();
                 break;
             case UA_DATATYPEKIND_DATETIME:
-                *(static_cast<int64_t*>(dps.dataPacket.getRawData())) =
-                    *static_cast<const UA_DateTime*>(value.getValue().value.data);
+                // OPC UA counts 100 ns ticks from 1601-01-01; the descriptor declares us from the UNIX epoch
+                *(static_cast<int64_t*>(dps.dataPacket.getRawData())) = value.getDateTimeValueUnixEpoch();
                 break;
             case UA_DATATYPEKIND_FLOAT:
                 *(static_cast<float*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Float>();

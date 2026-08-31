@@ -36,6 +36,14 @@ UA_DateTime OpcUaDataValue::getSourceTimestampUnixEpoch() const
     return (hasSourceTimestamp()) ? toUnixTimeUs(getDataValue().sourceTimestamp) : 0;
 }
 
+int64_t OpcUaDataValue::getDateTimeValueUnixEpoch() const
+{
+    if (!isDateTime())
+        return 0;
+    const UA_DateTime date = *static_cast<const UA_DateTime*>(value.value.data);
+    return (date - UA_DATETIME_UNIX_EPOCH) / UA_DATETIME_USEC;
+}
+
 const UA_DataValue& OpcUaDataValue::getDataValue() const
 {
     return OpcUaObject<UA_DataValue>::getValue();

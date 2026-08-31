@@ -252,7 +252,8 @@ within the timeout — with a 100 ms `SamplingInterval` that is about ten per se
 
 The value signal's sample type follows the node: floats → `Float32`/`Float64`, integers → the
 matching `Int*`/`UInt*`, `String`/`LocalizedText`/`QualifiedName` → `String`, `DateTime` → `Int64`
-holding the raw OPC UA tick count (100 ns since 1601). Arrays, structures and booleans are not
+microseconds since `1970-01-01T00:00:00Z` (the signal carries the matching time descriptor — unit
+`s`, tick resolution `1 / 1'000'000`, that origin). Arrays, structures and booleans are not
 supported.
 
 The domain signal is always `UInt64` microseconds since `1970-01-01T00:00:00Z`.
