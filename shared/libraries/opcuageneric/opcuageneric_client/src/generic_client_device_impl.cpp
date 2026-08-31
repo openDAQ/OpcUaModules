@@ -20,6 +20,7 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
     : Device(ctx, parent, localId.empty() ? generateLocalId() : localId)
     , connectionStatus("ConnectionStatusType", "ConnectionStatus", statusContainer, "Connected", context.getTypeManager())
     , client(client)
+    , sampler([this] { return this->client->isConnected(); })
     , reconnectIntervalMs(reconnectIntervalMs)
 {
     if (this->client == nullptr)
@@ -35,12 +36,14 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
     initComponentStatus();
 
     initNestedFbTypes();
+    sampler.start();
     startReconnectMonitor();
 }
 
 OpcuaGenericClientDeviceImpl::~OpcuaGenericClientDeviceImpl()
 {
     stopReconnectMonitor();
+    sampler.stop();
 }
 
 PropertyObjectPtr OpcuaGenericClientDeviceImpl::createDefaultConfig()
@@ -118,6 +121,8 @@ std::string OpcuaGenericClientDeviceImpl::getConnectionString() const
 void OpcuaGenericClientDeviceImpl::removed()
 {
     stopReconnectMonitor();
+    // Stopped before the function blocks are torn down, so that no tick can reach a dying item.
+    sampler.stop();
     Device::removed();
     client->disconnect(false);
 }
@@ -158,6 +163,7 @@ void OpcuaGenericClientDeviceImpl::reconnectMonitorLoop()
                 client->connect();
                 client->runIterate();
                 connectionStatus.setStatus("Connected");
+                sampler.onReconnected();
             }
             catch (const OpcUaException& e)
             {
@@ -209,7 +215,7 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
                     userSpecifiedLocalId = config.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID).asPtr<IString>().toStdString();
                 const auto localId = buildMILocalId(userSpecifiedLocalId);
                 nestedFunctionBlock = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
-                    context, functionBlocks, fbTypePtr, client, localId, domainSource, config);
+                    context, functionBlocks, fbTypePtr, client, localId, domainSource, &sampler, config);
             }
             else
             {
@@ -223,6 +229,7 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
                 auto lock = this->getRecursiveConfigLock2();
                 addNestedFunctionBlock(nestedFunctionBlock);
             }
+            sampler.registerItem(static_cast<OpcUaMonitoredItemFbImpl*>(*nestedFunctionBlock));
             setComponentStatus(ComponentStatus::Ok);
         }
         else

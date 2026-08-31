@@ -10,6 +10,9 @@
 #include "opendaq/reader_factory.h"
 #include "test_daq_test_helper.h"
 #include "timer.h"
+#include <chrono>
+#include <limits>
+#include <thread>
 
 #define ASSERT_DOUBLE_NE(val1, val2) ASSERT_GT(std::abs((val1) - (val2)), 1e-9)
 
@@ -319,6 +322,39 @@ TEST_F(GenericOpcuaMonitoredItemTest, CreationWithCustomConfig)
     ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
     EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 2u);
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+}
+
+// The caller may hand the very same config object to several addFunctionBlock calls.
+TEST_F(GenericOpcuaMonitoredItemTest, AddFbWithReusedConfigObject)
+{
+    StartUp();
+    auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32");
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+
+    daq::FunctionBlockPtr first;
+    ASSERT_NO_THROW(first = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
+    ASSERT_EQ(first.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    EXPECT_NE(fb.getLocalId(), first.getLocalId());
+
+    device.removeFunctionBlock(first);
+}
+
+// Properties the function block knows nothing about must be ignored, not rejected.
+TEST_F(GenericOpcuaMonitoredItemTest, AddFbWithUnknownPropertiesInConfig)
+{
+    StartUp();
+    auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32");
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+    config.addProperty(StringProperty("SomeForeignProperty", "value"));
+
+    ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    EXPECT_FALSE(fb.hasProperty("SomeForeignProperty"));
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, TwoFbCreation)
@@ -868,6 +904,8 @@ TEST_F(GenericOpcuaMonitoredItemTest, SignalDescriptorSampleTypeMatchesOpcUaData
         {OpcUaNodeId(1, ".i32"), SampleType::Int32},
         {OpcUaNodeId(1, ".i64"), SampleType::Int64},
         {OpcUaNodeId(1, ".s"),   SampleType::String},
+        {OpcUaNodeId(1, ".dt"),  SampleType::Int64},
+        {OpcUaNodeId(1, ".utc"), SampleType::Int64},
     };
 
     for (const auto& [nodeId, expectedType] : cases)
@@ -876,6 +914,42 @@ TEST_F(GenericOpcuaMonitoredItemTest, SignalDescriptorSampleTypeMatchesOpcUaData
         ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
         readValueWithTout(fb.getSignals()[0], 150);
         EXPECT_EQ(fb.getSignals()[0].getDescriptor().getSampleType(), expectedType);
+        device.removeFunctionBlock(fb);
+        fb = nullptr;
+    }
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, ReadDateTimeValue)
+{
+    StartUp();
+
+    const std::vector<std::pair<OpcUaNodeId, UA_DateTime>> cases = {
+        {OpcUaNodeId(1, ".dt"),  UA_DateTime_fromUnixTime(1700000000)},
+        {OpcUaNodeId(1, ".utc"), UA_DateTime_fromUnixTime(1700000001)},
+    };
+
+    for (const auto& [nodeId, expected] : cases)
+    {
+        CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), 50);
+
+        EXPECT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+        const daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], 300);
+        ASSERT_TRUE(val.assigned());
+
+        // the descriptor is adjusted only once the first value has been read
+        const auto descriptor = fb.getSignals()[0].getDescriptor();
+        EXPECT_EQ(descriptor.getSampleType(), SampleType::Int64);
+
+        // a DateTime node gets openDAQ's time descriptor
+        EXPECT_EQ(descriptor.getUnit().getSymbol(), "s");
+        EXPECT_EQ(descriptor.getTickResolution(), Ratio(1, 1'000'000));
+        EXPECT_EQ(descriptor.getOrigin(), "1970-01-01T00:00:00Z");
+
+        // OPC UA 100 ns ticks since 1601-01-01 are rebased to us since the UNIX epoch
+        const int64_t expectedUnixUs = (expected - UA_DATETIME_UNIX_EPOCH) / UA_DATETIME_USEC;
+        EXPECT_EQ(val.asPtr<INumber>().getValue<int64_t>(int64_t(0)), expectedUnixUs);
+
         device.removeFunctionBlock(fb);
         fb = nullptr;
     }
@@ -923,6 +997,42 @@ TEST_F(GenericOpcuaMonitoredItemTest, ZeroSamplingInterval)
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
     fb.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 0);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, NegativeSamplingInterval)
+{
+    StartUp();
+
+    auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, -5);
+
+    CreateMonitoredItemFB(config);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
+
+    // The negative value must not wrap into a huge unsigned interval: removing the FB has to
+    // detach it from the scheduler promptly instead of waiting out a weeks-long deadline.
+    const auto t0 = std::chrono::steady_clock::now();
+    ASSERT_NO_THROW(device.removeFunctionBlock(fb));
+    fb = nullptr;
+    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    EXPECT_LT(elapsedMs, 2 * DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, TooLargeSamplingInterval)
+{
+    StartUp();
+
+    auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, static_cast<Int>(std::numeric_limits<uint32_t>::max()) + 1);
+
+    CreateMonitoredItemFB(config);
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), errStatus());
 }
@@ -1010,4 +1120,70 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdTypeNumericToString)
     fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
 
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+}
+
+
+namespace
+{
+// Number of samples delivered on a signal, counted without draining the reader.
+daq::StreamReaderPtr makeCountingReader(const daq::SignalPtr& signal)
+{
+    return daq::StreamReaderBuilder()
+        .setSignal(signal)
+        .setValueReadType(daq::SampleType::Int64)
+        .setDomainReadType(daq::SampleType::UInt64)
+        .setSkipEvents(true)
+        .build();
+}
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockWhileSampling)
+{
+    StartUp();
+
+    // A short interval keeps the scheduler busy on this item, so removal is likely to land while a
+    // sample is in progress.
+    for (int i = 0; i < 10; ++i)
+    {
+        daq::FunctionBlockPtr localFb;
+        auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 1);
+
+        ASSERT_NO_THROW(localFb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        ASSERT_NO_THROW(device.removeFunctionBlock(localFb));
+    }
+
+    EXPECT_EQ(device.getFunctionBlocks().getCount(), 0u);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
+{
+    constexpr uint32_t slowInterval = 500;
+    constexpr uint32_t fastInterval = 20;
+    constexpr daq::SizeT packets = 6;
+    StartUp();
+
+    CreateMonitoredItemFB(std::string(".i32"), 1, slowInterval);
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+
+    auto reader = makeCountingReader(fb.getSignals()[0]);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    const auto slowCount = reader.getAvailableCount();
+    EXPECT_LE(slowCount, 3u);
+
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, fastInterval);
+
+    // Time the same packets at the new interval. At the old one they would need six times 500 ms, and
+    // the first of them still waits out the pending old deadline. Comparing the measured time against
+    // the old interval pits the runner against itself, so a slow machine cannot fail this spuriously.
+    const auto start = std::chrono::steady_clock::now();
+    const bool arrived = waitForPackets(reader, slowCount + packets, std::chrono::seconds(20));
+    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+
+    ASSERT_TRUE(arrived);
+    EXPECT_LT(elapsedMs, packets * slowInterval);
 }

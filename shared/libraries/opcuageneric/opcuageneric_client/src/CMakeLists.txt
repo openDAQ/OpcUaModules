@@ -7,12 +7,14 @@ set(SRC_PublicHeaders   constants.h
                         opcuageneric.h
                         generic_client_device_impl.h
                         opcua_monitored_item_fb_impl.h
+                        sampling_scheduler.h
                         status_container.h
                         status_adaptor.h
                         property_helper.h
 )
 set(SRC_Cpp generic_client_device_impl.cpp
             opcua_monitored_item_fb_impl.cpp
+            sampling_scheduler.cpp
 )
 
 source_group("common" FILES ${HEADERS_DIR}/constants.h
@@ -26,6 +28,9 @@ source_group("device" FILES ${HEADERS_DIR}/generic_client_device_impl.h
 )
 source_group("function_block" FILES ${HEADERS_DIR}/opcua_monitored_item_fb_impl.h
                             opcua_monitored_item_fb_impl.cpp
+)
+source_group("scheduler" FILES ${HEADERS_DIR}/sampling_scheduler.h
+                            sampling_scheduler.cpp
 )
 
 opendaq_prepend_include(${LIB_NAME} SRC_PublicHeaders)
