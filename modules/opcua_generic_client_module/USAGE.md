@@ -19,11 +19,12 @@ empty. IPv6 hosts go in brackets: `daq.opcua.generic://[::1]:4840`.
 To connect with settings, take the default config of the device type and pass it along:
 
 ```cpp
-auto cfg = instance.getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
-cfg.setPropertyValue("Username", "operator");
-cfg.setPropertyValue("Password", "secret");
-cfg.setPropertyValue("TimestampMode", 3);   // LocalSystemTimestamp
-auto device = instance.addDevice("daq.opcua.generic://192.168.1.50:4840", cfg);
+PropertyObjectPtr config = instance.createDefaultAddDeviceConfig();
+PropertyObjectPtr opcuaSetting = config.getPropertyValue("Device.OPCUAGeneric");
+opcuaSetting.setPropertyValue("Username", "operator");
+opcuaSetting.setPropertyValue("Password", "secret");
+opcuaSetting.setPropertyValue("TimestampMode", 3);   // LocalSystemTimestamp
+auto device = instance.addDevice("daq.opcua.generic://192.168.1.50:4840", config);
 ```
 
 ### Device properties
