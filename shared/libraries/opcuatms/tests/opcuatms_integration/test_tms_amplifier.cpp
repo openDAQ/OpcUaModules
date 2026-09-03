@@ -16,12 +16,6 @@ using namespace opcua::tms;
 using namespace opcua;
 using namespace std::chrono_literals;
 
-struct RegisteredPropertyObject
-{
-    TmsServerPropertyObjectPtr serverProp;
-    PropertyObjectPtr clientProp;
-};
-
 using namespace daq;
 
 class TMSAmplifierTest : public TmsObjectIntegrationTest, public testing::Test

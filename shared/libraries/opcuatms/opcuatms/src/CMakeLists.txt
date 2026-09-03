@@ -63,6 +63,19 @@ add_library(${MODULE_NAME} STATIC ${SRC_PublicHeaders}
 )
 
 add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${MODULE_NAME} ALIAS ${MODULE_NAME})
+# Guarded: the helper only exists when building inside the openDAQ super-build.
+if (COMMAND opendaq_target_pch)
+    opendaq_target_pch(${MODULE_NAME}
+        <opendaq/opendaq.h>
+        <opcuatms/converters/variant_converter.h>
+        <opcuatms/converters/list_conversion_utils.h>
+        <opcuatms/converters/struct_converter.h>
+        <opcuatms/core_types_utils.h>
+    )
+endif()
+
+# No unity build: the converters define explicit specializations that sibling converters instantiate first.
+
 
 target_include_directories(${MODULE_NAME} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/>
                                                  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include/>

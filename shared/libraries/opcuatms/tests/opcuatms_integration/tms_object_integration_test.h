@@ -20,6 +20,15 @@
 #include <opcuatms_server/tms_server_context.h>
 #include <opendaq/logger_sink_ptr.h>
 #include <opendaq/logger_sink_last_message_private_ptr.h>
+#include <opcuatms_server/objects/tms_server_property_object.h>
+
+// Shared by the property-object integration tests; they cannot each define their own
+// copy when their sources share a unity translation unit.
+struct RegisteredPropertyObject
+{
+    daq::opcua::tms::TmsServerPropertyObjectPtr serverProp;
+    daq::PropertyObjectPtr clientProp;
+};
 
 class TmsObjectIntegrationTest : public TmsObjectTest
 {

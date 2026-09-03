@@ -19,6 +19,16 @@ target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MOD
                                           ${BCRYPT_LIB}
 )
 
+# Guarded: the helper only exists when building inside the openDAQ super-build.
+if (COMMAND opendaq_target_pch)
+    opendaq_target_pch(${TEST_APP}
+        <opendaq/opendaq.h>
+        <gtest/gtest.h>
+        <opcuaclient/opcuaclient.h>
+        <opcuatms/converters/variant_converter.h>
+    )
+endif()
+
 add_test(NAME ${TEST_APP}
          COMMAND $<TARGET_FILE_NAME:${TEST_APP}>
          WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>

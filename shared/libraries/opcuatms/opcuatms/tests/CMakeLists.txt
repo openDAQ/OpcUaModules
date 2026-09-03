@@ -20,6 +20,21 @@ target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MOD
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_test_utils gtest
 )
 
+# Guarded: the helper only exists when building inside the openDAQ super-build.
+if (COMMAND opendaq_target_pch)
+    opendaq_target_pch(${TEST_APP}
+        <opendaq/opendaq.h>
+        <gtest/gtest.h>
+        <opcuatms/converters/variant_converter.h>
+    )
+endif()
+
+# testapp.cpp defines main() and must stay its own translation unit.
+set_source_files_properties(testapp.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+if (COMMAND opendaq_target_unity_tests)
+    opendaq_target_unity_tests(${TEST_APP} BATCH_SIZE 4)
+endif()
+
 add_test(NAME ${TEST_APP}
          COMMAND $<TARGET_FILE_NAME:${TEST_APP}>
          WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>

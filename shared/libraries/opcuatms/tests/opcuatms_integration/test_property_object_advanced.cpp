@@ -24,12 +24,6 @@ using namespace opcua::tms;
 using namespace opcua;
 using namespace std::chrono_literals;
 
-struct RegisteredPropertyObject
-{
-    TmsServerPropertyObjectPtr serverProp;
-    PropertyObjectPtr clientProp;
-};
-
 // TODO: Add complex number type property test cases once implemented
 
 class TmsPropertyObjectAdvancedTest : public TmsObjectIntegrationTest, public testing::Test

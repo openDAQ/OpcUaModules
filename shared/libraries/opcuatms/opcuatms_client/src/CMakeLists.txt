@@ -122,6 +122,21 @@ add_library(${LIB_NAME} STATIC ${SRC_Cpp}
 )
 
 add_library(${OPENDAQ_SDK_TARGET_NAMESPACE}::${LIB_NAME} ALIAS ${LIB_NAME})
+# Guarded: the helper only exists when building inside the openDAQ super-build.
+if (COMMAND opendaq_target_pch)
+    opendaq_target_pch(${LIB_NAME}
+        <opendaq/opendaq.h>
+        <opcuatms/converters/variant_converter.h>
+        <opcuatms/converters/list_conversion_utils.h>
+        <opcuatms/converters/struct_converter.h>
+        <opcuatms/core_types_utils.h>
+    )
+endif()
+
+if (COMMAND opendaq_target_unity_libs)
+    opendaq_target_unity_libs(${LIB_NAME} BATCH_SIZE 4)
+endif()
+
 
 if(BUILD_64Bit OR BUILD_ARM)
     set_target_properties(${LIB_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)

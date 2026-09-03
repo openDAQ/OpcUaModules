@@ -19,12 +19,6 @@ using namespace opcua::tms;
 using namespace opcua;
 using namespace std::chrono_literals;
 
-struct RegisteredPropertyObject
-{
-    TmsServerPropertyObjectPtr serverProp;
-    PropertyObjectPtr clientProp;
-};
-
 class TmsFusionDevice : public TmsObjectIntegrationTest, public testing::Test
 {
 protected:
