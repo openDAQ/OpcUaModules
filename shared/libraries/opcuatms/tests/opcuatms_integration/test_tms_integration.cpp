@@ -4,6 +4,7 @@
 #include <opendaq/mock/mock_fb_module.h>
 #include <opcuatms_client/tms_client.h>
 #include <opcuatms_server/tms_server.h>
+#include <tms_object_test.h>
 #include <opendaq/search_filter_factory.h>
 #include <chrono>
 #include <thread>
@@ -24,7 +25,7 @@ using namespace std::chrono_literals;
 class TmsIntegrationTest : public testing::Test
 {
 public:
-    const std::string OPC_URL = "opc.tcp://localhost/";
+    const std::string OPC_URL = "opc.tcp://localhost:" + std::to_string(TMS_TEST_OPCUA_PORT) + "/";
 
     InstancePtr createDevice(const StringPtr& localId = "localInstance")
     {
@@ -60,6 +61,7 @@ TEST_F(TmsIntegrationTest, Connect)
     InstancePtr device = createDevice();
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -73,6 +75,7 @@ TEST_F(TmsIntegrationTest, Devices)
     InstancePtr device = createDevice();
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -86,6 +89,7 @@ TEST_F(TmsIntegrationTest, DeviceInfo)
     InstancePtr device = createDevice();
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -101,6 +105,7 @@ TEST_F(TmsIntegrationTest, FunctionBlocks)
     InstancePtr device = createDevice();
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -115,6 +120,7 @@ TEST_F(TmsIntegrationTest, FunctionBlockType)
     InstancePtr device = createDevice();
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -130,6 +136,7 @@ TEST_F(TmsIntegrationTest, GetSignals)
     InstancePtr device = createDevice();
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -229,6 +236,7 @@ TEST_F(TmsIntegrationTest, GetDomainSignal)
     InstancePtr device = createDevice();
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     DevicePtr clientDevice;
@@ -251,6 +259,7 @@ TEST_F(TmsIntegrationTest, GetAvailableFunctionBlockTypes)
 {
     InstancePtr device = createDevice();
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     auto serverFbTypes = device.getAvailableFunctionBlockTypes();
@@ -269,6 +278,7 @@ TEST_F(TmsIntegrationTest, AddFunctionBlock)
 {
     InstancePtr device = createDevice();
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -290,6 +300,7 @@ TEST_F(TmsIntegrationTest, AddFunctionBlockWitchConfig)
 {
     InstancePtr device = createDevice();
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -313,6 +324,7 @@ TEST_F(TmsIntegrationTest, RemoveFunctionBlock)
 {
     InstancePtr device = createDevice();
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -333,6 +345,7 @@ TEST_F(TmsIntegrationTest, InputPortConnect)
 {
     InstancePtr device = createDevice();
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -406,6 +419,7 @@ TEST_F(TmsIntegrationTest, BeginEndUpdateDevice)
 {
     InstancePtr device = createDevice();
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -429,6 +443,7 @@ TEST_F(TmsIntegrationTest, SyncComponentNoSubdevices)
     serverSync.setSelectedSource(1);
 
     TmsServer tmsServer(inst);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(inst.getContext(), nullptr, OPC_URL);
@@ -459,6 +474,7 @@ TEST_F(TmsIntegrationTest, SyncComponent)
     serverSync.setSelectedSource(1);
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -517,6 +533,7 @@ TEST_F(TmsIntegrationTest, SyncComponentCustomInterfaceValues)
     syncComponentPrivate.setSyncLocked(true);
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -567,6 +584,7 @@ TEST_F(TmsIntegrationTest, SyncComponentCustomInterface)
     }
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -603,6 +621,7 @@ TEST_F(TmsIntegrationTest, SyncComponentCustomModeOptions)
     }
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);
@@ -627,6 +646,7 @@ TEST_F(TmsIntegrationTest, GetDaqServers)
     DevicePtr device = test_utils::createTestDevice();
 
     TmsServer tmsServer(device, device.getContext());
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(NullContext(), nullptr, OPC_URL);
@@ -643,6 +663,7 @@ TEST_F(TmsIntegrationTest, ConnectedClientInfoHasAddressAndHostname)
     InstancePtr device = createDevice();
 
     TmsServer tmsServer(device);
+    tmsServer.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     tmsServer.start();
 
     TmsClient tmsClient(device.getContext(), nullptr, OPC_URL);

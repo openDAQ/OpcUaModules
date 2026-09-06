@@ -99,14 +99,14 @@ void TmsObjectTest::waitForInput()
 daq::opcua::OpcUaServerPtr TmsObjectTest::CreateAndStartTestServer()
 {
     auto server = std::make_shared<daq::opcua::OpcUaServer>();
-    server->setPort(4840);
+    server->setPort(TMS_TEST_OPCUA_PORT);
     server->start();
     return server;
 }
 
 daq::opcua::OpcUaClientPtr TmsObjectTest::CreateAndConnectTestClient(const std::string& username, const std::string& password)
 {
-    OpcUaEndpoint endpoint("opc.tcp://127.0.0.1:4840", username, password);
+    OpcUaEndpoint endpoint(TmsTestOpcUaUrl(), username, password);
     endpoint.registerCustomTypes(UA_TYPES_DI_COUNT, UA_TYPES_DI);
     endpoint.registerCustomTypes(UA_TYPES_DAQBT_COUNT, UA_TYPES_DAQBT);
     endpoint.registerCustomTypes(UA_TYPES_DAQBSP_COUNT, UA_TYPES_DAQBSP);

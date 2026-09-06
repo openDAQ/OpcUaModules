@@ -24,6 +24,7 @@ TEST_F(TmsServerTest, StartStop)
 {
     auto daqInstance = SetupInstance();
     TmsServer server(daqInstance);
+    server.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     server.start();
     server.stop();
 }
@@ -32,6 +33,7 @@ TEST_F(TmsServerTest, Connect)
 {
     auto daqInstance = SetupInstance();
     TmsServer server(daqInstance);
+    server.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     server.start();
 
     auto client = TmsObjectTest::CreateAndConnectTestClient();
@@ -42,6 +44,7 @@ TEST_F(TmsServerTest, DeviceTopology)
 {
     auto daqInstance = SetupInstance();
     TmsServer server(daqInstance);
+    server.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     server.start();
 
     auto client = TmsObjectTest::CreateAndConnectTestClient();
@@ -57,6 +60,7 @@ TEST_F(TmsServerTest, Channels)
 {
     auto daqInstance = SetupInstance();
     TmsServer server(daqInstance);
+    server.setOpcUaPort(TMS_TEST_OPCUA_PORT);
     server.start();
 
     auto client = TmsObjectTest::CreateAndConnectTestClient();

@@ -18,6 +18,15 @@
 #include <gtest/gtest.h>
 #include <opcuaclient/opcuaclient.h>
 #include <opcuaserver/opcuaserver.h>
+#include <string>
+
+// The test servers listen apart from the default 4840, so these tests can run beside tests of the OPC UA modules
+constexpr uint16_t TMS_TEST_OPCUA_PORT = 4860;
+
+inline std::string TmsTestOpcUaUrl()
+{
+    return "opc.tcp://127.0.0.1:" + std::to_string(TMS_TEST_OPCUA_PORT);
+}
 
 class TmsObjectTest
 {
