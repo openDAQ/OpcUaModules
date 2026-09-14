@@ -18,14 +18,24 @@
 #include <gtest/gtest.h>
 #include <opcuaclient/opcuaclient.h>
 #include <opcuaserver/opcuaserver.h>
+#include <cstdlib>
 #include <string>
 
-// The test servers listen apart from the default 4840, so these tests can run beside tests of the OPC UA modules
-constexpr uint16_t TMS_TEST_OPCUA_PORT = 4860;
+// The test servers listen apart from the default 4840, so these tests can run beside tests of the OPC UA
+// modules, and every GoogleTest shard listens on a port of its own, so the shards can run at the same time
+inline uint16_t TmsTestOpcUaPort()
+{
+    static const uint16_t port = []() -> uint16_t
+    {
+        const char* const shard = std::getenv("GTEST_SHARD_INDEX");
+        return shard != nullptr ? static_cast<uint16_t>(4861 + std::atoi(shard)) : uint16_t{4860};
+    }();
+    return port;
+}
 
 inline std::string TmsTestOpcUaUrl()
 {
-    return "opc.tcp://127.0.0.1:" + std::to_string(TMS_TEST_OPCUA_PORT);
+    return "opc.tcp://127.0.0.1:" + std::to_string(TmsTestOpcUaPort());
 }
 
 class TmsObjectTest

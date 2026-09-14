@@ -66,10 +66,14 @@ if (COMMAND opendaq_target_unity_tests)
     opendaq_target_unity_tests(${TEST_APP} BATCH_SIZE 4)
 endif()
 
-add_test(NAME ${TEST_APP}
-         COMMAND $<TARGET_FILE_NAME:${TEST_APP}>
-         WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>
-)
+if (COMMAND opendaq_add_sharded_test)
+    opendaq_add_sharded_test(${TEST_APP} 8)
+else()
+    add_test(NAME ${TEST_APP}
+             COMMAND $<TARGET_FILE_NAME:${TEST_APP}>
+             WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>
+    )
+endif()
 
 if (MSVC)
     target_compile_options(${TEST_APP} PRIVATE /wd4324  /bigobj)

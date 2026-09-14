@@ -99,7 +99,7 @@ void TmsObjectTest::waitForInput()
 daq::opcua::OpcUaServerPtr TmsObjectTest::CreateAndStartTestServer()
 {
     auto server = std::make_shared<daq::opcua::OpcUaServer>();
-    server->setPort(TMS_TEST_OPCUA_PORT);
+    server->setPort(TmsTestOpcUaPort());
     server->start();
     return server;
 }

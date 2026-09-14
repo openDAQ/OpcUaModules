@@ -17,7 +17,7 @@ static LoggerPtr CreateLoggerWithDebugSink(const LoggerSinkPtr& sink)
 void TmsObjectIntegrationTest::Init()
 {
     server = std::make_shared<daq::opcua::OpcUaServer>();
-    server->setPort(TMS_TEST_OPCUA_PORT);
+    server->setPort(TmsTestOpcUaPort());
     server->setAllowBrowsingNodeCallback(TmsServerObject::allowBrowsingNodeCallback);
     server->setGetUserAccessLevelCallback(TmsServerObject::getUserAccessLevelCallback);
     server->setGetUserRightsMaskCallback(TmsServerObject::getUserRightsMaskCallback);
