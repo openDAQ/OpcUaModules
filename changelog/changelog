@@ -13,3 +13,4 @@
 
 - [#2](https://github.com/openDAQ/OpcUaModules/pull/2) Import commit history from openDAQ SDK.
 - [#1](https://github.com/openDAQ/OpcUaModules/pull/1) Project initial version.
+- [#37](https://github.com/openDAQ/OpcUaModules/pull/37) Precompiled headers and unity builds through opendaq-cmake-utils v1.1.0.
