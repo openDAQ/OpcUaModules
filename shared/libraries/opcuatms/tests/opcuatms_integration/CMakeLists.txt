@@ -50,6 +50,17 @@ if(SUPPORTS_ASAN)
     target_compile_options(${TEST_APP} PRIVATE -Wall -Werror ${CGOV_COMPILE_FLAGS} ${ASAN_COMPILE_FLAGS})
 endif()
 
+opendaq_target_pch(${TEST_APP}
+    <opendaq/opendaq.h>
+    <gtest/gtest.h>
+    <opcuaclient/opcuaclient.h>
+    <opcuatms/converters/variant_converter.h>
+)
+
+# main.cpp defines main() and must stay its own translation unit.
+set_source_files_properties(main.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+opendaq_target_unity_tests(${TEST_APP} BATCH_SIZE 4)
+
 add_test(NAME ${TEST_APP}
          COMMAND $<TARGET_FILE_NAME:${TEST_APP}>
          WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>
