@@ -33,6 +33,17 @@ target_link_libraries(${TEST_APP} PRIVATE ${OPENDAQ_SDK_TARGET_NAMESPACE}::${MOD
                                           ${OPENDAQ_SDK_TARGET_NAMESPACE}::opendaq_mocks
 )
 
+opendaq_target_pch(${TEST_APP}
+    <opendaq/opendaq.h>
+    <gtest/gtest.h>
+    <opcuaclient/opcuaclient.h>
+    <opcuatms/converters/variant_converter.h>
+)
+
+# testapp.cpp defines main() and must stay its own translation unit.
+set_source_files_properties(testapp.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+opendaq_target_unity_tests(${TEST_APP} BATCH_SIZE 4)
+
 add_test(NAME ${TEST_APP}
          COMMAND $<TARGET_FILE_NAME:${TEST_APP}>
          WORKING_DIRECTORY $<TARGET_FILE_DIR:${TEST_APP}>

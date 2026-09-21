@@ -14,12 +14,6 @@ using namespace daq;
 using namespace opcua::tms;
 using namespace opcua;
 
-struct RegisteredPropertyObject
-{
-    TmsServerPropertyObjectPtr serverProp;
-    PropertyObjectPtr clientProp;
-};
-
 class TmsFunctionTest: public TmsObjectIntegrationTest, public testing::Test
 {
 public:

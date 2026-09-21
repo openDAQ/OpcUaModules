@@ -22,12 +22,6 @@ using namespace opcua::tms;
 using namespace opcua;
 using namespace std::chrono_literals;
 
-struct RegisteredPropertyObject
-{
-    TmsServerPropertyObjectPtr serverProp;
-    PropertyObjectPtr clientProp;
-};
-
 class TmsPropertyObjectTest : public TmsObjectIntegrationTest, public testing::Test
 {
 public:

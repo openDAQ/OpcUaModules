@@ -39,4 +39,13 @@ public:
                                        const ContextPtr& context = nullptr);
 };
 
+// Declared here so that every user sees the IBaseObject specializations before instantiating the primary template.
+template <>
+BaseObjectPtr VariantConverter<IBaseObject>::ToDaqObject(const OpcUaVariant& variant, const ContextPtr& context);
+
+template <>
+OpcUaVariant VariantConverter<IBaseObject>::ToVariant(const BaseObjectPtr& object,
+                                                      const UA_DataType* targetType,
+                                                      const ContextPtr& context);
+
 END_NAMESPACE_OPENDAQ_OPCUA_TMS
