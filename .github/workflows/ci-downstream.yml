@@ -12,13 +12,14 @@ on:
 jobs:
   call-opendaq-reusable:
     name: OPC UA
-    uses: openDAQ/openDAQ-CI/.github/workflows/reusable.yml@v1
+    uses: openDAQ/openDAQ-CI/.github/workflows/reusable.yml@v3
     with:
       opendaq-ref: ${{ github.event.inputs.opendaq-ref || '' }}
       cmake-presets: >
         [
           {
             "configure-preset": "module",
-            "test-preset": "module-test"
+            "test-preset": "module-test",
+            "cache-externals": true
           }
         ]
