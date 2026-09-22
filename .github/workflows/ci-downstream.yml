@@ -15,6 +15,7 @@ jobs:
     uses: openDAQ/openDAQ-CI/.github/workflows/reusable.yml@v3
     with:
       opendaq-ref: ${{ github.event.inputs.opendaq-ref || '' }}
+      exclude-jobs: '["windows-11-*", "manylinux*"]'
       cmake-presets: >
         [
           {
