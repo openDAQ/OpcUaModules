@@ -172,6 +172,13 @@ void OpcUaServerTestHelper::createModel()
     UA_StatusCode myStatus = UA_STATUSCODE_GOODSUBSCRIPTIONTRANSFERRED;
     publishVariable(".sc", &myStatus, &UA_TYPES[UA_TYPES_STATUSCODE], &uaObjectsFolder);
 
+    UA_DateTime myDateTime = UA_DateTime_fromUnixTime(1700000000);
+    publishVariable(".dt", &myDateTime, &UA_TYPES[UA_TYPES_DATETIME], &uaObjectsFolder);
+
+    // UtcTime is a subtype of DateTime and carries its own UA_DataType entry
+    UA_UtcTime myUtcTime = UA_DateTime_fromUnixTime(1700000001);
+    publishVariable(".utc", &myUtcTime, &UA_TYPES[UA_TYPES_UTCTIME], &uaObjectsFolder);
+
     // vectors
 
     UA_Int32 myVecInt32[] = {12, 13, 15, 18};

@@ -18,13 +18,15 @@
 #include <opcuageneric_client/opcuageneric.h>
 #include <opcuageneric_client/status_container.h>
 #include <opcuageneric_client/common.h>
+#include <opcuageneric_client/constants.h>
+#include <opcuageneric_client/sampling_scheduler.h>
 #include <opendaq/data_packet_ptr.h>
 #include <opendaq/function_block_impl.h>
 #include "opcuaclient/opcuaclient.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
-class OpcUaMonitoredItemFbImpl final : public FunctionBlock
+class OpcUaMonitoredItemFbImpl final : public FunctionBlock, public ISampledItem
 {
     friend class GenericOpcuaMonitoredItemTest;
 
@@ -35,11 +37,17 @@ public:
                                       daq::opcua::OpcUaClientPtr client,
                                       const std::string& localId,
                                       DomainSource defaultDomainSource,
+                                      SamplingScheduler* scheduler = nullptr,
                                       const PropertyObjectPtr& config = nullptr);
     ~OpcUaMonitoredItemFbImpl();
     DAQ_OPCUA_GENERIC_MODULE_API static FunctionBlockTypePtr CreateType();
 
     void setDomainSource(DomainSource domainSource);
+
+    uint32_t getSamplingInterval() const override;
+    void processSample() override;
+    void onConnectionRestored() override;
+    void onSchedulerDestroyed() override;
 
 protected:
     struct DataPackets
@@ -51,7 +59,6 @@ protected:
     struct FbConfig
     {
         OpcUaNodeId nodeId;
-        uint32_t samplingInterval;
         DomainSource domainSource;
     };
 
@@ -68,8 +75,12 @@ protected:
     daq::opcua::OpcUaClientPtr client;
     OpcUaNodeId nodeDataType;
 
-    std::thread readerThread;
-    std::atomic<bool> running;
+    std::atomic<uint32_t> samplingIntervalMs{DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL};
+
+    // Not owned. The device owns the scheduler and destroys it before the component tree releases this
+    // block, so the scheduler clears this pointer from its destructor. Atomic because removed() and that
+    // teardown can reach it from different threads.
+    std::atomic<SamplingScheduler*> scheduler;
     std::recursive_mutex processingMutex;
 
     std::shared_ptr<utils::StatusContainer> statuses;
@@ -83,6 +94,7 @@ protected:
     static std::string generateLocalId();
 
     void initStatusContainer();
+    static DataDescriptorPtr buildTimeDescriptor(daq::SampleType sampleType);
     void adjustSignalDescriptor();
     void createSignal();
     void reconfigureSignal(const FbConfig& prevConfig);
@@ -98,8 +110,7 @@ protected:
     bool validateResponse(const OpcUaDataValue& value);
     bool validateValueDataType(const OpcUaDataValue& value);
 
-    void runReaderThread();
-    void readerLoop();
+    void detachFromScheduler();
 
     DataPackets buildDataPacket(const OpcUaDataValue& value);
     daq::DataPacketPtr buildDomainDataPacket(const OpcUaDataValue& value);

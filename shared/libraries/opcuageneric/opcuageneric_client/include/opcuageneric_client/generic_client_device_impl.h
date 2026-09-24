@@ -25,6 +25,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <opcuageneric_client/opcua_monitored_item_fb_impl.h>
+#include <opcuageneric_client/sampling_scheduler.h>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
@@ -68,6 +69,9 @@ protected:
 
     daq::opcua::OpcUaClientPtr client;
     DomainSource domainSource;
+
+    // Drives every monitored item of this device from a single thread.
+    SamplingScheduler sampler;
 
     // Reconnect monitor
     const uint32_t reconnectIntervalMs;
