@@ -40,6 +40,18 @@ public:
     std::string getDescription() override;
     bool checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext) override;
 
+    /*!
+     * @brief Adds the function block type option nodes under the given parent node.
+     *
+     * The options are not part of the FunctionBlockInfoStructure defined by the companion specification,
+     * so they are exposed as separate read-only properties. `CommonSettingsTypeId` is only added when the
+     * type has one assigned; a client that does not find a node falls back to the option's default.
+     */
+    static void AddOptionNodes(const OpcUaServerPtr& server,
+                               const OpcUaNodeId& parentNodeId,
+                               const FunctionBlockTypePtr& type,
+                               void* nodeContext);
+
 protected:
     OpcUaNodeId getTmsTypeId() override;
     void addChildNodes() override;
