@@ -4,6 +4,8 @@
 #include <opcuatms_client/objects/tms_client_signal_factory.h>
 #include <opcuatms_client/objects/tms_client_function_block_factory.h>
 #include <opcuatms_client/objects/tms_client_input_port_factory.h>
+#include <opcuatms_client/objects/tms_client_function_block_type_impl.h>
+#include <opendaq/component_type_builder_factory.h>
 #include <open62541/daqbsp_nodeids.h>
 
 
@@ -174,7 +176,24 @@ void TmsClientFunctionBlockBaseImpl<Impl>::readFbType()
 {
     auto infoNodeId = this->getNodeId("FunctionBlockInfo");
     auto variant = this->clientContext->getAttributeReader()->getValue(infoNodeId, UA_ATTRIBUTEID_VALUE);
-    this->type = VariantConverter<IFunctionBlockType>::ToDaqObject(variant).detach();
+    const auto baseType = VariantConverter<IFunctionBlockType>::ToDaqObject(variant);
+
+    // The options live next to the structure rather than inside it, so the type has to be rebuilt
+    // once they are read. Against a server that does not publish them the options keep their
+    // defaults and the type matches what the structure alone used to produce.
+    const auto options = ReadFunctionBlockTypeOptions(this->clientContext, infoNodeId);
+
+    FunctionBlockTypePtr fbType = FunctionBlockTypeBuilder()
+                                            .setId(baseType.getId())
+                                            .setName(baseType.getName())
+                                            .setDescription(baseType.getDescription())
+                                            .setDefaultConfig(baseType.createDefaultConfig())
+                                            .setAlwaysEmptyInput(options.alwaysEmptyInput)
+                                            .setSingleton(options.singleton)
+                                            .setCommonSettingsTypeId(options.commonSettingsTypeId)
+                                            .build();
+
+    this->type = fbType.detach();
 }
 
 template <typename Impl> 

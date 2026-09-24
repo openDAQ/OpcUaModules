@@ -1,5 +1,6 @@
 #include <opendaq/channel_ptr.h>
 #include <opcuatms_server/objects/tms_server_function_block.h>
+#include <opcuatms_server/objects/tms_server_function_block_type.h>
 #include <opcuatms/converters/variant_converter.h>
 #include <open62541/statuscodes.h>
 #include <open62541/daqbsp_nodeids.h>
@@ -80,6 +81,12 @@ void TmsServerFunctionBlock<T>::addChildNodes()
         auto tmsFunctionBlock = this->template registerTmsObjectOrAddReference<TmsServerFunctionBlock<>>(this->nodeId, fb, numberInList++);
         functionBlocks.push_back(std::move(tmsFunctionBlock));
     }
+
+    // The options are not carried by FunctionBlockInfoStructure, so they are exposed as
+    // properties of the FunctionBlockInfo node instead.
+    const auto infoNodeId = this->getChildNodeId("FunctionBlockInfo");
+    if (!infoNodeId.isNull())
+        TmsServerFunctionBlockType::AddOptionNodes(this->server, infoNodeId, this->object.getFunctionBlockType(), this);
 
     Super::addChildNodes();
 }

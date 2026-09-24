@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "tms_object_integration_test.h"
 #include <opendaq/function_block_type_factory.h>
+#include <opendaq/component_type_builder_factory.h>
 #include <opcuatms_server/objects/tms_server_function_block_type.h>
 #include <opcuatms_client/objects/tms_client_function_block_type_factory.h>
 #include <coreobjects/property_factory.h>
@@ -112,6 +113,65 @@ TEST_F(TmsFunctionBlockTypeTest, ReadOnly)
     ASSERT_THROW(client->writeValue(nameId, OpcUaVariant("value")), OpcUaException);
     ASSERT_THROW(client->writeValue(portId, OpcUaVariant(1001)), OpcUaException);
     ASSERT_THROW(client->writeValue(scalingId, OpcUaVariant()), OpcUaException);
+}
+
+TEST_F(TmsFunctionBlockTypeTest, Options)
+{
+    const FunctionBlockTypePtr fbType = FunctionBlockTypeBuilder()
+                                            .setId("RefFB")
+                                            .setName("Reference function block")
+                                            .setDescription("Description")
+                                            .setAlwaysEmptyInput(True)
+                                            .setSingleton(True)
+                                            .setCommonSettingsTypeId("SettingsId")
+                                            .build();
+
+    auto serverFbType = std::make_shared<TmsServerFunctionBlockType>(fbType, server, ctx, serverContext);
+    auto nodeId = serverFbType->registerOpcUaNode();
+    auto clientFbType = TmsClientFunctionBlockType(ctx, clientContext, nodeId);
+
+    ASSERT_TRUE(clientFbType.getAlwaysEmptyInput());
+    ASSERT_TRUE(clientFbType.getSingleton());
+    ASSERT_EQ(clientFbType.getCommonSettingsTypeId(), "SettingsId");
+
+    ASSERT_TRUE(TestComparators::FunctionBlockTypeEquals(fbType, clientFbType));
+}
+
+TEST_F(TmsFunctionBlockTypeTest, OptionDefaults)
+{
+    auto fbType = createFunctionBlockType();
+
+    auto serverFbType = std::make_shared<TmsServerFunctionBlockType>(fbType, server, ctx, serverContext);
+    auto nodeId = serverFbType->registerOpcUaNode();
+    auto clientFbType = TmsClientFunctionBlockType(ctx, clientContext, nodeId);
+
+    ASSERT_FALSE(clientFbType.getAlwaysEmptyInput());
+    ASSERT_FALSE(clientFbType.getSingleton());
+    ASSERT_FALSE(clientFbType.getCommonSettingsTypeId().assigned());
+
+    // An unassigned id publishes no node at all, which is what lets a client tell it apart from an
+    // empty string and what a server predating the options looks like.
+    auto browser = CachedReferenceBrowser(client);
+    ASSERT_FALSE(browser.hasReference(nodeId, "CommonSettingsTypeId"));
+}
+
+TEST_F(TmsFunctionBlockTypeTest, OptionsReadOnly)
+{
+    const FunctionBlockTypePtr fbType = FunctionBlockTypeBuilder()
+                                            .setId("RefFB")
+                                            .setSingleton(True)
+                                            .setCommonSettingsTypeId("SettingsId")
+                                            .build();
+
+    auto serverFbType = std::make_shared<TmsServerFunctionBlockType>(fbType, server, ctx, serverContext);
+    auto nodeId = serverFbType->registerOpcUaNode();
+
+    auto browser = CachedReferenceBrowser(client);
+    const auto singletonId = browser.getChildNodeId(nodeId, "Singleton");
+    const auto commonSettingsId = browser.getChildNodeId(nodeId, "CommonSettingsTypeId");
+
+    ASSERT_THROW(client->writeValue(singletonId, OpcUaVariant(false)), OpcUaException);
+    ASSERT_THROW(client->writeValue(commonSettingsId, OpcUaVariant("other")), OpcUaException);
 }
 
 TEST_F(TmsFunctionBlockTypeTest, DISABLED_NonDefaultValues)
