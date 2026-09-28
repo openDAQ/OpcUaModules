@@ -68,7 +68,7 @@ protected:
     StatusAdaptor connectionStatus;
 
     daq::opcua::OpcUaClientPtr client;
-    DomainSource domainSource;
+    DomainSource defaultDomainSource;       // default domain source for new added FBs
 
     // Drives every monitored item of this device from a single thread.
     SamplingScheduler sampler;

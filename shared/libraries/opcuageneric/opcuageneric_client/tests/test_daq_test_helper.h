@@ -19,7 +19,7 @@ public:
     static daq::PropertyObjectPtr buildDeviceConfig(DomainSource ds)
     {
         auto deviceConfig = OpcuaGenericClientDeviceImpl::createDefaultConfig();
-        deviceConfig.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(ds));
+        deviceConfig.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(ds));
         return deviceConfig;
     }
 

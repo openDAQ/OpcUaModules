@@ -94,7 +94,7 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_USERNAME));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PASSWORD));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID));
-    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
+    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC));
@@ -103,7 +103,7 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_USERNAME).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PASSWORD).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID).getValueType(), CoreType::ctString);
-    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_TS_MODE).getValueType(), CoreType::ctInt);
+    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).getValueType(), CoreType::ctInt);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE).getValueType(), CoreType::ctInt);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC).getValueType(), CoreType::ctInt);
@@ -112,7 +112,7 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME), DEFAULT_OPCUA_USERNAME);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD), DEFAULT_OPCUA_PASSWORD);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID), "");
-    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).asPtr<IInteger>(),
               static_cast<int>(DomainSource::SourceTimestamp));
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE).asPtr<IInteger>(),
               static_cast<int>(NodeIDType::String));
@@ -167,7 +167,7 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
     ASSERT_TRUE(deviceFromList == device);
 
     ASSERT_EQ(device.getAllProperties().getCount(), 1u);
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithLocalId)
@@ -417,34 +417,16 @@ TEST_F(GenericOpcuaClientDeviceTest, TimestampModeFromConfigIsAppliedToDevice)
 {
     StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
 
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
-    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).asPtr<IInteger>(),
               static_cast<int>(DomainSource::ServerTimestamp));
-}
-
-TEST_F(GenericOpcuaClientDeviceTest, TimestampModeChangePropagatesToMultipleFBs)
-{
-    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
-
-    auto fb1 = addMonitoredItemFB(".i32", 1);
-    auto fb2 = addMonitoredItemFB(".i64", 1);
-
-    ASSERT_EQ(fb1.getSignals(daq::search::Any()).getCount(), 2u);
-    ASSERT_EQ(fb2.getSignals(daq::search::Any()).getCount(), 2u);
-
-    device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::None));
-
-    EXPECT_EQ(fb1.getSignals(daq::search::Any()).getCount(), 1u);
-    EXPECT_FALSE(fb1.getSignals()[0].getDomainSignal().assigned());
-    EXPECT_EQ(fb2.getSignals(daq::search::Any()).getCount(), 1u);
-    EXPECT_FALSE(fb2.getSignals()[0].getDomainSignal().assigned());
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, TimestampModeNewFBInheritsCurrentDeviceMode)
 {
     StartUp(buildDeviceConfig(DomainSource::SourceTimestamp));
 
-    device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::None));
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DomainSource::None));
 
     auto fb = addMonitoredItemFB(".i32", 1);
 
@@ -463,7 +445,7 @@ TEST_F(GenericOpcuaClientDeviceTest, RemovedFBIsIgnoredOnSubsequentTimestampMode
               Enumeration("ComponentStatusType", "Ok", daqInstance.getContext().getTypeManager()));
 
     ASSERT_NO_THROW(device.removeFunctionBlock(fb));
-    ASSERT_NO_THROW(device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::None)));    
+    ASSERT_NO_THROW(device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DomainSource::None)));
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithDefaultAddDeviceConfig)
@@ -478,15 +460,15 @@ TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithDefaultAddDeviceConfig)
     ASSERT_TRUE(deviceTypeConfigs.hasProperty("OPCUAGeneric"));
 
     PropertyObjectPtr ourConfig = deviceTypeConfigs.getPropertyValue("OPCUAGeneric");
-    ourConfig.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::ServerTimestamp));
+    ourConfig.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DomainSource::ServerTimestamp));
 
     ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
     ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
               Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
 
     // the value set in the nested section must reach the device
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
-    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).asPtr<IInteger>(),
               static_cast<int>(DomainSource::ServerTimestamp));
 }
 
@@ -496,14 +478,14 @@ TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithPlainPartialConfig)
     const auto instance = DaqInstanceInit();
 
     auto config = PropertyObject();
-    config.addProperty(IntProperty(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::LocalSystemTimestamp)));
+    config.addProperty(IntProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DomainSource::LocalSystemTimestamp)));
 
     ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
     ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
               Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
 
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
-    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).asPtr<IInteger>(),
               static_cast<int>(DomainSource::LocalSystemTimestamp));
 }
 

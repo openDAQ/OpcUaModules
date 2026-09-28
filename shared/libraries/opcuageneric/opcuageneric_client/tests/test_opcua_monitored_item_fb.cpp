@@ -174,7 +174,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, DefaultConfig)
 
     ASSERT_TRUE(defaultConfig.assigned());
 
-    EXPECT_EQ(defaultConfig.getAllProperties().getCount(), 6u);
+    EXPECT_EQ(defaultConfig.getAllProperties().getCount(), 7u);
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE));
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE).getValueType(), CoreType::ctInt);
@@ -201,6 +201,11 @@ TEST_F(GenericOpcuaMonitoredItemTest, DefaultConfig)
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX).getValueType(), CoreType::ctInt);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX).asPtr<IInteger>(), 0);
     EXPECT_TRUE(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX).getVisible());
+
+    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
+    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_TS_MODE).getValueType(), CoreType::ctInt);
+    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::SourceTimestamp));
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL));
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL).getValueType(), CoreType::ctInt);
@@ -837,15 +842,128 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureTsModeTogglesDomainSignal)
     EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 2u);
     EXPECT_TRUE(fb.getSignals()[0].getDomainSignal().assigned());
 
-    device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::None));
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::None));
 
     EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 1u);
     EXPECT_FALSE(fb.getSignals()[0].getDomainSignal().assigned());
 
-    device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::ServerTimestamp));
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::ServerTimestamp));
 
     EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 2u);
     EXPECT_TRUE(fb.getSignals()[0].getDomainSignal().assigned());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, FbTsModeDoesNotInheritDevTsModeIfExplicit)
+{
+    StartUp(buildDeviceConfig(DomainSource::None));
+
+    using NT = NodeIDType;
+    auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::String));
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32");
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 100);
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::LocalSystemTimestamp));
+    CreateMonitoredItemFB(config);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    ASSERT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::LocalSystemTimestamp));
+    EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 2u);
+    EXPECT_TRUE(fb.getSignals()[0].getDomainSignal().assigned());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, FbTsModeInheritDevTsModeWithPlainPartialConfig)
+{
+    StartUp(buildDeviceConfig(DomainSource::None));
+
+    auto config = PropertyObject();
+    config.addProperty(IntProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NodeIDType::String)));
+    config.addProperty(StringProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32"));
+    config.addProperty(IntProperty(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1));
+    CreateMonitoredItemFB(config);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    EXPECT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(), static_cast<int>(DS::None));
+    EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 1u);
+    EXPECT_FALSE(fb.getSignals()[0].getDomainSignal().assigned());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, FbTsModeInheritDevTsModeWithoutConfig)
+{
+    StartUp(buildDeviceConfig(DomainSource::LocalSystemTimestamp));
+
+    ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME));
+
+    // no node ID is configured, so the FB is in error, but the timestamp mode must still be inherited
+    EXPECT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(), static_cast<int>(DS::LocalSystemTimestamp));
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, FbTypeDefaultConfigFollowsDevDefaultTsMode)
+{
+    StartUp(buildDeviceConfig(DomainSource::None));
+
+    auto getDefaultTsMode = [this]
+    {
+        return device.getAvailableFunctionBlockTypes()
+            .get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME)
+            .createDefaultConfig()
+            .getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE)
+            .asPtr<IInteger>();
+    };
+
+    EXPECT_EQ(getDefaultTsMode(), static_cast<int>(DS::None));
+
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DS::ServerTimestamp));
+    EXPECT_EQ(getDefaultTsMode(), static_cast<int>(DS::ServerTimestamp));
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, FbTsModeKeptOnOtherPropertyChange)
+{
+    StartUp(buildDeviceConfig(DomainSource::None));
+
+    auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32");
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::ServerTimestamp));
+    CreateMonitoredItemFB(config);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    ASSERT_EQ(fb.getSignals(daq::search::Any()).getCount(), 2u);
+
+    fb.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 200);
+
+    EXPECT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(), static_cast<int>(DS::ServerTimestamp));
+    EXPECT_EQ(fb.getSignals(daq::search::Any()).getCount(), 2u);
+    EXPECT_TRUE(fb.getSignals()[0].getDomainSignal().assigned());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, FbTsModeInheritDevTsMode)
+{
+    StartUp(buildDeviceConfig(DomainSource::None));
+
+    CreateMonitoredItemFB(".i32", 1, 100);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    ASSERT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::None));
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DS::LocalSystemTimestamp));
+
+    ASSERT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::None));
+    daq::FunctionBlockPtr firstFb = fb;
+
+    CreateMonitoredItemFB(".d", 1, 100);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    ASSERT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::LocalSystemTimestamp));
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DS::ServerTimestamp));
+
+    ASSERT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::LocalSystemTimestamp));
+    ASSERT_EQ(firstFb.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::None));
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdFromInvalidToValid)

@@ -24,7 +24,7 @@ static constexpr const char* GENERIC_OPCUA_MONITORED_ITEM_FB_NAME = "MonitoredIt
 static constexpr const char* PROPERTY_NAME_OPCUA_USERNAME = "Username";
 static constexpr const char* PROPERTY_NAME_OPCUA_PASSWORD = "Password";
 static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID = "LocalId";
-static constexpr const char* PROPERTY_NAME_OPCUA_TS_MODE = "TimestampMode";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE = "DefaultTimestampMode";
 
 // MonitoredItem FB
 static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_TYPE = "NodeIDType";
@@ -33,6 +33,7 @@ static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC = "NodeIDNumeri
 static constexpr const char* PROPERTY_NAME_OPCUA_NAMESPACE_INDEX = "NamespaceIndex";
 static constexpr const char* PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL = "SamplingInterval";
 static constexpr const char* PROPERTY_NAME_OPCUA_MI_LOCAL_ID = "LocalId";
+static constexpr const char* PROPERTY_NAME_OPCUA_TS_MODE = "TimestampMode";
 
 // Device node ID for DeviceInfo reading
 static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE    = "DeviceNodeIDType";

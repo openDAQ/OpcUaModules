@@ -23,7 +23,7 @@ PropertyObjectPtr config = instance.createDefaultAddDeviceConfig();
 PropertyObjectPtr opcuaSetting = config.getPropertyValue("Device.OPCUAGeneric");
 opcuaSetting.setPropertyValue("Username", "operator");
 opcuaSetting.setPropertyValue("Password", "secret");
-opcuaSetting.setPropertyValue("TimestampMode", 3);   // LocalSystemTimestamp
+opcuaSetting.setPropertyValue("DefaultTimestampMode", 3);   // LocalSystemTimestamp
 auto device = instance.addDevice("daq.opcua.generic://192.168.1.50:4840", config);
 ```
 
@@ -34,15 +34,15 @@ auto device = instance.addDevice("daq.opcua.generic://192.168.1.50:4840", config
 | `Username` | String | `""` | at connect |
 | `Password` | String | `""` | at connect |
 | `LocalId` | String | `""` | at connect |
-| `TimestampMode` | Selection | `2` — `SourceTimestamp` | at connect **and** at runtime |
+| `DefaultTimestampMode` | Selection | `2` — `SourceTimestamp` | at connect **and** at runtime |
 | `DeviceNodeIDType` | Selection | `1` — `String` | at connect |
 | `DeviceNodeIDString` | String | `""` | at connect |
 | `DeviceNodeIDNumeric` | Int | `0` | at connect |
 | `DeviceNamespaceIndex` | Int | `0` | at connect |
 
-Everything except `TimestampMode` is read once while the device is being created; changing those
-values afterwards has no effect — remove the device and add it again. `TimestampMode` remains a
-property of the device object and can be written at any time.
+Everything except `DefaultTimestampMode` is read once while the device is being created; changing
+those values afterwards has no effect — remove the device and add it again. `DefaultTimestampMode`
+remains a property of the device object and can be written at any time.
 
 ---
 
@@ -70,26 +70,22 @@ independent of `LocalId`.
 
 ---
 
-**`TimestampMode`** — which clock the domain (time) signal of every `MonitoredItem` of this device
-carries. It is a device-wide setting; individual blocks cannot override it.
+**`DefaultTimestampMode`** — the `TimestampMode` a newly added `MonitoredItem` gets when its
+configuration does not say otherwise. It takes the same values as the block's
+[`TimestampMode`](#monitoreditem-properties).
 
-| Value | Name | What the domain signal carries | When to use it |
-|---|---|---|---|
-| `0` | `None` | nothing — no domain signal is created at all | you only care about values, or the consumer supplies its own time axis |
-| `1` | `ServerTimestamp` | the time the OPC UA server produced the response | the server's clock is the reference, the source timestamp is unreliable |
-| `2` | `SourceTimestamp` | the time the value originated at its source (default) | closest to when the data was actually measured |
-| `3` | `LocalSystemTimestamp` | the client's system clock at the moment of the read | the server sends no usable timestamps; includes network + polling delay |
+The device only supplies a default; the mode actually used is a property of each block. A block
+inherits `DefaultTimestampMode` when it is added without a config, with a config that has no
+`TimestampMode`, or with a config from `fbType.createDefaultConfig()` whose `TimestampMode` was left
+untouched — that default config already carries the device's current `DefaultTimestampMode`. A value
+set explicitly in the config always wins.
 
-With `ServerTimestamp` or `SourceTimestamp`, a server that does not deliver that timestamp puts the
-block into `Error` and it publishes nothing — that is a real, and common, failure mode.
-`LocalSystemTimestamp` always works, at the cost of accuracy. `None` removes the domain signal, so
-readers must not expect a time axis.
-
-Writing the property at runtime takes effect immediately on all existing blocks: domain signals are
-created or removed as needed.
+Writing the property at runtime affects only blocks added afterwards; blocks that already exist keep
+their `TimestampMode`. A config obtained from `createDefaultConfig()` before the write still holds the
+old default.
 
 ```cpp
-device.setPropertyValue("TimestampMode", 1);   // ServerTimestamp
+device.setPropertyValue("DefaultTimestampMode", 1);   // ServerTimestamp for blocks added from now on
 ```
 
 ---
@@ -147,11 +143,12 @@ auto fb = device.addFunctionBlock("MonitoredItem", cfg);
 | `NodeIDString` | String | `""` | at creation **and** at runtime |
 | `NodeIDNumeric` | Int | `0` | at creation **and** at runtime |
 | `NamespaceIndex` | Int | `0` | at creation **and** at runtime |
+| `TimestampMode` | Selection | device's `DefaultTimestampMode` | at creation **and** at runtime |
 | `SamplingInterval` | Int | `100` | at creation **and** at runtime |
 
 `LocalId` is consumed while the block is being created and does not become a property of it. The
-other five do, and each write re-reads the configuration, re-validates the node, refreshes the block
-status and reconfigures the signals if the data type changed:
+other six do, and each write re-reads the configuration, re-validates the node, refreshes the block
+status and reconfigures the signals if the data type or the timestamp mode changed:
 
 ```cpp
 fb.setPropertyValue("SamplingInterval", 500);
@@ -186,6 +183,30 @@ again or the connection is re-established.
 
 An empty `NodeIDString` while `NodeIDType` is `String` is a configuration error — the most common
 reason for a freshly added block to sit in `Error` and never produce data.
+
+---
+
+**`TimestampMode`** — which clock the domain (time) signal of this block carries. If the config does
+not set it, the block takes the device's `DefaultTimestampMode`.
+
+| Value | Name | What the domain signal carries | When to use it |
+|---|---|---|---|
+| `0` | `None` | nothing — no domain signal is created at all | you only care about values, or the consumer supplies its own time axis |
+| `1` | `ServerTimestamp` | the time the OPC UA server produced the response | the server's clock is the reference, the source timestamp is unreliable |
+| `2` | `SourceTimestamp` | the time the value originated at its source | closest to when the data was actually measured |
+| `3` | `LocalSystemTimestamp` | the client's system clock at the moment of the read | the server sends no usable timestamps; includes network + polling delay |
+
+With `ServerTimestamp` or `SourceTimestamp`, a server that does not deliver that timestamp puts the
+block into `Error` and it publishes nothing — that is a real, and common, failure mode.
+`LocalSystemTimestamp` always works, at the cost of accuracy. `None` removes the domain signal, so
+readers must not expect a time axis.
+
+Writing the property at runtime takes effect immediately on this block only: its domain signal is
+created or removed as needed.
+
+```cpp
+fb.setPropertyValue("TimestampMode", 1);   // ServerTimestamp
+```
 
 ---
 

@@ -67,7 +67,6 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
                                                    const FunctionBlockTypePtr& type,
                                                    daq::opcua::OpcUaClientPtr client,
                                                    const std::string& localId,
-                                                   DomainSource defaultDomainSource,
                                                    SamplingScheduler* scheduler,
                                                    const PropertyObjectPtr& config)
     : FunctionBlock(type, ctx, parent, localId.empty() ? generateLocalId() : localId)
@@ -81,8 +80,6 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
         initProperties(property_helper::populateDefaultConfig(type.createDefaultConfig(), config));
     else
         initProperties(type.createDefaultConfig());
-
-    this->config.domainSource = defaultDomainSource;
 
     validateNode();
     adjustSignalDescriptor();
@@ -123,7 +120,7 @@ void OpcUaMonitoredItemFbImpl::initStatusContainer()
     exceptionErr = statuses->addStatus("Exception");
 }
 
-FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
+FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType(DomainSource defaultDomainSource)
 {
     auto defaultConfig = PropertyObject();
     {
@@ -166,6 +163,16 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
     }
 
     {
+        auto builder = SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_TS_MODE,
+                                                List<IString>("None", "ServerTimestamp", "SourceTimestamp", "LocalSystemTimestamp"),
+                                                static_cast<int>(defaultDomainSource))
+                           .setDescription(fmt::format("Defines what to use as a domain signal. By default it is set to the value of "
+                                                       "the device's \"{}\" property.",
+                                                       PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+        defaultConfig.addProperty(builder.build());
+    }
+
+    {
         auto builder =
             IntPropertyBuilder(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, Integer(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL))
                 .setDescription(fmt::format(
@@ -179,18 +186,6 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
                                           "Monitors a specified OPCUA node and outputs the value and timestamp as signals.",
                                           defaultConfig);
     return fbType;
-}
-
-void OpcUaMonitoredItemFbImpl::setDomainSource(DomainSource domainSource)
-{
-    auto lock = this->getRecursiveConfigLock2();
-    auto lockProcessing = std::scoped_lock(processingMutex);
-    if (config.domainSource != domainSource)
-    {
-        auto prevConfig = config;
-        config.domainSource = domainSource;
-        reconfigureSignal(prevConfig);
-    }
 }
 
 std::string OpcUaMonitoredItemFbImpl::generateLocalId()
@@ -276,6 +271,18 @@ void OpcUaMonitoredItemFbImpl::readProperties()
     {
         const auto nodeIdNumeric = static_cast<uint32_t>(readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC, 0));
         config.nodeId = OpcUaNodeId{static_cast<uint16_t>(namespaceIndex), nodeIdNumeric};
+    }
+
+    using DS = DomainSource;
+    const auto tmpDomainSource =
+        readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::SourceTimestamp));
+    if (tmpDomainSource < static_cast<int>(DS::_count) && tmpDomainSource >= 0)
+    {
+        config.domainSource = static_cast<DS>(tmpDomainSource);
+    }
+    else
+    {
+        config.domainSource = DS::ServerTimestamp;
     }
 
     const auto samplingInterval =

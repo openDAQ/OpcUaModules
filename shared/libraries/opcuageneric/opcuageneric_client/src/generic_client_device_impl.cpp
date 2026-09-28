@@ -51,7 +51,7 @@ PropertyObjectPtr OpcuaGenericClientDeviceImpl::createDefaultConfig()
     auto defaultConfig = PropertyObject();
 
     {
-        auto builder = SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_TS_MODE,
+        auto builder = SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE,
                                                 List<IString>("None", "ServerTimestamp", "SourceTimestamp", "LocalSystemTimestamp"),
                                                 static_cast<int>(DomainSource::SourceTimestamp))
                            .setDescription("Defines what to use as a domain signal. By default it is set to SourceTimestamp.");
@@ -87,14 +87,14 @@ void OpcuaGenericClientDeviceImpl::readProperties()
     auto lock = this->getRecursiveConfigLock();
     using DS = DomainSource;
     const auto tmpDomainSource =
-        readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::SourceTimestamp));
+        readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DS::SourceTimestamp));
     if (tmpDomainSource < static_cast<int>(DS::_count) && tmpDomainSource >= 0)
     {
-        domainSource = static_cast<DS>(tmpDomainSource);
+        defaultDomainSource = static_cast<DS>(tmpDomainSource);
     }
     else
     {
-        domainSource = DS::ServerTimestamp;
+        defaultDomainSource = DS::ServerTimestamp;
     }
 }
 
@@ -102,15 +102,7 @@ void OpcuaGenericClientDeviceImpl::propertyChanged()
 {
     auto lock = this->getRecursiveConfigLock2();
     readProperties();
-
-    for (const FunctionBlockPtr& fb : this->functionBlocks.getItems(search::Any()))
-    {
-        if (fb.assigned())
-        {
-            auto monitoredItemFb = static_cast<OpcUaMonitoredItemFbImpl*>(*fb);
-            monitoredItemFb->setDomainSource(domainSource);
-        }
-    }
+    initNestedFbTypes();
 }
 
 std::string OpcuaGenericClientDeviceImpl::getConnectionString() const
@@ -190,7 +182,7 @@ void OpcuaGenericClientDeviceImpl::initNestedFbTypes()
     nestedFbTypes = Dict<IString, IFunctionBlockType>();
     // Add a function block type for monitoring an OPCUA node
     {
-        const auto fbType = OpcUaMonitoredItemFbImpl::CreateType();
+        const auto fbType = OpcUaMonitoredItemFbImpl::CreateType(defaultDomainSource);
         nestedFbTypes.set(fbType.getId(), fbType);
     }
 }
@@ -198,6 +190,7 @@ void OpcuaGenericClientDeviceImpl::initNestedFbTypes()
 
 DictPtr<IString, IFunctionBlockType> OpcuaGenericClientDeviceImpl::onGetAvailableFunctionBlockTypes()
 {
+    auto lock = this->getRecursiveConfigLock2();
     return nestedFbTypes;
 }
 
@@ -205,9 +198,10 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
 {
     FunctionBlockPtr nestedFunctionBlock;
     {
-        if (nestedFbTypes.hasKey(typeId))
+        const auto fbTypes = onGetAvailableFunctionBlockTypes();
+        if (fbTypes.hasKey(typeId))
         {
-            auto fbTypePtr = nestedFbTypes.getOrDefault(typeId);
+            auto fbTypePtr = fbTypes.getOrDefault(typeId);
             if (fbTypePtr.getName() == GENERIC_OPCUA_MONITORED_ITEM_FB_NAME)
             {
                 std::string userSpecifiedLocalId;
@@ -215,7 +209,7 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
                     userSpecifiedLocalId = config.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID).asPtr<IString>().toStdString();
                 const auto localId = buildMILocalId(userSpecifiedLocalId);
                 nestedFunctionBlock = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
-                    context, functionBlocks, fbTypePtr, client, localId, domainSource, &sampler, config);
+                    context, functionBlocks, fbTypePtr, client, localId, &sampler, config);
             }
             else
             {
