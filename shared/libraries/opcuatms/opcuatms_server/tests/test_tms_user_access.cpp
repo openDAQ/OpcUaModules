@@ -183,6 +183,8 @@ INSTANTIATE_TEST_SUITE_P(UserParameters,
                                            UserAccessTestParams{"wrongUser", "wrongUserPass", false},
                                            UserAccessTestParams{"commonUser", "wrongUserPass", false}));
 
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
+
 TEST_P(AsseccPTest, AccessBrowse)
 {
     const auto userParams = GetParam();
@@ -376,3 +378,5 @@ INSTANTIATE_TEST_SUITE_P(UserParameters,
                                            UserAccessTestParams{"writerUser", "writerUserPass", true, true, true, false},
                                            UserAccessTestParams{"executorUser", "executorUserPass", true, true, false, true},
                                            UserAccessTestParams{"adminUser", "adminUserPass", true, true, true, true}));
+
+#endif

@@ -249,6 +249,8 @@ TEST_F(TmsUserAccessTest, CreateClientDevice)
     ASSERT_NO_THROW(TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
 }
 
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
+
 TEST_F(TmsUserAccessTest, Anonymous)
 {
     fb.getPermissionManager().setPermissions(test_helpers::CreatePermissionsBuilder().build());
@@ -294,6 +296,8 @@ TEST_F(TmsUserAccessTest, CommonUserForRootDevice)
     ASSERT_ANY_THROW(clientDevice = TmsClientRootDevice(ctx, nullptr, "dev", clientContext, nodeId));
 }
 
+#endif
+
 TEST_P(TmsUserAccessPTest, CommonChecks)
 {
     const UserPermission userPerm(GetParam());
@@ -322,6 +326,8 @@ TEST_P(TmsUserAccessPTest, CommonChecks)
     EXPECT_EQ(device.getSignals().getCount() - 1, mockDevice.getSignals().getCount());
     EXPECT_EQ(fb.getSignals().getCount() - 1, mockFb.getSignals().getCount());
 }
+
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
 
 TEST_P(TmsUserAccessPTest, Properties)
 {
@@ -704,6 +710,8 @@ TEST_P(TmsUserAccessPTest, Disconnect)
         ASSERT_ANY_THROW(ip[0].disconnect());
     }
 }
+
+#endif
 
 INSTANTIATE_TEST_SUITE_P(UserAccess,
                          TmsUserAccessPTest,

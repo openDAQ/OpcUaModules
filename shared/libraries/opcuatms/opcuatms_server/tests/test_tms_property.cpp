@@ -76,6 +76,8 @@ TEST_F(TmsPropertyTest, Register)
     ASSERT_TRUE(this->getClient()->nodeExists(nodeId));
 }
 
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
+
 TEST_F(TmsPropertyTest, Permissions)
 {
     PropertyObjectPtr propertyObject = createPropertyObject();
@@ -101,3 +103,5 @@ TEST_F(TmsPropertyTest, Permissions)
     lambdaMain(test_helpers::createSessionAdmin("admin"), true, true, true);
 
 }
+
+#endif

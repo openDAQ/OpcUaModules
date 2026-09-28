@@ -134,6 +134,8 @@ TEST_F(TmsFunctionBlockTest, NestedFunctionBlocks)
     ASSERT_TRUE(getServer()->nodeExists(firstFBNodeId));
 }
 
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
+
 TEST_F(TmsFunctionBlockTest, Permissions)
 {
     FunctionBlockPtr functionBlock = createFunctionBlock();
@@ -157,3 +159,5 @@ TEST_F(TmsFunctionBlockTest, Permissions)
     lambdaMain(test_helpers::createSessionExecutor("executor"), true, false, true);
     lambdaMain(test_helpers::createSessionAdmin("admin"), true, true, true);
 }
+
+#endif

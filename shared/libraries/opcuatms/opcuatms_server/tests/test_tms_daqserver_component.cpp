@@ -43,6 +43,8 @@ TEST_F(TmsDaqServerComponentTest, Register)
     ASSERT_TRUE(this->getClient()->nodeExists(nodeId));
 }
 
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
+
 TEST_F(TmsDaqServerComponentTest, Permissions)
 {
     ServerPtr serverDaqServerComponent = createDaqServerComponent(ctx);
@@ -79,3 +81,5 @@ TEST_F(TmsDaqServerComponentTest, Permissions)
     lambdaTemplate(disableDiscoveryNodeID.getPtr(), test_helpers::createSessionExecutor("executor"), true, false, false);
     lambdaTemplate(disableDiscoveryNodeID.getPtr(), test_helpers::createSessionAdmin("admin"), true, true, true);
 }
+
+#endif

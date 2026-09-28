@@ -122,6 +122,8 @@ TEST_F(TmsDeviceTest, Components)
     ASSERT_FALSE(componentB.isNull());
 }
 
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
+
 TEST_F(TmsDeviceTest, Permissions)
 {
     auto instance = test_helpers::SetupInstance();
@@ -167,3 +169,4 @@ TEST_F(TmsDeviceTest, Permissions)
     lambdaSpecial(test_helpers::createSessionAdmin("admin"), true, true, true);
 }
 
+#endif
