@@ -23,28 +23,35 @@ PropertyObjectPtr config = instance.createDefaultAddDeviceConfig();
 PropertyObjectPtr opcuaSetting = config.getPropertyValue("Device.OPCUAGeneric");
 opcuaSetting.setPropertyValue("Username", "operator");
 opcuaSetting.setPropertyValue("Password", "secret");
-opcuaSetting.setPropertyValue("DefaultTimestampMode", 3);   // LocalSystemTimestamp
 auto device = instance.addDevice("daq.opcua.generic://192.168.1.50:4840", config);
+device.setPropertyValue("DefaultTimestampMode", 3);   // LocalSystemTimestamp for the blocks added below
 ```
+
+### Connection config
+
+| Property | Type | Default |
+|---|---|---|
+| `Username` | String | `""` |
+| `Password` | String | `""` |
+| `LocalId` | String | `""` |
+| `DeviceNodeIDType` | Selection | `1` — `String` |
+| `DeviceNodeIDString` | String | `""` |
+| `DeviceNodeIDNumeric` | Int | `0` |
+| `DeviceNamespaceIndex` | Int | `0` |
+
+These are read once while the device is being created; changing them afterwards has no effect —
+remove the device and add it again. None of them becomes a property of the device object.
 
 ### Device properties
 
-| Property | Type | Default | Applied |
-|---|---|---|---|
-| `Username` | String | `""` | at connect |
-| `Password` | String | `""` | at connect |
-| `LocalId` | String | `""` | at connect |
-| `DefaultTimestampMode` | Selection | `2` — `SourceTimestamp` | at connect **and** at runtime |
-| `DefaultSamplingInterval` | Int | `100` | at connect **and** at runtime |
-| `DeviceNodeIDType` | Selection | `1` — `String` | at connect |
-| `DeviceNodeIDString` | String | `""` | at connect |
-| `DeviceNodeIDNumeric` | Int | `0` | at connect |
-| `DeviceNamespaceIndex` | Int | `0` | at connect |
+| Property | Type | Default |
+|---|---|---|
+| `DefaultTimestampMode` | Selection | `2` — `SourceTimestamp` |
+| `DefaultSamplingInterval` | Int | `100` |
 
-Everything except `DefaultTimestampMode` and `DefaultSamplingInterval` is read once while the device
-is being created; changing those values afterwards has no effect — remove the device and add it
-again. `DefaultTimestampMode` and `DefaultSamplingInterval` remain properties of the device object and
-can be written at any time.
+These are **not** part of the connection config — the same names in a config passed to `addDevice`
+are ignored. Every device starts with the default values above; set them on the device object after
+it has been created, at any time.
 
 ---
 

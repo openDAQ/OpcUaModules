@@ -16,24 +16,17 @@ public:
     daq::InstancePtr daqInstance;
     daq::DevicePtr device;
 
-    static daq::PropertyObjectPtr buildDeviceConfig(DomainSource ds)
-    {
-        auto deviceConfig = OpcuaGenericClientDeviceImpl::createDefaultConfig();
-        deviceConfig.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(ds));
-        return deviceConfig;
-    }
-
-    static daq::PropertyObjectPtr buildDeviceConfig(DomainSource ds, uint32_t defaultSamplingIntervalMs)
-    {
-        auto deviceConfig = buildDeviceConfig(ds);
-        deviceConfig.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, defaultSamplingIntervalMs);
-        return deviceConfig;
-    }
-
     void StartUp(daq::PropertyObjectPtr config = nullptr, std::string connectionStr = "daq.opcua.generic://127.0.0.1:4842")
     {
         DaqInstanceInit();
         DaqOpcuaGenericClientDeviceInit(connectionStr, config);
+    }
+
+    void StartUp(DomainSource defaultDomainSource, uint32_t defaultSamplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL)
+    {
+        StartUp();
+        device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(defaultDomainSource));
+        device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, defaultSamplingIntervalMs);
     }
 
     daq::InstancePtr DaqInstanceInit()

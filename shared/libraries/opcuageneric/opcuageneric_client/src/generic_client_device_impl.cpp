@@ -13,7 +13,6 @@ std::atomic<int> OpcuaGenericClientDeviceImpl::localIndex = 0;
 
 OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx,
                                                            const ComponentPtr& parent,
-                                                           const PropertyObjectPtr& config,
                                                            std::shared_ptr<OpcUaClient> client,
                                                            const std::string& localId,
                                                            const std::string& name,
@@ -30,11 +29,7 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
 
     this->name = name.empty() ? GENERIC_OPCUA_CLIENT_DEVICE_NAME : name;
 
-    if (config.assigned())
-        initProperties(property_helper::populateDefaultConfig(createDefaultConfig(), config));
-    else
-        initProperties(createDefaultConfig());
-
+    initProperties();
     initComponentStatus();
 
     initNestedFbTypes();
@@ -48,16 +43,17 @@ OpcuaGenericClientDeviceImpl::~OpcuaGenericClientDeviceImpl()
     sampler.stop();
 }
 
-PropertyObjectPtr OpcuaGenericClientDeviceImpl::createDefaultConfig()
+void OpcuaGenericClientDeviceImpl::initProperties()
 {
-    auto defaultConfig = PropertyObject();
-
     {
         auto builder = SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE,
                                                 List<IString>("None", "ServerTimestamp", "SourceTimestamp", "LocalSystemTimestamp"),
                                                 static_cast<int>(DomainSource::SourceTimestamp))
-                           .setDescription("Defines what to use as a domain signal. By default it is set to SourceTimestamp.");
-        defaultConfig.addProperty(builder.build());
+                           .setDescription(fmt::format("Default \"{}\" for newly added monitored items. By default it is set to "
+                                                       "SourceTimestamp.",
+                                                       PROPERTY_NAME_OPCUA_TS_MODE));
+        objPtr.addProperty(builder.build());
+        objPtr.getOnPropertyValueWrite(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE) += [this](PropertyObjectPtr&, PropertyValueEventArgsPtr&) { propertyChanged(); };
     }
 
     {
@@ -66,29 +62,10 @@ PropertyObjectPtr OpcuaGenericClientDeviceImpl::createDefaultConfig()
                 .setDescription(fmt::format("Default sampling interval in milliseconds for newly added monitored items. By default it is "
                                             "set to {} ms.",
                                             DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL));
-        defaultConfig.addProperty(builder.build());
+        objPtr.addProperty(builder.build());
+        objPtr.getOnPropertyValueWrite(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL) += [this](PropertyObjectPtr&, PropertyValueEventArgsPtr&) { propertyChanged(); };
     }
 
-    return defaultConfig;
-}
-
-void OpcuaGenericClientDeviceImpl::initProperties(const PropertyObjectPtr& config)
-{
-    const auto defaultConfig = createDefaultConfig();
-    for (const auto& prop : config.getAllProperties())
-    {
-        const auto propName = prop.getName();
-        if (defaultConfig.hasProperty(propName))
-        {
-            if (const auto internalProp = prop.asPtrOrNull<IPropertyInternal>(true); internalProp.assigned())
-            {
-                objPtr.addProperty(internalProp.clone());
-                objPtr.setPropertyValue(propName, prop.getValue());
-                objPtr.getOnPropertyValueWrite(prop.getName()) +=
-                    [this](PropertyObjectPtr&, PropertyValueEventArgsPtr&) { propertyChanged(); };
-            }
-        }
-    }
     readProperties();
 }
 

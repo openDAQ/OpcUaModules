@@ -34,13 +34,11 @@ class OpcuaGenericClientDeviceImpl : public Device
 public:
     explicit OpcuaGenericClientDeviceImpl(const ContextPtr& ctx,
                                           const ComponentPtr& parent,
-                                          const PropertyObjectPtr& config,
                                           std::shared_ptr<OpcUaClient> client,
                                           const std::string& localId,
                                           const std::string& name,
                                           uint32_t reconnectIntervalMs = DEFAULT_RECONNECT_INTERVAL);
     ~OpcuaGenericClientDeviceImpl();
-    DAQ_OPCUA_GENERIC_MODULE_API static PropertyObjectPtr createDefaultConfig();
 
 protected:
     static std::atomic<int> localIndex;
@@ -57,7 +55,7 @@ protected:
     FunctionBlockPtr onAddFunctionBlock(const StringPtr& typeId, const PropertyObjectPtr& config) override;
 
     void initNestedFbTypes();
-    void initProperties(const PropertyObjectPtr& config);
+    void initProperties();
     void readProperties();
     void propertyChanged();
     std::string getConnectionString() const;
