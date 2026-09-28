@@ -36,12 +36,13 @@ public:
                                       const FunctionBlockTypePtr& type,
                                       daq::opcua::OpcUaClientPtr client,
                                       const std::string& localId,
+                                      DomainSource initialDomainSource = DomainSource::SourceTimestamp,
+                                      uint32_t initialSamplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL,
                                       SamplingScheduler* scheduler = nullptr,
                                       const PropertyObjectPtr& config = nullptr);
     ~OpcUaMonitoredItemFbImpl();
 
-    DAQ_OPCUA_GENERIC_MODULE_API static FunctionBlockTypePtr CreateType(DomainSource defaultDomainSource = DomainSource::SourceTimestamp,
-                                                                        uint32_t defaultSamplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
+    DAQ_OPCUA_GENERIC_MODULE_API static FunctionBlockTypePtr CreateType();
 
     uint32_t getSamplingInterval() const override;
     void processSample() override;
@@ -99,7 +100,7 @@ protected:
     void reconfigureSignal(const FbConfig& prevConfig);
     SignalConfigPtr createDomainSignal();
 
-    void initProperties(const PropertyObjectPtr& config);
+    void initProperties(const PropertyObjectPtr& config, DomainSource initialDomainSource, uint32_t initialSamplingIntervalMs);
     void readProperties();
     void propertyChanged();
 

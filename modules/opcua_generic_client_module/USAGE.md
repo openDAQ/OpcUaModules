@@ -79,19 +79,16 @@ independent of `LocalId`.
 
 ---
 
-**`DefaultTimestampMode`** — the `TimestampMode` a newly added `MonitoredItem` gets when its
-configuration does not say otherwise. It takes the same values as the block's
-[`TimestampMode`](#monitoreditem-properties).
+**`DefaultTimestampMode`** — the initial `TimestampMode` of every newly added `MonitoredItem`. It
+takes the same values as the block's [`TimestampMode`](#monitoreditem-properties).
 
-The device only supplies a default; the mode actually used is a property of each block. A block
-inherits `DefaultTimestampMode` when it is added without a config, with a config that has no
-`TimestampMode`, or with a config from `fbType.createDefaultConfig()` whose `TimestampMode` was left
-untouched — that default config already carries the device's current `DefaultTimestampMode`. A value
-set explicitly in the config always wins.
+The device only supplies the starting value; the mode actually used is a property of each block.
+`TimestampMode` is not part of the `MonitoredItem` config, so a block always starts with the device's
+current `DefaultTimestampMode`. To use another mode for one block, write its `TimestampMode` after
+adding it.
 
 Writing the property at runtime affects only blocks added afterwards; blocks that already exist keep
-their `TimestampMode`. A config obtained from `createDefaultConfig()` before the write still holds the
-old default.
+their `TimestampMode`.
 
 ```cpp
 device.setPropertyValue("DefaultTimestampMode", 1);   // ServerTimestamp for blocks added from now on
@@ -99,13 +96,12 @@ device.setPropertyValue("DefaultTimestampMode", 1);   // ServerTimestamp for blo
 
 ---
 
-**`DefaultSamplingInterval`** — the `SamplingInterval`, in milliseconds, a newly added `MonitoredItem`
-gets when its configuration does not say otherwise. `100` by default.
+**`DefaultSamplingInterval`** — the initial `SamplingInterval`, in milliseconds, of every newly added
+`MonitoredItem`. `100` by default.
 
-It works exactly like `DefaultTimestampMode`: it becomes the default value of `SamplingInterval` in the
-`MonitoredItem` type, a block added without that property in its config (or with it left untouched in
-`fbType.createDefaultConfig()`) inherits it, an explicit value wins, and writing it at runtime affects
-only blocks added afterwards.
+It works exactly like `DefaultTimestampMode`: `SamplingInterval` is not part of the `MonitoredItem`
+config, a block always starts with the device's current `DefaultSamplingInterval` and can be changed
+afterwards, and writing the device property at runtime affects only blocks added afterwards.
 
 The value must be greater than `0` and fit into 32 bits. Anything else is ignored with a warning in
 the log, and new blocks get the 100 ms default instead.
@@ -155,26 +151,29 @@ auto cfg = fbType.createDefaultConfig();
 cfg.setPropertyValue("NodeIDType", 1);            // String
 cfg.setPropertyValue("NodeIDString", ".temperature");
 cfg.setPropertyValue("NamespaceIndex", 1);
-cfg.setPropertyValue("SamplingInterval", 100);    // ms
 
 auto fb = device.addFunctionBlock("MonitoredItem", cfg);
+fb.setPropertyValue("SamplingInterval", 500);     // ms; starts with the device's DefaultSamplingInterval
 ```
 
 ### MonitoredItem properties
 
-| Property | Type | Default | Applied |
-|---|---|---|---|
-| `LocalId` | String | `""` | at creation only |
-| `NodeIDType` | Selection | `1` — `String` | at creation **and** at runtime |
-| `NodeIDString` | String | `""` | at creation **and** at runtime |
-| `NodeIDNumeric` | Int | `0` | at creation **and** at runtime |
-| `NamespaceIndex` | Int | `0` | at creation **and** at runtime |
-| `TimestampMode` | Selection | device's `DefaultTimestampMode` | at creation **and** at runtime |
-| `SamplingInterval` | Int | device's `DefaultSamplingInterval` | at creation **and** at runtime |
+| Property | Type | Default | In config | Applied |
+|---|---|---|---|---|
+| `LocalId` | String | `""` | yes | at creation only |
+| `NodeIDType` | Selection | `1` — `String` | yes | at creation **and** at runtime |
+| `NodeIDString` | String | `""` | yes | at creation **and** at runtime |
+| `NodeIDNumeric` | Int | `0` | yes | at creation **and** at runtime |
+| `NamespaceIndex` | Int | `0` | yes | at creation **and** at runtime |
+| `TimestampMode` | Selection | device's `DefaultTimestampMode` | **no** | at runtime |
+| `SamplingInterval` | Int | device's `DefaultSamplingInterval` | **no** | at runtime |
 
-`LocalId` is consumed while the block is being created and does not become a property of it. The
-other six do, and each write re-reads the configuration, re-validates the node, refreshes the block
-status and reconfigures the signals if the data type or the timestamp mode changed:
+`LocalId` is consumed while the block is being created and does not become a property of it.
+`TimestampMode` and `SamplingInterval` are not in the config at all — the same names in a config
+passed to `addFunctionBlock` are ignored; the block adds them itself, with the device's current
+defaults as initial values. The other six are properties of the block, and each write re-reads the
+configuration, re-validates the node, refreshes the block status and reconfigures the signals if the
+data type or the timestamp mode changed:
 
 ```cpp
 fb.setPropertyValue("SamplingInterval", 500);
@@ -212,8 +211,8 @@ reason for a freshly added block to sit in `Error` and never produce data.
 
 ---
 
-**`TimestampMode`** — which clock the domain (time) signal of this block carries. If the config does
-not set it, the block takes the device's `DefaultTimestampMode`.
+**`TimestampMode`** — which clock the domain (time) signal of this block carries. The block starts
+with the device's `DefaultTimestampMode`.
 
 | Value | Name | What the domain signal carries | When to use it |
 |---|---|---|---|
@@ -237,8 +236,7 @@ fb.setPropertyValue("TimestampMode", 1);   // ServerTimestamp
 ---
 
 **`SamplingInterval`** — how often, in milliseconds, this block issues one OPC UA `Read` for its
-node. If the config does not set it, the block takes the device's `DefaultSamplingInterval` (`100` by
-default).
+node. The block starts with the device's `DefaultSamplingInterval` (`100` by default).
 
 This is client-side polling, not an OPC UA subscription: nothing is configured on the server, and the
 server's own sampling and publishing settings do not apply. Every successful read publishes a sample,

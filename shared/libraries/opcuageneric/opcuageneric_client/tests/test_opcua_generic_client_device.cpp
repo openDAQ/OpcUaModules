@@ -55,7 +55,8 @@ public:
         config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::String));
         config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, nodeId);
         config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, nsIndex);
-        config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, interval);
+        // SamplingInterval is not part of the config: the FB starts with the device's DefaultSamplingInterval
+        device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, interval);
         return device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config);
     }
 

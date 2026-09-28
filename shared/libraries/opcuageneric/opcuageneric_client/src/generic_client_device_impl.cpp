@@ -105,7 +105,6 @@ void OpcuaGenericClientDeviceImpl::propertyChanged()
 {
     auto lock = this->getRecursiveConfigLock2();
     readProperties();
-    initNestedFbTypes();
 }
 
 std::string OpcuaGenericClientDeviceImpl::getConnectionString() const
@@ -185,7 +184,7 @@ void OpcuaGenericClientDeviceImpl::initNestedFbTypes()
     nestedFbTypes = Dict<IString, IFunctionBlockType>();
     // Add a function block type for monitoring an OPCUA node
     {
-        const auto fbType = OpcUaMonitoredItemFbImpl::CreateType(defaultDomainSource, defaultSamplingIntervalMs);
+        const auto fbType = OpcUaMonitoredItemFbImpl::CreateType();
         nestedFbTypes.set(fbType.getId(), fbType);
     }
 }
@@ -211,8 +210,16 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
                 if (config.assigned() && config.hasProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID))
                     userSpecifiedLocalId = config.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID).asPtr<IString>().toStdString();
                 const auto localId = buildMILocalId(userSpecifiedLocalId);
+                // The new function block starts with the device's current defaults for these.
+                DomainSource initialDomainSource;
+                uint32_t initialSamplingIntervalMs;
+                {
+                    auto lock = this->getRecursiveConfigLock2();
+                    initialDomainSource = defaultDomainSource;
+                    initialSamplingIntervalMs = defaultSamplingIntervalMs;
+                }
                 nestedFunctionBlock = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
-                    context, functionBlocks, fbTypePtr, client, localId, &sampler, config);
+                    context, functionBlocks, fbTypePtr, client, localId, initialDomainSource, initialSamplingIntervalMs, &sampler, config);
             }
             else
             {
