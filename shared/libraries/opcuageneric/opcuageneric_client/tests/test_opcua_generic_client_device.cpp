@@ -89,12 +89,13 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     auto defaultConfig = deviceTypes.get("OPCUAGeneric").createDefaultConfig();
     ASSERT_TRUE(defaultConfig.assigned());
 
-    ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 8u);
+    ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 9u);
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_USERNAME));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PASSWORD));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC));
@@ -104,6 +105,7 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PASSWORD).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).getValueType(), CoreType::ctInt);
+    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL).getValueType(), CoreType::ctInt);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE).getValueType(), CoreType::ctInt);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC).getValueType(), CoreType::ctInt);
@@ -114,6 +116,8 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID), "");
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).asPtr<IInteger>(),
               static_cast<int>(DomainSource::SourceTimestamp));
+    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL).asPtr<IInteger>(),
+              static_cast<Int>(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL));
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE).asPtr<IInteger>(),
               static_cast<int>(NodeIDType::String));
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING), "");
@@ -166,8 +170,9 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
     ASSERT_EQ(deviceFromList.getInfo().getName(), device.getInfo().getName());
     ASSERT_TRUE(deviceFromList == device);
 
-    ASSERT_EQ(device.getAllProperties().getCount(), 1u);
+    ASSERT_EQ(device.getAllProperties().getCount(), 2u);
     ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL));
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithLocalId)

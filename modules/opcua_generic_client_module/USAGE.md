@@ -35,14 +35,16 @@ auto device = instance.addDevice("daq.opcua.generic://192.168.1.50:4840", config
 | `Password` | String | `""` | at connect |
 | `LocalId` | String | `""` | at connect |
 | `DefaultTimestampMode` | Selection | `2` — `SourceTimestamp` | at connect **and** at runtime |
+| `DefaultSamplingInterval` | Int | `100` | at connect **and** at runtime |
 | `DeviceNodeIDType` | Selection | `1` — `String` | at connect |
 | `DeviceNodeIDString` | String | `""` | at connect |
 | `DeviceNodeIDNumeric` | Int | `0` | at connect |
 | `DeviceNamespaceIndex` | Int | `0` | at connect |
 
-Everything except `DefaultTimestampMode` is read once while the device is being created; changing
-those values afterwards has no effect — remove the device and add it again. `DefaultTimestampMode`
-remains a property of the device object and can be written at any time.
+Everything except `DefaultTimestampMode` and `DefaultSamplingInterval` is read once while the device
+is being created; changing those values afterwards has no effect — remove the device and add it
+again. `DefaultTimestampMode` and `DefaultSamplingInterval` remain properties of the device object and
+can be written at any time.
 
 ---
 
@@ -86,6 +88,23 @@ old default.
 
 ```cpp
 device.setPropertyValue("DefaultTimestampMode", 1);   // ServerTimestamp for blocks added from now on
+```
+
+---
+
+**`DefaultSamplingInterval`** — the `SamplingInterval`, in milliseconds, a newly added `MonitoredItem`
+gets when its configuration does not say otherwise. `100` by default.
+
+It works exactly like `DefaultTimestampMode`: it becomes the default value of `SamplingInterval` in the
+`MonitoredItem` type, a block added without that property in its config (or with it left untouched in
+`fbType.createDefaultConfig()`) inherits it, an explicit value wins, and writing it at runtime affects
+only blocks added afterwards.
+
+The value must be greater than `0` and fit into 32 bits. Anything else is ignored with a warning in
+the log, and new blocks get the 100 ms default instead.
+
+```cpp
+device.setPropertyValue("DefaultSamplingInterval", 500);   // blocks added from now on poll every 500 ms
 ```
 
 ---
@@ -144,7 +163,7 @@ auto fb = device.addFunctionBlock("MonitoredItem", cfg);
 | `NodeIDNumeric` | Int | `0` | at creation **and** at runtime |
 | `NamespaceIndex` | Int | `0` | at creation **and** at runtime |
 | `TimestampMode` | Selection | device's `DefaultTimestampMode` | at creation **and** at runtime |
-| `SamplingInterval` | Int | `100` | at creation **and** at runtime |
+| `SamplingInterval` | Int | device's `DefaultSamplingInterval` | at creation **and** at runtime |
 
 `LocalId` is consumed while the block is being created and does not become a property of it. The
 other six do, and each write re-reads the configuration, re-validates the node, refreshes the block
@@ -211,7 +230,8 @@ fb.setPropertyValue("TimestampMode", 1);   // ServerTimestamp
 ---
 
 **`SamplingInterval`** — how often, in milliseconds, this block issues one OPC UA `Read` for its
-node. `100` by default.
+node. If the config does not set it, the block takes the device's `DefaultSamplingInterval` (`100` by
+default).
 
 This is client-side polling, not an OPC UA subscription: nothing is configured on the server, and the
 server's own sampling and publishing settings do not apply. Every successful read publishes a sample,

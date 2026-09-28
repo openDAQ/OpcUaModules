@@ -966,6 +966,106 @@ TEST_F(GenericOpcuaMonitoredItemTest, FbTsModeInheritDevTsMode)
               static_cast<int>(DomainSource::None));
 }
 
+TEST_F(GenericOpcuaMonitoredItemTest, FbSamplingIntervalInheritDevSamplingInterval)
+{
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp, 250));
+
+    // default config from the device's FB type, SamplingInterval left untouched
+    auto makeConfig = [this](const std::string& nodeId)
+    {
+        auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, nodeId);
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+        return config;
+    };
+
+    CreateMonitoredItemFB(makeConfig(".i32"));
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    EXPECT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL).asPtr<IInteger>(), 250);
+    daq::FunctionBlockPtr firstFb = fb;
+
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, 400);
+    EXPECT_EQ(firstFb.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL).asPtr<IInteger>(), 250);
+
+    CreateMonitoredItemFB(makeConfig(".d"));
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    EXPECT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL).asPtr<IInteger>(), 400);
+    EXPECT_EQ(firstFb.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL).asPtr<IInteger>(), 250);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, FbSamplingIntervalDoesNotInheritDevSamplingIntervalIfExplicit)
+{
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp, 250));
+
+    CreateMonitoredItemFB(".i32", 1, 150);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    EXPECT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL).asPtr<IInteger>(), 150);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, FbSamplingIntervalInheritDevSamplingIntervalWithPlainPartialConfig)
+{
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp, 250));
+
+    auto config = PropertyObject();
+    config.addProperty(IntProperty(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NodeIDType::String)));
+    config.addProperty(StringProperty(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32"));
+    config.addProperty(IntProperty(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1));
+    CreateMonitoredItemFB(config);
+
+    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    EXPECT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL).asPtr<IInteger>(), 250);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, FbSamplingIntervalInheritDevSamplingIntervalWithoutConfig)
+{
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp, 250));
+
+    ASSERT_NO_THROW(fb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME));
+
+    // no node ID is configured, so the FB is in error, but the sampling interval must still be inherited
+    EXPECT_EQ(fb.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL).asPtr<IInteger>(), 250);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, FbTypeDefaultConfigFollowsDevSamplingInterval)
+{
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp, 250));
+
+    auto getDefaultSamplingInterval = [this]
+    {
+        return device.getAvailableFunctionBlockTypes()
+            .get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME)
+            .createDefaultConfig()
+            .getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL)
+            .asPtr<IInteger>();
+    };
+
+    EXPECT_EQ(getDefaultSamplingInterval(), 250);
+
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, 400);
+    EXPECT_EQ(getDefaultSamplingInterval(), 400);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, InvalidDevSamplingIntervalFallsBackToDefault)
+{
+    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp, 250));
+
+    auto getDefaultSamplingInterval = [this]
+    {
+        return device.getAvailableFunctionBlockTypes()
+            .get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME)
+            .createDefaultConfig()
+            .getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL)
+            .asPtr<IInteger>();
+    };
+
+    for (const Int invalid : {Int(0), Int(-1), static_cast<Int>(std::numeric_limits<uint32_t>::max()) + 1})
+    {
+        device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, invalid);
+        EXPECT_EQ(getDefaultSamplingInterval(), static_cast<Int>(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL)) << "value: " << invalid;
+    }
+}
+
 TEST_F(GenericOpcuaMonitoredItemTest, ReconfigureNodeIdFromInvalidToValid)
 {
     StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));

@@ -23,6 +23,13 @@ public:
         return deviceConfig;
     }
 
+    static daq::PropertyObjectPtr buildDeviceConfig(DomainSource ds, uint32_t defaultSamplingIntervalMs)
+    {
+        auto deviceConfig = buildDeviceConfig(ds);
+        deviceConfig.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, defaultSamplingIntervalMs);
+        return deviceConfig;
+    }
+
     void StartUp(daq::PropertyObjectPtr config = nullptr, std::string connectionStr = "daq.opcua.generic://127.0.0.1:4842")
     {
         DaqInstanceInit();

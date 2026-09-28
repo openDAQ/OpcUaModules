@@ -120,7 +120,7 @@ void OpcUaMonitoredItemFbImpl::initStatusContainer()
     exceptionErr = statuses->addStatus("Exception");
 }
 
-FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType(DomainSource defaultDomainSource)
+FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType(DomainSource defaultDomainSource, uint32_t defaultSamplingIntervalMs)
 {
     auto defaultConfig = PropertyObject();
     {
@@ -174,10 +174,10 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType(DomainSource defaultDo
 
     {
         auto builder =
-            IntPropertyBuilder(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, Integer(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL))
-                .setDescription(fmt::format(
-                    "Specifies the sampling interval in milliseconds for monitoring the OPCUA node. By default it is set to {} ms.",
-                    DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL));
+            IntPropertyBuilder(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, Integer(defaultSamplingIntervalMs))
+                .setDescription(fmt::format("Specifies the sampling interval in milliseconds for monitoring the OPCUA node. By default it "
+                                            "is set to the value of the device's \"{}\" property.",
+                                            PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL));
         defaultConfig.addProperty(builder.build());
     }
 

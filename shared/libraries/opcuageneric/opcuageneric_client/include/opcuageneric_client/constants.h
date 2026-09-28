@@ -25,6 +25,7 @@ static constexpr const char* PROPERTY_NAME_OPCUA_USERNAME = "Username";
 static constexpr const char* PROPERTY_NAME_OPCUA_PASSWORD = "Password";
 static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID = "LocalId";
 static constexpr const char* PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE = "DefaultTimestampMode";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL = "DefaultSamplingInterval";
 
 // MonitoredItem FB
 static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_TYPE = "NodeIDType";

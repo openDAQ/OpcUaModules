@@ -69,6 +69,7 @@ protected:
 
     daq::opcua::OpcUaClientPtr client;
     DomainSource defaultDomainSource;       // default domain source for new added FBs
+    uint32_t defaultSamplingIntervalMs;  // default sampling interval for new added FBs
 
     // Drives every monitored item of this device from a single thread.
     SamplingScheduler sampler;

@@ -5,6 +5,7 @@
 #include <opcuageneric_client/constants.h>
 #include <opcuageneric_client/property_helper.h>
 #include "opcuashared/opcuaendpoint.h"
+#include <limits>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
@@ -20,6 +21,7 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
     : Device(ctx, parent, localId.empty() ? generateLocalId() : localId)
     , connectionStatus("ConnectionStatusType", "ConnectionStatus", statusContainer, "Connected", context.getTypeManager())
     , client(client)
+    , defaultSamplingIntervalMs(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL)
     , sampler([this] { return this->client->isConnected(); })
     , reconnectIntervalMs(reconnectIntervalMs)
 {
@@ -55,6 +57,15 @@ PropertyObjectPtr OpcuaGenericClientDeviceImpl::createDefaultConfig()
                                                 List<IString>("None", "ServerTimestamp", "SourceTimestamp", "LocalSystemTimestamp"),
                                                 static_cast<int>(DomainSource::SourceTimestamp))
                            .setDescription("Defines what to use as a domain signal. By default it is set to SourceTimestamp.");
+        defaultConfig.addProperty(builder.build());
+    }
+
+    {
+        auto builder =
+            IntPropertyBuilder(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, Integer(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL))
+                .setDescription(fmt::format("Default sampling interval in milliseconds for newly added monitored items. By default it is "
+                                            "set to {} ms.",
+                                            DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL));
         defaultConfig.addProperty(builder.build());
     }
 
@@ -95,6 +106,21 @@ void OpcuaGenericClientDeviceImpl::readProperties()
     else
     {
         defaultDomainSource = DS::ServerTimestamp;
+    }
+
+    const auto samplingInterval =
+        readProperty<Int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
+    if (samplingInterval <= 0 || samplingInterval > static_cast<Int>(std::numeric_limits<uint32_t>::max()))
+    {
+        LOG_W("Invalid value {} for the \"{}\" property! Sampling interval must be a positive integer. Using {} ms instead.",
+              samplingInterval,
+              PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL,
+              DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
+        defaultSamplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
+    }
+    else
+    {
+        defaultSamplingIntervalMs = static_cast<uint32_t>(samplingInterval);
     }
 }
 
@@ -182,7 +208,7 @@ void OpcuaGenericClientDeviceImpl::initNestedFbTypes()
     nestedFbTypes = Dict<IString, IFunctionBlockType>();
     // Add a function block type for monitoring an OPCUA node
     {
-        const auto fbType = OpcUaMonitoredItemFbImpl::CreateType(defaultDomainSource);
+        const auto fbType = OpcUaMonitoredItemFbImpl::CreateType(defaultDomainSource, defaultSamplingIntervalMs);
         nestedFbTypes.set(fbType.getId(), fbType);
     }
 }

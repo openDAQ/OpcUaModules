@@ -40,7 +40,8 @@ public:
                                       const PropertyObjectPtr& config = nullptr);
     ~OpcUaMonitoredItemFbImpl();
 
-    DAQ_OPCUA_GENERIC_MODULE_API static FunctionBlockTypePtr CreateType(DomainSource defaultDomainSource = DomainSource::SourceTimestamp);
+    DAQ_OPCUA_GENERIC_MODULE_API static FunctionBlockTypePtr CreateType(DomainSource defaultDomainSource = DomainSource::SourceTimestamp,
+                                                                        uint32_t defaultSamplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
 
     uint32_t getSamplingInterval() const override;
     void processSample() override;
