@@ -88,6 +88,8 @@ TEST_F(TmsInputPortTest, ConnectedToReference)
     ASSERT_EQ(connectedToNodes[0]->getNodeId(), signalNodeId);
 }
 
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
+
 TEST_F(TmsInputPortTest, Permissions)
 {
     InputPortPtr inputPort = createInputPort();
@@ -125,3 +127,5 @@ TEST_F(TmsInputPortTest, Permissions)
     lambdaTemplate(disconFbNodeID.getPtr(), test_helpers::createSessionExecutor("executor"), true, false, false);    // <-
     lambdaTemplate(disconFbNodeID.getPtr(), test_helpers::createSessionAdmin("admin"), true, true, true);
 }
+
+#endif

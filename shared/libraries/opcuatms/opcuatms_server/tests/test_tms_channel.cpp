@@ -112,6 +112,8 @@ TEST_F(TmsChannelTest, Property)
     ASSERT_DOUBLE_EQ(srValue.readScalar<UA_Double>(), 22.2);
 }
 
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
+
 TEST_F(TmsChannelTest, Permissions)
 {
     ChannelPtr channel = createChannel();
@@ -135,3 +137,5 @@ TEST_F(TmsChannelTest, Permissions)
     lambdaMain(test_helpers::createSessionExecutor("executor"), true, false, true);
     lambdaMain(test_helpers::createSessionAdmin("admin"), true, true, true);
 }
+
+#endif

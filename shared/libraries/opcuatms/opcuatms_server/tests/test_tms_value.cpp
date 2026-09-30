@@ -58,6 +58,8 @@ TEST_F(TmsValueTest, Register)
     ASSERT_TRUE(this->getClient()->nodeExists(analogValueNodeId));
 }
 
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
+
 TEST_F(TmsValueTest, Permissions)
 {
     SignalConfigPtr signal = Signal(ctx, nullptr, "sig");
@@ -90,3 +92,5 @@ TEST_F(TmsValueTest, Permissions)
     lambdaMain(test_helpers::createSessionAdmin("admin"), true, true, true);
 
 }
+
+#endif

@@ -129,6 +129,8 @@ TEST_F(TmsSignalTest, ValueAndAnalogValueDataTypeInt32)
     ASSERT_EQ(analogValueDataType, OpcUaNodeId(0, UA_NS0ID_INT32));
 }
 
+#ifdef OPENDAQ_ENABLE_ACCESS_CONTROL
+
 TEST_F(TmsSignalTest, Permissions)
 {
     SignalConfigPtr signal = Signal(ctx, nullptr, "sig");
@@ -152,3 +154,5 @@ TEST_F(TmsSignalTest, Permissions)
     lambdaMain(test_helpers::createSessionAdmin("admin"), true, true, true);
 
 }
+
+#endif
