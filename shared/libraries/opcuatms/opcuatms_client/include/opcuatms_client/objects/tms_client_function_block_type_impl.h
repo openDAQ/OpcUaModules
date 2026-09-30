@@ -20,6 +20,31 @@
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_TMS
 
+/*!
+ * @brief The function block type options carried next to the FunctionBlockInfoStructure.
+ *
+ * The companion specification's structure only holds id, name and description, so the options
+ * travel as read-only properties of the node. A server that predates them exposes no such nodes,
+ * in which case every field keeps its default.
+ */
+struct FunctionBlockTypeOptions
+{
+    Bool alwaysEmptyInput = False;
+    Bool singleton = False;
+    StringPtr commonSettingsTypeId;
+};
+
+/*!
+ * @brief Reads the function block type options from the properties of the given node.
+ * @param clientContext The client context used to browse for the option nodes.
+ * @param nodeId The node the options are attached to.
+ *
+ * Missing nodes are not an error: the corresponding option keeps its default, which is how a
+ * connection to a server that does not publish the options behaves.
+ */
+FunctionBlockTypeOptions ReadFunctionBlockTypeOptions(const TmsClientContextPtr& clientContext,
+                                                      const opcua::OpcUaNodeId& nodeId);
+
 class TmsClientFunctionBlockTypeImpl final : public TmsClientObjectImpl, public FunctionBlockTypeImpl
 {
 public:
@@ -31,12 +56,16 @@ public:
     ErrCode INTERFACE_FUNC getName(IString** name) override;
     ErrCode INTERFACE_FUNC getDescription(IString** description) override;
     ErrCode INTERFACE_FUNC createDefaultConfig(IPropertyObject** defaultConfig) override;
+    ErrCode INTERFACE_FUNC getAlwaysEmptyInput(Bool* alwaysEmpty) override;
+    ErrCode INTERFACE_FUNC getSingleton(Bool* singleton) override;
+    ErrCode INTERFACE_FUNC getCommonSettingsTypeId(IString** typeId) override;
 
 private:
     void readAttributes();
 
     FunctionBlockTypePtr type;
     PropertyObjectPtr defaultConfig;
+    FunctionBlockTypeOptions options;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_TMS

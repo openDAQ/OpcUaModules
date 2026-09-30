@@ -4,6 +4,7 @@
 #include <opendaq/function_block_type_ptr.h>
 #include <opendaq/function_block_ptr.h>
 #include <opendaq/function_block_type_factory.h>
+#include <opendaq/component_type_builder_factory.h>
 #include <opendaq/signal_factory.h>
 #include <opendaq/input_port_factory.h>
 #include <gtest/gtest.h>
@@ -101,6 +102,45 @@ TEST_F(TmsFunctionBlockTest, AttrFunctionBlockType)
     ASSERT_EQ(clientType.getId(), "UNIQUE ID");
     ASSERT_EQ(clientType.getName(), "NAME");
     ASSERT_EQ(clientType.getDescription(), "DESCRIPTION");
+}
+
+TEST_F(TmsFunctionBlockTest, AttrFunctionBlockTypeOptions)
+{
+    const FunctionBlockTypePtr type = FunctionBlockTypeBuilder()
+                                          .setId("UNIQUE ID")
+                                          .setName("NAME")
+                                          .setDescription("DESCRIPTION")
+                                          .setAlwaysEmptyInput(True)
+                                          .setSingleton(True)
+                                          .setCommonSettingsTypeId("SettingsId")
+                                          .build();
+
+    auto serverFunctionBlock = createFunctionBlock(type);
+    auto tmsServerFunctionBlock = TmsServerFunctionBlock(serverFunctionBlock, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsServerFunctionBlock.registerOpcUaNode();
+
+    FunctionBlockPtr clientFunctionBlock = TmsClientFunctionBlock(NullContext(), nullptr, "mockfb", clientContext, nodeId);
+
+    auto clientType = clientFunctionBlock.getFunctionBlockType();
+    ASSERT_TRUE(clientType.getAlwaysEmptyInput());
+    ASSERT_TRUE(clientType.getSingleton());
+    ASSERT_EQ(clientType.getCommonSettingsTypeId(), "SettingsId");
+}
+
+TEST_F(TmsFunctionBlockTest, AttrFunctionBlockTypeOptionDefaults)
+{
+    const FunctionBlockTypePtr type = FunctionBlockType("UNIQUE ID", "NAME", "DESCRIPTION");
+
+    auto serverFunctionBlock = createFunctionBlock(type);
+    auto tmsServerFunctionBlock = TmsServerFunctionBlock(serverFunctionBlock, this->getServer(), ctx, serverContext);
+    auto nodeId = tmsServerFunctionBlock.registerOpcUaNode();
+
+    FunctionBlockPtr clientFunctionBlock = TmsClientFunctionBlock(NullContext(), nullptr, "mockfb", clientContext, nodeId);
+
+    auto clientType = clientFunctionBlock.getFunctionBlockType();
+    ASSERT_FALSE(clientType.getAlwaysEmptyInput());
+    ASSERT_FALSE(clientType.getSingleton());
+    ASSERT_FALSE(clientType.getCommonSettingsTypeId().assigned());
 }
 
 TEST_F(TmsFunctionBlockTest, MethodGetInputPorts)
