@@ -33,10 +33,10 @@ public:
         using namespace daq::opcua::tms;
         server = std::make_shared<daq::opcua::OpcUaServer>();
         server->setPort(4840);
-        server->setAllowBrowsingNodeCallback(TmsServerObject::allowBrowsingNodeCallback);
-        server->setGetUserAccessLevelCallback(TmsServerObject::getUserAccessLevelCallback);
-        server->setGetUserRightsMaskCallback(TmsServerObject::getUserRightsMaskCallback);
-        server->setGetUserExecutableCallback(TmsServerObject::getUserExecutableCallback);
+        server->setAllowBrowsingNodeCallback(TmsServerObject::AllowBrowsingNodeCallback);
+        server->setGetUserAccessLevelCallback(TmsServerObject::GetUserAccessLevelCallback);
+        server->setGetUserRightsMaskCallback(TmsServerObject::GetUserRightsMaskCallback);
+        server->setGetUserExecutableCallback(TmsServerObject::GetUserExecutableCallback);
         server->setAuthenticationProvider(StaticAuthenticationProvider(true, test_helpers::CreateUsers()));
         server->start();
 
