@@ -67,7 +67,8 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
                                                    const FunctionBlockTypePtr& type,
                                                    daq::opcua::OpcUaClientPtr client,
                                                    const std::string& localId,
-                                                   DomainSource defaultDomainSource,
+                                                   DomainSource initialDomainSource,
+                                                   uint32_t initialSamplingIntervalMs,
                                                    SamplingScheduler* scheduler,
                                                    const PropertyObjectPtr& config)
     : FunctionBlock(type, ctx, parent, localId.empty() ? generateLocalId() : localId)
@@ -78,11 +79,9 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
     initComponentStatus();
     initStatusContainer();
     if (config.assigned())
-        initProperties(property_helper::populateDefaultConfig(type.createDefaultConfig(), config));
+        initProperties(property_helper::populateDefaultConfig(type.createDefaultConfig(), config), initialDomainSource, initialSamplingIntervalMs);
     else
-        initProperties(type.createDefaultConfig());
-
-    this->config.domainSource = defaultDomainSource;
+        initProperties(type.createDefaultConfig(), initialDomainSource, initialSamplingIntervalMs);
 
     validateNode();
     adjustSignalDescriptor();
@@ -165,32 +164,11 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
         defaultConfig.addProperty(builder.build());
     }
 
-    {
-        auto builder =
-            IntPropertyBuilder(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, Integer(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL))
-                .setDescription(fmt::format(
-                    "Specifies the sampling interval in milliseconds for monitoring the OPCUA node. By default it is set to {} ms.",
-                    DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL));
-        defaultConfig.addProperty(builder.build());
-    }
-
     const auto fbType = FunctionBlockType(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME,
                                           GENERIC_OPCUA_MONITORED_ITEM_FB_NAME,
                                           "Monitors a specified OPCUA node and outputs the value and timestamp as signals.",
                                           defaultConfig);
     return fbType;
-}
-
-void OpcUaMonitoredItemFbImpl::setDomainSource(DomainSource domainSource)
-{
-    auto lock = this->getRecursiveConfigLock2();
-    auto lockProcessing = std::scoped_lock(processingMutex);
-    if (config.domainSource != domainSource)
-    {
-        auto prevConfig = config;
-        config.domainSource = domainSource;
-        reconfigureSignal(prevConfig);
-    }
 }
 
 std::string OpcUaMonitoredItemFbImpl::generateLocalId()
@@ -226,7 +204,9 @@ void OpcUaMonitoredItemFbImpl::adjustSignalDescriptor()
     }
 }
 
-void OpcUaMonitoredItemFbImpl::initProperties(const PropertyObjectPtr& config)
+void OpcUaMonitoredItemFbImpl::initProperties(const PropertyObjectPtr& config,
+                                              DomainSource initialDomainSource,
+                                              uint32_t initialSamplingIntervalMs)
 {
     for (const auto& prop : config.getAllProperties())
     {
@@ -248,6 +228,30 @@ void OpcUaMonitoredItemFbImpl::initProperties(const PropertyObjectPtr& config)
             objPtr.setPropertyValue(propName, prop.getValue());
         }
     }
+
+    // TimestampMode and SamplingInterval are not part of the config: their initial values come from the parent device's
+    // DefaultTimestampMode and DefaultSamplingInterval, and they can be changed on the function block afterwards.
+    {
+        auto builder = SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_TS_MODE,
+                                                List<IString>("None", "ServerTimestamp", "SourceTimestamp", "LocalSystemTimestamp"),
+                                                static_cast<int>(initialDomainSource))
+                           .setDescription(fmt::format("Defines what to use as a domain signal. Initially set to the value of the "
+                                                       "device's \"{}\" property.",
+                                                       PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+        objPtr.addProperty(builder.build());
+        objPtr.getOnPropertyValueWrite(PROPERTY_NAME_OPCUA_TS_MODE) += [this](PropertyObjectPtr&, PropertyValueEventArgsPtr&) { propertyChanged(); };
+    }
+
+    {
+        auto builder =
+            IntPropertyBuilder(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, Integer(initialSamplingIntervalMs))
+                .setDescription(fmt::format("Specifies the sampling interval in milliseconds for monitoring the OPCUA node. Initially set "
+                                            "to the value of the device's \"{}\" property.",
+                                            PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL));
+        objPtr.addProperty(builder.build());
+        objPtr.getOnPropertyValueWrite(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL) += [this](PropertyObjectPtr&, PropertyValueEventArgsPtr&) { propertyChanged(); };
+    }
+
     readProperties();
 }
 
@@ -276,6 +280,18 @@ void OpcUaMonitoredItemFbImpl::readProperties()
     {
         const auto nodeIdNumeric = static_cast<uint32_t>(readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC, 0));
         config.nodeId = OpcUaNodeId{static_cast<uint16_t>(namespaceIndex), nodeIdNumeric};
+    }
+
+    using DS = DomainSource;
+    const auto tmpDomainSource =
+        readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::SourceTimestamp));
+    if (tmpDomainSource < static_cast<int>(DS::_count) && tmpDomainSource >= 0)
+    {
+        config.domainSource = static_cast<DS>(tmpDomainSource);
+    }
+    else
+    {
+        config.domainSource = DS::ServerTimestamp;
     }
 
     const auto samplingInterval =

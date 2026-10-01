@@ -23,26 +23,35 @@ PropertyObjectPtr config = instance.createDefaultAddDeviceConfig();
 PropertyObjectPtr opcuaSetting = config.getPropertyValue("Device.OPCUAGeneric");
 opcuaSetting.setPropertyValue("Username", "operator");
 opcuaSetting.setPropertyValue("Password", "secret");
-opcuaSetting.setPropertyValue("TimestampMode", 3);   // LocalSystemTimestamp
 auto device = instance.addDevice("daq.opcua.generic://192.168.1.50:4840", config);
+device.setPropertyValue("DefaultTimestampMode", 3);   // LocalSystemTimestamp for the blocks added below
 ```
+
+### Connection config
+
+| Property | Type | Default |
+|---|---|---|
+| `Username` | String | `""` |
+| `Password` | String | `""` |
+| `LocalId` | String | `""` |
+| `DeviceNodeIDType` | Selection | `1` — `String` |
+| `DeviceNodeIDString` | String | `""` |
+| `DeviceNodeIDNumeric` | Int | `0` |
+| `DeviceNamespaceIndex` | Int | `0` |
+
+These are read once while the device is being created; changing them afterwards has no effect —
+remove the device and add it again. None of them becomes a property of the device object.
 
 ### Device properties
 
-| Property | Type | Default | Applied |
-|---|---|---|---|
-| `Username` | String | `""` | at connect |
-| `Password` | String | `""` | at connect |
-| `LocalId` | String | `""` | at connect |
-| `TimestampMode` | Selection | `2` — `SourceTimestamp` | at connect **and** at runtime |
-| `DeviceNodeIDType` | Selection | `1` — `String` | at connect |
-| `DeviceNodeIDString` | String | `""` | at connect |
-| `DeviceNodeIDNumeric` | Int | `0` | at connect |
-| `DeviceNamespaceIndex` | Int | `0` | at connect |
+| Property | Type | Default |
+|---|---|---|
+| `DefaultTimestampMode` | Selection | `2` — `SourceTimestamp` |
+| `DefaultSamplingInterval` | Int | `100` |
 
-Everything except `TimestampMode` is read once while the device is being created; changing those
-values afterwards has no effect — remove the device and add it again. `TimestampMode` remains a
-property of the device object and can be written at any time.
+These are **not** part of the connection config — the same names in a config passed to `addDevice`
+are ignored. Every device starts with the default values above; set them on the device object after
+it has been created, at any time.
 
 ---
 
@@ -70,26 +79,35 @@ independent of `LocalId`.
 
 ---
 
-**`TimestampMode`** — which clock the domain (time) signal of every `MonitoredItem` of this device
-carries. It is a device-wide setting; individual blocks cannot override it.
+**`DefaultTimestampMode`** — the initial `TimestampMode` of every newly added `MonitoredItem`. It
+takes the same values as the block's [`TimestampMode`](#monitoreditem-properties).
 
-| Value | Name | What the domain signal carries | When to use it |
-|---|---|---|---|
-| `0` | `None` | nothing — no domain signal is created at all | you only care about values, or the consumer supplies its own time axis |
-| `1` | `ServerTimestamp` | the time the OPC UA server produced the response | the server's clock is the reference, the source timestamp is unreliable |
-| `2` | `SourceTimestamp` | the time the value originated at its source (default) | closest to when the data was actually measured |
-| `3` | `LocalSystemTimestamp` | the client's system clock at the moment of the read | the server sends no usable timestamps; includes network + polling delay |
+The device only supplies the starting value; the mode actually used is a property of each block.
+`TimestampMode` is not part of the `MonitoredItem` config, so a block always starts with the device's
+current `DefaultTimestampMode`. To use another mode for one block, write its `TimestampMode` after
+adding it.
 
-With `ServerTimestamp` or `SourceTimestamp`, a server that does not deliver that timestamp puts the
-block into `Error` and it publishes nothing — that is a real, and common, failure mode.
-`LocalSystemTimestamp` always works, at the cost of accuracy. `None` removes the domain signal, so
-readers must not expect a time axis.
-
-Writing the property at runtime takes effect immediately on all existing blocks: domain signals are
-created or removed as needed.
+Writing the property at runtime affects only blocks added afterwards; blocks that already exist keep
+their `TimestampMode`.
 
 ```cpp
-device.setPropertyValue("TimestampMode", 1);   // ServerTimestamp
+device.setPropertyValue("DefaultTimestampMode", 1);   // ServerTimestamp for blocks added from now on
+```
+
+---
+
+**`DefaultSamplingInterval`** — the initial `SamplingInterval`, in milliseconds, of every newly added
+`MonitoredItem`. `100` by default.
+
+It works exactly like `DefaultTimestampMode`: `SamplingInterval` is not part of the `MonitoredItem`
+config, a block always starts with the device's current `DefaultSamplingInterval` and can be changed
+afterwards, and writing the device property at runtime affects only blocks added afterwards.
+
+The value must be greater than `0` and fit into 32 bits. Anything else is ignored with a warning in
+the log, and new blocks get the 100 ms default instead.
+
+```cpp
+device.setPropertyValue("DefaultSamplingInterval", 500);   // blocks added from now on poll every 500 ms
 ```
 
 ---
@@ -133,25 +151,29 @@ auto cfg = fbType.createDefaultConfig();
 cfg.setPropertyValue("NodeIDType", 1);            // String
 cfg.setPropertyValue("NodeIDString", ".temperature");
 cfg.setPropertyValue("NamespaceIndex", 1);
-cfg.setPropertyValue("SamplingInterval", 100);    // ms
 
 auto fb = device.addFunctionBlock("MonitoredItem", cfg);
+fb.setPropertyValue("SamplingInterval", 500);     // ms; starts with the device's DefaultSamplingInterval
 ```
 
 ### MonitoredItem properties
 
-| Property | Type | Default | Applied |
-|---|---|---|---|
-| `LocalId` | String | `""` | at creation only |
-| `NodeIDType` | Selection | `1` — `String` | at creation **and** at runtime |
-| `NodeIDString` | String | `""` | at creation **and** at runtime |
-| `NodeIDNumeric` | Int | `0` | at creation **and** at runtime |
-| `NamespaceIndex` | Int | `0` | at creation **and** at runtime |
-| `SamplingInterval` | Int | `100` | at creation **and** at runtime |
+| Property | Type | Default | In config | Applied |
+|---|---|---|---|---|
+| `LocalId` | String | `""` | yes | at creation only |
+| `NodeIDType` | Selection | `1` — `String` | yes | at creation **and** at runtime |
+| `NodeIDString` | String | `""` | yes | at creation **and** at runtime |
+| `NodeIDNumeric` | Int | `0` | yes | at creation **and** at runtime |
+| `NamespaceIndex` | Int | `0` | yes | at creation **and** at runtime |
+| `TimestampMode` | Selection | device's `DefaultTimestampMode` | **no** | at runtime |
+| `SamplingInterval` | Int | device's `DefaultSamplingInterval` | **no** | at runtime |
 
-`LocalId` is consumed while the block is being created and does not become a property of it. The
-other five do, and each write re-reads the configuration, re-validates the node, refreshes the block
-status and reconfigures the signals if the data type changed:
+`LocalId` is consumed while the block is being created and does not become a property of it.
+`TimestampMode` and `SamplingInterval` are not in the config at all — the same names in a config
+passed to `addFunctionBlock` are ignored; the block adds them itself, with the device's current
+defaults as initial values. The other six are properties of the block, and each write re-reads the
+configuration, re-validates the node, refreshes the block status and reconfigures the signals if the
+data type or the timestamp mode changed:
 
 ```cpp
 fb.setPropertyValue("SamplingInterval", 500);
@@ -189,8 +211,32 @@ reason for a freshly added block to sit in `Error` and never produce data.
 
 ---
 
+**`TimestampMode`** — which clock the domain (time) signal of this block carries. The block starts
+with the device's `DefaultTimestampMode`.
+
+| Value | Name | What the domain signal carries | When to use it |
+|---|---|---|---|
+| `0` | `None` | nothing — no domain signal is created at all | you only care about values, or the consumer supplies its own time axis |
+| `1` | `ServerTimestamp` | the time the OPC UA server produced the response | the server's clock is the reference, the source timestamp is unreliable |
+| `2` | `SourceTimestamp` | the time the value originated at its source | closest to when the data was actually measured |
+| `3` | `LocalSystemTimestamp` | the client's system clock at the moment of the read | the server sends no usable timestamps; includes network + polling delay |
+
+With `ServerTimestamp` or `SourceTimestamp`, a server that does not deliver that timestamp puts the
+block into `Error` and it publishes nothing — that is a real, and common, failure mode.
+`LocalSystemTimestamp` always works, at the cost of accuracy. `None` removes the domain signal, so
+readers must not expect a time axis.
+
+Writing the property at runtime takes effect immediately on this block only: its domain signal is
+created or removed as needed.
+
+```cpp
+fb.setPropertyValue("TimestampMode", 1);   // ServerTimestamp
+```
+
+---
+
 **`SamplingInterval`** — how often, in milliseconds, this block issues one OPC UA `Read` for its
-node. `100` by default.
+node. The block starts with the device's `DefaultSamplingInterval` (`100` by default).
 
 This is client-side polling, not an OPC UA subscription: nothing is configured on the server, and the
 server's own sampling and publishing settings do not apply. Every successful read publishes a sample,
