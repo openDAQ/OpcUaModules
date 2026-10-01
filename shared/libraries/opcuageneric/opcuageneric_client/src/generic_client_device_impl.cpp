@@ -5,6 +5,7 @@
 #include <opcuageneric_client/constants.h>
 #include <opcuageneric_client/property_helper.h>
 #include "opcuashared/opcuaendpoint.h"
+#include <limits>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
@@ -12,7 +13,6 @@ std::atomic<int> OpcuaGenericClientDeviceImpl::localIndex = 0;
 
 OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx,
                                                            const ComponentPtr& parent,
-                                                           const PropertyObjectPtr& config,
                                                            std::shared_ptr<OpcUaClient> client,
                                                            const std::string& localId,
                                                            const std::string& name,
@@ -20,6 +20,8 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
     : Device(ctx, parent, localId.empty() ? generateLocalId() : localId)
     , connectionStatus("ConnectionStatusType", "ConnectionStatus", statusContainer, "Connected", context.getTypeManager())
     , client(client)
+    , defaultSamplingIntervalMs(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL)
+    , sampler([this] { return this->client->isConnected(); })
     , reconnectIntervalMs(reconnectIntervalMs)
 {
     if (this->client == nullptr)
@@ -27,54 +29,43 @@ OpcuaGenericClientDeviceImpl::OpcuaGenericClientDeviceImpl(const ContextPtr& ctx
 
     this->name = name.empty() ? GENERIC_OPCUA_CLIENT_DEVICE_NAME : name;
 
-    if (config.assigned())
-        initProperties(property_helper::populateDefaultConfig(createDefaultConfig(), config));
-    else
-        initProperties(createDefaultConfig());
-
+    initProperties();
     initComponentStatus();
 
     initNestedFbTypes();
+    sampler.start();
     startReconnectMonitor();
 }
 
 OpcuaGenericClientDeviceImpl::~OpcuaGenericClientDeviceImpl()
 {
     stopReconnectMonitor();
+    sampler.stop();
 }
 
-PropertyObjectPtr OpcuaGenericClientDeviceImpl::createDefaultConfig()
+void OpcuaGenericClientDeviceImpl::initProperties()
 {
-    auto defaultConfig = PropertyObject();
-
     {
-        auto builder = SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_TS_MODE,
+        auto builder = SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE,
                                                 List<IString>("None", "ServerTimestamp", "SourceTimestamp", "LocalSystemTimestamp"),
                                                 static_cast<int>(DomainSource::SourceTimestamp))
-                           .setDescription("Defines what to use as a domain signal. By default it is set to SourceTimestamp.");
-        defaultConfig.addProperty(builder.build());
+                           .setDescription(fmt::format("Default \"{}\" for newly added monitored items. By default it is set to "
+                                                       "SourceTimestamp.",
+                                                       PROPERTY_NAME_OPCUA_TS_MODE));
+        objPtr.addProperty(builder.build());
+        objPtr.getOnPropertyValueWrite(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE) += [this](PropertyObjectPtr&, PropertyValueEventArgsPtr&) { propertyChanged(); };
     }
 
-    return defaultConfig;
-}
-
-void OpcuaGenericClientDeviceImpl::initProperties(const PropertyObjectPtr& config)
-{
-    const auto defaultConfig = createDefaultConfig();
-    for (const auto& prop : config.getAllProperties())
     {
-        const auto propName = prop.getName();
-        if (defaultConfig.hasProperty(propName))
-        {
-            if (const auto internalProp = prop.asPtrOrNull<IPropertyInternal>(true); internalProp.assigned())
-            {
-                objPtr.addProperty(internalProp.clone());
-                objPtr.setPropertyValue(propName, prop.getValue());
-                objPtr.getOnPropertyValueWrite(prop.getName()) +=
-                    [this](PropertyObjectPtr&, PropertyValueEventArgsPtr&) { propertyChanged(); };
-            }
-        }
+        auto builder =
+            IntPropertyBuilder(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, Integer(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL))
+                .setDescription(fmt::format("Default sampling interval in milliseconds for newly added monitored items. By default it is "
+                                            "set to {} ms.",
+                                            DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL));
+        objPtr.addProperty(builder.build());
+        objPtr.getOnPropertyValueWrite(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL) += [this](PropertyObjectPtr&, PropertyValueEventArgsPtr&) { propertyChanged(); };
     }
+
     readProperties();
 }
 
@@ -84,14 +75,29 @@ void OpcuaGenericClientDeviceImpl::readProperties()
     auto lock = this->getRecursiveConfigLock();
     using DS = DomainSource;
     const auto tmpDomainSource =
-        readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::SourceTimestamp));
+        readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DS::SourceTimestamp));
     if (tmpDomainSource < static_cast<int>(DS::_count) && tmpDomainSource >= 0)
     {
-        domainSource = static_cast<DS>(tmpDomainSource);
+        defaultDomainSource = static_cast<DS>(tmpDomainSource);
     }
     else
     {
-        domainSource = DS::ServerTimestamp;
+        defaultDomainSource = DS::ServerTimestamp;
+    }
+
+    const auto samplingInterval =
+        readProperty<Int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
+    if (samplingInterval <= 0 || samplingInterval > static_cast<Int>(std::numeric_limits<uint32_t>::max()))
+    {
+        LOG_W("Invalid value {} for the \"{}\" property! Sampling interval must be a positive integer. Using {} ms instead.",
+              samplingInterval,
+              PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL,
+              DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
+        defaultSamplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
+    }
+    else
+    {
+        defaultSamplingIntervalMs = static_cast<uint32_t>(samplingInterval);
     }
 }
 
@@ -99,15 +105,6 @@ void OpcuaGenericClientDeviceImpl::propertyChanged()
 {
     auto lock = this->getRecursiveConfigLock2();
     readProperties();
-
-    for (const FunctionBlockPtr& fb : this->functionBlocks.getItems(search::Any()))
-    {
-        if (fb.assigned())
-        {
-            auto monitoredItemFb = static_cast<OpcUaMonitoredItemFbImpl*>(*fb);
-            monitoredItemFb->setDomainSource(domainSource);
-        }
-    }
 }
 
 std::string OpcuaGenericClientDeviceImpl::getConnectionString() const
@@ -118,6 +115,8 @@ std::string OpcuaGenericClientDeviceImpl::getConnectionString() const
 void OpcuaGenericClientDeviceImpl::removed()
 {
     stopReconnectMonitor();
+    // Stopped before the function blocks are torn down, so that no tick can reach a dying item.
+    sampler.stop();
     Device::removed();
     client->disconnect(false);
 }
@@ -158,6 +157,7 @@ void OpcuaGenericClientDeviceImpl::reconnectMonitorLoop()
                 client->connect();
                 client->runIterate();
                 connectionStatus.setStatus("Connected");
+                sampler.onReconnected();
             }
             catch (const OpcUaException& e)
             {
@@ -192,6 +192,7 @@ void OpcuaGenericClientDeviceImpl::initNestedFbTypes()
 
 DictPtr<IString, IFunctionBlockType> OpcuaGenericClientDeviceImpl::onGetAvailableFunctionBlockTypes()
 {
+    auto lock = this->getRecursiveConfigLock2();
     return nestedFbTypes;
 }
 
@@ -199,17 +200,26 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
 {
     FunctionBlockPtr nestedFunctionBlock;
     {
-        if (nestedFbTypes.hasKey(typeId))
+        const auto fbTypes = onGetAvailableFunctionBlockTypes();
+        if (fbTypes.hasKey(typeId))
         {
-            auto fbTypePtr = nestedFbTypes.getOrDefault(typeId);
+            auto fbTypePtr = fbTypes.getOrDefault(typeId);
             if (fbTypePtr.getName() == GENERIC_OPCUA_MONITORED_ITEM_FB_NAME)
             {
                 std::string userSpecifiedLocalId;
                 if (config.assigned() && config.hasProperty(PROPERTY_NAME_OPCUA_MI_LOCAL_ID))
                     userSpecifiedLocalId = config.getPropertyValue(PROPERTY_NAME_OPCUA_MI_LOCAL_ID).asPtr<IString>().toStdString();
                 const auto localId = buildMILocalId(userSpecifiedLocalId);
+                // The new function block starts with the device's current defaults for these.
+                DomainSource initialDomainSource;
+                uint32_t initialSamplingIntervalMs;
+                {
+                    auto lock = this->getRecursiveConfigLock2();
+                    initialDomainSource = defaultDomainSource;
+                    initialSamplingIntervalMs = defaultSamplingIntervalMs;
+                }
                 nestedFunctionBlock = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
-                    context, functionBlocks, fbTypePtr, client, localId, domainSource, config);
+                    context, functionBlocks, fbTypePtr, client, localId, initialDomainSource, initialSamplingIntervalMs, &sampler, config);
             }
             else
             {
@@ -223,6 +233,7 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
                 auto lock = this->getRecursiveConfigLock2();
                 addNestedFunctionBlock(nestedFunctionBlock);
             }
+            sampler.registerItem(static_cast<OpcUaMonitoredItemFbImpl*>(*nestedFunctionBlock));
             setComponentStatus(ComponentStatus::Ok);
         }
         else

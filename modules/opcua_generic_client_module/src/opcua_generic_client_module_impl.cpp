@@ -112,7 +112,7 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
 
     const auto deviceLocalId = buildDeviceLocalId(parent, userSpecifiedLocalId, devInfoList, desc);
 
-    DevicePtr device(createWithImplementation<IDevice, OpcuaGenericClientDeviceImpl>(context, parent, configPtr, client, deviceLocalId, deviceName));
+    DevicePtr device(createWithImplementation<IDevice, OpcuaGenericClientDeviceImpl>(context, parent, client, deviceLocalId, deviceName));
     DeviceInfoPtr deviceInfo = device.getInfo();
 
 
@@ -647,17 +647,6 @@ PropertyObjectPtr OpcUaGenericClientModule::createDefaultConfig()
         auto builder = IntPropertyBuilder(PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX, Integer(0))
                            .setDescription("Namespace index of the DeviceType/ComponentType node to read device info from.");
         defaultConfig.addProperty(builder.build());
-    }
-
-    auto deviceDefaultConfig = OpcuaGenericClientDeviceImpl::createDefaultConfig();
-    for (const auto& prop : deviceDefaultConfig.getAllProperties())
-    {
-        const auto propName = prop.getName();
-        if (const auto internalProp = prop.asPtrOrNull<IPropertyInternal>(true); internalProp.assigned())
-        {
-            defaultConfig.addProperty(internalProp.clone());
-            defaultConfig.setPropertyValue(propName, prop.getValue());
-        }
     }
     return defaultConfig;
 }
