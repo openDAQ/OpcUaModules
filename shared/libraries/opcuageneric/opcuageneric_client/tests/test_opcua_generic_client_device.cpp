@@ -412,6 +412,32 @@ TEST_F(GenericOpcuaClientDeviceTest, DeviceNodeFromConfigNotOfDeviceTypeWinsOver
     EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_PLAIN_SERIAL);
 }
 
+TEST_F(GenericOpcuaClientDeviceTest, LocalIdFromSerialNumberWithoutManufacturer)
+{
+    using namespace daq::opcua::helper::constants;
+
+    testHelper.startServer();
+    const auto instance = DaqInstanceInit();
+
+    const auto config = createConfigWithDeviceNode(SERIAL_ONLY_DEVICE_STRING_ID, TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    EXPECT_EQ(device.getLocalId(), EXPECTED_SERIAL_ONLY_SERIAL);
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_SERIAL_ONLY_SERIAL);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, LocalIdWithoutSerialNumberFallsBackToApplicationUri)
+{
+    using namespace daq::opcua::helper::constants;
+
+    testHelper.startServer();
+    const auto instance = DaqInstanceInit();
+
+    const auto config = createConfigWithDeviceNode(MANUFACTURER_ONLY_DEVICE_STRING_ID, TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    EXPECT_EQ(device.getLocalId(), "urn:open62541.server.application");
+    EXPECT_EQ(device.getInfo().getManufacturer().toStdString(), EXPECTED_MANUFACTURER);
+}
+
 TEST_F(GenericOpcuaClientDeviceTest, DeviceNodeFromConfigWithoutDeviceInfoAndWithoutDiNamespace)
 {
     testHelper.startServer();

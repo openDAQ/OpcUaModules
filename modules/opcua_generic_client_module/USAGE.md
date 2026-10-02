@@ -71,7 +71,8 @@ example when configuration is stored per component path. Leave it empty to let t
 
 The value is used as-is unless it is empty or already taken by a sibling device; in those cases the
 module falls back, in order, to `<Manufacturer>_<SerialNumber>` read from the device node (see
-`DeviceNodeID*` below), then the server's `ApplicationUri` (with `/` replaced by `-`), then a generated
+`DeviceNodeID*` below; the `SerialNumber` alone when the node has no `Manufacturer`), then the
+server's `ApplicationUri` (with `/` replaced by `-`), then a generated
 `GenericOPCUAClientPseudoDevice<N>`.
 
 Note this is not the device *name*: the name comes from the server's application description, and is
@@ -128,7 +129,9 @@ The node is used for two things:
   `SerialNumber`, `Manufacturer`, `Model`, `DeviceRevision`, `SoftwareRevision`, `HardwareRevision`,
   `DeviceManual`, `DeviceClass`, `RevisionCounter`, `ManufacturerUri`, `ProductCode`,
   `ProductInstanceUri`, `AssetId`, `ComponentName` from it;
-* deriving a stable `LocalId` from `Manufacturer` + `SerialNumber` when `LocalId` is empty.
+* deriving a stable `LocalId` when `LocalId` is empty: `<Manufacturer>_<SerialNumber>`, or the
+  `SerialNumber` alone when the node has no `Manufacturer`. A node without a `SerialNumber` gives no
+  `LocalId`.
 
 The whole group is **optional**. The node from the config is tried first; the module falls back to
 the server's `DeviceSet` object when the node

@@ -35,6 +35,9 @@ namespace helper::constants
     constexpr uint16_t TEST_NS = 1;
     // an object with device info that is not a part of the Device Integration model
     constexpr const char* PLAIN_DEVICE_STRING_ID = "TestPlainDevice";
+    // objects that carry only a part of the device info
+    constexpr const char* SERIAL_ONLY_DEVICE_STRING_ID = "TestSerialOnlyDevice";
+    constexpr const char* MANUFACTURER_ONLY_DEVICE_STRING_ID = "TestManufacturerOnlyDevice";
     constexpr const char* DI_DEVICE_STRING_ID = "TestDiDevice";
     constexpr const char* DI_FOREIGN_OBJECT_STRING_ID = "TestDiForeignObject";
     constexpr const char* DI_STANDALONE_DEVICE_STRING_ID = "TestDiStandaloneDevice";
@@ -57,6 +60,7 @@ namespace helper::constants
     constexpr const char* EXPECTED_SERIAL = "SN-1234567";
     constexpr const char* EXPECTED_STANDALONE_SERIAL = "SN-STANDALONE";
     constexpr const char* EXPECTED_PLAIN_SERIAL = "SN-PLAIN";
+    constexpr const char* EXPECTED_SERIAL_ONLY_SERIAL = "SN-ONLY";
     constexpr const char* EXPECTED_PRODUCT_CODE = "TEST PRODUCT CODE";
     constexpr const char* EXPECTED_DEVICE_MANUAL = "TEST DEVICE MANUAL";
     constexpr const char* EXPECTED_DEVICE_CLASS = "TEST DEVICE CLASS";

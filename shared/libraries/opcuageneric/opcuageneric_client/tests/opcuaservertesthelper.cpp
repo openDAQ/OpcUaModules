@@ -230,6 +230,18 @@ void OpcUaServerTestHelper::createModel()
 
         publishFolder(PLAIN_DEVICE_STRING_ID, &uaObjectsFolder, "en_US", TEST_NS);
         publishDeviceInfoProperties(OpcUaNodeId(TEST_NS, PLAIN_DEVICE_STRING_ID), EXPECTED_PLAIN_SERIAL);
+
+        const OpcUaObject<UA_String> serialNumber = UA_STRING_ALLOC(EXPECTED_SERIAL_ONLY_SERIAL);
+        publishFolder(SERIAL_ONLY_DEVICE_STRING_ID, &uaObjectsFolder, "en_US", TEST_NS);
+        addPropertyImpl(
+            "SerialNumber", serialNumber.get(), &UA_TYPES[UA_TYPES_STRING], OpcUaNodeId(TEST_NS, SERIAL_ONLY_DEVICE_STRING_ID).getPtr());
+
+        const OpcUaObject<UA_LocalizedText> manufacturer = UA_LOCALIZEDTEXT_ALLOC("en-US", EXPECTED_MANUFACTURER);
+        publishFolder(MANUFACTURER_ONLY_DEVICE_STRING_ID, &uaObjectsFolder, "en_US", TEST_NS);
+        addPropertyImpl("Manufacturer",
+                        manufacturer.get(),
+                        &UA_TYPES[UA_TYPES_LOCALIZEDTEXT],
+                        OpcUaNodeId(TEST_NS, MANUFACTURER_ONLY_DEVICE_STRING_ID).getPtr());
     }
 
     if (diModel.has_value())

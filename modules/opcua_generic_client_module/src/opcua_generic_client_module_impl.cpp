@@ -107,7 +107,7 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
 
     // The local ID is the first of these that is not empty and not taken by a sibling under the parent:
     //   1. LocalId from the config;
-    //   2. <Manufacturer>_<SerialNumber> read from the device node;
+    //   2. <Manufacturer>_<SerialNumber> read from the device node, or <SerialNumber> alone when it has no Manufacturer;
     //   3. the server's ApplicationUri, with '/' replaced by '-';
     //   4. an empty string, which makes the device generate GenericOPCUAClientPseudoDevice<N>.
     const auto deviceLocalId = buildDeviceLocalId(parent, userSpecifiedLocalId, devInfoList, desc);
@@ -475,15 +475,15 @@ std::string OpcUaGenericClientModule::buildDeviceLocalId(const ComponentPtr& par
             const auto manufacturerStr = manufacturer != devInfoList.cend() ? manufacturer->second.toString() : "";
             const auto serialStr = serial != devInfoList.cend() ? serial->second.toString() : "";
 
-            auto idFromRootInfo = manufacturerStr + "_" + serialStr;
-            tweakLocalId(idFromRootInfo);
-            if (idFromRootInfo.empty())
+            if (serialStr.empty())
             {
-                LOG_W("Cannot build local ID from root device information because Manufacturer or SerialNumber is missing or not a "
-                      "string. Trying to use application URI.");
+                LOG_W("Cannot build local ID from root device information because SerialNumber is missing, empty or not a string. "
+                      "Trying to use application URI.");
             }
             else
             {
+                auto idFromRootInfo = manufacturerStr.empty() ? serialStr : manufacturerStr + "_" + serialStr;
+                tweakLocalId(idFromRootInfo);
                 if (!parent.supportsInterface<IFolder>() || !parent.asPtr<IFolder>().hasItem(idFromRootInfo))
                     return idFromRootInfo;
 
