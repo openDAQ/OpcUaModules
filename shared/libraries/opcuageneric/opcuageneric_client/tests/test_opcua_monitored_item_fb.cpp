@@ -129,6 +129,12 @@ namespace daq::opcua::generic
     class GenericOpcuaMonitoredItemTest : public testing::Test, public GenericOpcuaMonitoredItemHelper
     {
     protected:
+        // Whoever holds this mutex keeps a scheduler callback on the block from returning.
+        static std::recursive_mutex& processingMutexOf(const daq::FunctionBlockPtr& block)
+        {
+            return static_cast<OpcUaMonitoredItemFbImpl*>(block.getObject())->processingMutex;
+        }
+
         void SetUp() override
         {
             testing::Test::SetUp();
@@ -1338,8 +1344,8 @@ TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockWhileSampling)
 
 namespace
 {
-// Registered after the block under test: the scheduler revalidates items in registration order, so
-// this one is reached only once the block's own revalidation has returned.
+// Tells when the scheduler revalidates it. Items are revalidated in registration order, so one of
+// these on either side of a block brackets the revalidation of that block.
 class RevalidationProbe : public ISampledItem
 {
 public:
@@ -1368,7 +1374,7 @@ public:
 // the server down.
 struct StandaloneMonitoredItem
 {
-    StandaloneMonitoredItem(const daq::ContextPtr& context, const std::shared_ptr<OpcUaClient>& client)
+    StandaloneMonitoredItem(const daq::ContextPtr& context, const std::shared_ptr<OpcUaClient>& client, uint32_t samplingIntervalMs = 20)
     {
         const auto type = OpcUaMonitoredItemFbImpl::CreateType();
         auto config = type.createDefaultConfig();
@@ -1376,9 +1382,10 @@ struct StandaloneMonitoredItem
         config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
 
         block = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
-            context, nullptr, type, client, "", DomainSource::SourceTimestamp, 20u, &scheduler, config);
+            context, nullptr, type, client, "", DomainSource::SourceTimestamp, samplingIntervalMs, &scheduler, config);
+        scheduler.registerItem(&before);
         scheduler.registerItem(static_cast<OpcUaMonitoredItemFbImpl*>(block.getObject()));
-        scheduler.registerItem(&probe);
+        scheduler.registerItem(&after);
         scheduler.start();
     }
 
@@ -1386,10 +1393,26 @@ struct StandaloneMonitoredItem
     bool revalidate(std::chrono::milliseconds timeout)
     {
         scheduler.onReconnected();
-        return probe.revalidated.get_future().wait_for(timeout) == std::future_status::ready;
+        return after.revalidated.get_future().wait_for(timeout) == std::future_status::ready;
     }
 
-    RevalidationProbe probe;
+    // Returns once the scheduler is inside the block's onConnectionRestored(), or false if it did not
+    // get there in time. Meant for a caller that keeps that call from returning. One-shot.
+    bool enterRevalidation(std::chrono::milliseconds timeout)
+    {
+        scheduler.onReconnected();
+        if (before.revalidated.get_future().wait_for(timeout) != std::future_status::ready)
+            return false;
+
+        // The block is next, but not necessarily marked as in progress yet. The scheduler keeps its
+        // mutex from the return of `before` until that mark is set, and unregisterItem() waits for
+        // the former and needs the mutex, so it cannot return before the latter.
+        scheduler.unregisterItem(&before);
+        return true;
+    }
+
+    RevalidationProbe before;
+    RevalidationProbe after;
     SamplingScheduler scheduler{nullptr};
     daq::FunctionBlockPtr block;
 };
@@ -1435,6 +1458,48 @@ TEST_F(GenericOpcuaMonitoredItemTest, RevalidationKeepsConfigError)
     ASSERT_TRUE(item.revalidate(patience));
     EXPECT_EQ(statuses.getStatus("ComponentStatus"), errStatus());
     EXPECT_EQ(statuses.getStatusMessage("ComponentStatus"), message);
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, RemoveWaitsForRevalidationInProgress)
+{
+    constexpr auto patience = std::chrono::seconds(5);
+    constexpr uint32_t onceOnly = 3'600'000;  // one sample when the scheduler starts, none after it
+
+    DaqInstanceInit();
+    auto client = std::make_shared<OpcUaClient>(testHelper.getServerUrl());
+    ASSERT_NO_THROW(client->connect());
+    auto item = std::make_unique<StandaloneMonitoredItem>(daqInstance.getContext(), client, onceOnly);
+
+    // With its only sample behind it, the next thing the scheduler does with the block is the revalidation.
+    ASSERT_TRUE(readValueWithTout(item->block.getSignals()[0], std::chrono::milliseconds(patience).count()).assigned());
+
+    std::unique_lock revalidationGate(processingMutexOf(item->block));
+    ASSERT_TRUE(item->enterRevalidation(patience));
+
+    std::promise<void> removed;
+    auto removedFuture = removed.get_future();
+    std::thread remover(
+        [&removed, block = item->block]
+        {
+            block.remove();
+            removed.set_value();
+        });
+
+    // removed() takes the block apart, so it must not get there under a call that is still running on
+    // the block. A slow runner only makes this easier to pass.
+    EXPECT_EQ(removedFuture.wait_for(std::chrono::milliseconds(200)), std::future_status::timeout)
+        << "remove() returned while onConnectionRestored() was still running on the block";
+
+    revalidationGate.unlock();
+    if (removedFuture.wait_for(patience) != std::future_status::ready)
+    {
+        // remove() and the scheduler are stuck on each other for good, and so would be the destructors
+        // of the item. Leaving all of it behind lets the rest of the suite run.
+        remover.detach();
+        (void) item.release();
+        FAIL() << "remove() did not return although the revalidation it waited for was free to finish";
+    }
+    remover.join();
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)

@@ -78,7 +78,10 @@ void SamplingScheduler::unregisterItem(ISampledItem* item)
 
 void SamplingScheduler::onReconnected()
 {
-    revalidatePending = true;
+    {
+        std::scoped_lock lock(mutex);
+        revalidatePending = true;
+    }
     cv.notify_all();
 }
 
@@ -102,10 +105,8 @@ void SamplingScheduler::invokeUnlocked(std::unique_lock<std::mutex>& lock, ISamp
     inFlightCv.notify_all();
 }
 
-void SamplingScheduler::revalidateItems()
+void SamplingScheduler::revalidateItems(std::unique_lock<std::mutex>& lock)
 {
-    std::unique_lock lock(mutex);
-
     // Snapshot: the list can change while an item is revalidated outside of the mutex.
     std::vector<ISampledItem*> pending;
     pending.reserve(items.size());
@@ -134,16 +135,20 @@ void SamplingScheduler::loop()
         if (isConnected && !isConnected())
         {
             std::unique_lock lock(mutex);
-            cv.wait_for(lock, DISCONNECTED_POLL_INTERVAL, [this] { return !running.load() || revalidatePending.load(); });
+            cv.wait_for(lock, DISCONNECTED_POLL_INTERVAL, [this] { return !running.load() || revalidatePending; });
             continue;
         }
-
-        if (revalidatePending.exchange(false))
-            revalidateItems();
 
         std::unique_lock lock(mutex);
         if (!running)
             break;
+
+        if (revalidatePending)
+        {
+            revalidatePending = false;
+            revalidateItems(lock);
+            continue;
+        }
 
         if (items.empty())
         {

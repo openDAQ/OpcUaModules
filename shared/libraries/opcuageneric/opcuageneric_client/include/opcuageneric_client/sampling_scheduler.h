@@ -66,7 +66,7 @@ private:
     static constexpr std::chrono::milliseconds DISCONNECTED_POLL_INTERVAL{1000};
 
     void loop();
-    void revalidateItems();
+    void revalidateItems(std::unique_lock<std::mutex>& lock);
 
     // Runs fn on the item outside of the mutex while keeping unregisterItem() correct.
     void invokeUnlocked(std::unique_lock<std::mutex>& lock, ISampledItem* item, const std::function<void(ISampledItem*)>& fn);
@@ -75,11 +75,11 @@ private:
 
     std::thread thread;
     std::atomic<bool> running{false};
-    std::atomic<bool> revalidatePending{false};
 
     std::mutex mutex;
     std::condition_variable cv;
     std::vector<Entry> items;
+    bool revalidatePending{false};
 
     ISampledItem* inFlight{nullptr};
     std::condition_variable inFlightCv;
