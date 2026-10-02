@@ -184,7 +184,6 @@ DataDescriptorPtr OpcUaMonitoredItemFbImpl::buildTimeDescriptor(daq::SampleType 
         .setUnit(Unit("s", -1, "seconds", "time"))
         .setTickResolution(Ratio(1, 1'000'000))
         .setOrigin("1970-01-01T00:00:00Z")
-        .setName("Time")
         .build();
 }
 
