@@ -557,7 +557,6 @@ void OpcUaMonitoredItemFbImpl::processSample()
 
 void OpcUaMonitoredItemFbImpl::onConnectionRestored()
 {
-    auto lock = this->getRecursiveConfigLock2();
     auto lockProcessing = std::scoped_lock(processingMutex);
 
     // The node may have disappeared or changed its data type while the connection was down, so the
@@ -566,7 +565,8 @@ void OpcUaMonitoredItemFbImpl::onConnectionRestored()
 
     validateNode();
     adjustSignalDescriptor();
-    reconfigureSignal();
+    if (outputSignal.getDescriptor() != outputSignalDescriptor)
+        outputSignal.setDescriptor(outputSignalDescriptor);
     updateStatuses();
 }
 

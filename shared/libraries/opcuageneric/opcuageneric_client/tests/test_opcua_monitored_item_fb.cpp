@@ -11,6 +11,7 @@
 #include "test_daq_test_helper.h"
 #include "timer.h"
 #include <chrono>
+#include <future>
 #include <limits>
 #include <thread>
 
@@ -1333,6 +1334,71 @@ TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockWhileSampling)
     }
 
     EXPECT_EQ(device.getFunctionBlocks().getCount(), 0u);
+}
+
+namespace
+{
+// Registered after the block under test: the scheduler revalidates items in registration order, so
+// this one is reached only once the block's own revalidation has returned.
+class RevalidationProbe : public ISampledItem
+{
+public:
+    uint32_t getSamplingInterval() const override
+    {
+        return std::numeric_limits<uint32_t>::max();
+    }
+
+    void processSample() override
+    {
+    }
+
+    void onConnectionRestored() override
+    {
+        revalidated.set_value();
+    }
+
+    void onSchedulerDestroyed() override
+    {
+    }
+
+    std::promise<void> revalidated;
+};
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, RevalidationDoesNotNeedConfigLock)
+{
+    constexpr auto patience = std::chrono::seconds(5);
+
+    DaqInstanceInit();
+    auto client = std::make_shared<OpcUaClient>(testHelper.getServerUrl());
+    ASSERT_NO_THROW(client->connect());
+
+    const auto type = OpcUaMonitoredItemFbImpl::CreateType();
+    auto config = type.createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+
+    // A scheduler of its own lets the test ask for a revalidation without taking the server down.
+    RevalidationProbe probe;
+    SamplingScheduler scheduler(nullptr);
+    const auto block = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
+        daqInstance.getContext(), nullptr, type, client, "", DomainSource::SourceTimestamp, 20u, &scheduler, config);
+    scheduler.registerItem(static_cast<OpcUaMonitoredItemFbImpl*>(block.getObject()));
+    scheduler.registerItem(&probe);
+    scheduler.start();
+
+    auto revalidated = probe.revalidated.get_future();
+    std::future_status status;
+    {
+        // remove() holds this lock while removed() waits for the scheduler to let go of the block, so a
+        // revalidation that needed it as well would never return and the removal would deadlock.
+        const auto lock = block.asPtr<IPropertyObjectInternal>(true).getRecursiveLockGuard();
+        scheduler.onReconnected();
+        status = revalidated.wait_for(patience);
+    }
+    EXPECT_EQ(status, std::future_status::ready) << "onConnectionRestored() is waiting for the config lock of its block";
+
+    ASSERT_NO_THROW(block.remove());
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
