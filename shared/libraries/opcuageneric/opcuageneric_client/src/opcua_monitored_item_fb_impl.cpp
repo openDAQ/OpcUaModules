@@ -319,6 +319,7 @@ void OpcUaMonitoredItemFbImpl::propertyChanged()
 
     auto prevConfig = config;
     readProperties();
+
     validateNode();
     adjustSignalDescriptor();
     reconfigureSignal(prevConfig);
@@ -480,6 +481,8 @@ void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
     else if (!outputDomainSignal.assigned())
     {
         outputSignal.setDomainSignal(createDomainSignal());
+        // A new domain signal has not carried any timestamp yet, so the next sample is published
+        lastPublishedDomainTs.reset();
     }
     if (outputSignal.getDescriptor() != outputSignalDescriptor)
     {
@@ -516,17 +519,24 @@ void OpcUaMonitoredItemFbImpl::processSample()
                 exceptionErr.reset();
                 if (validateResponse(dataValue) && validateValueDataType(dataValue))
                 {
-                    const auto dps = buildDataPacket(dataValue);
-                    if (dps.dataPacket.assigned())
+                    // An unchanged node comes back with the timestamp that was
+                    // already published. Such a sample is dropped, whatever its value
+                    const auto domainTs = resolveDomainTimestamp(dataValue);
+                    if (!domainTs.has_value() || isNewDomainTimestamp(*domainTs))
                     {
-                        if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
-                            outputDomainSignal.sendPacket(dps.domainDataPacket);
-                        outputSignal.sendPacket(dps.dataPacket);
-                    }
-                    else
-                    {
-                        valueValidationErr.set(fmt::format("Failed to build a packet for value type ({}).",
-                                                           static_cast<int>(dataValue.getValue().value.type->typeKind)));
+                        const auto dps = buildDataPacket(dataValue, domainTs);
+                        if (dps.dataPacket.assigned())
+                        {
+                            if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
+                                outputDomainSignal.sendPacket(dps.domainDataPacket);
+                            outputSignal.sendPacket(dps.dataPacket);
+                            lastPublishedDomainTs = domainTs;
+                        }
+                        else
+                        {
+                            valueValidationErr.set(fmt::format("Failed to build a packet for value type ({}).",
+                                                               static_cast<int>(dataValue.getValue().value.type->typeKind)));
+                        }
                     }
                 }
             }
@@ -562,10 +572,12 @@ void OpcUaMonitoredItemFbImpl::onConnectionRestored()
     updateStatuses();
 }
 
-OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(const OpcUaDataValue& value)
+OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(const OpcUaDataValue& value,
+                                                                                const std::optional<uint64_t>& domainTs)
 {
     DataPackets dps;
-    dps.domainDataPacket = buildDomainDataPacket(value);
+    if (domainTs.has_value())
+        dps.domainDataPacket = buildDomainDataPacket(*domainTs);
 
     if (value.isString())
     {
@@ -624,33 +636,35 @@ OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(
     return dps;
 }
 
-DataPacketPtr OpcUaMonitoredItemFbImpl::buildDomainDataPacket(const OpcUaDataValue& value)
+std::optional<uint64_t> OpcUaMonitoredItemFbImpl::resolveDomainTimestamp(const OpcUaDataValue& value) const
 {
-    DataPacketPtr domainDp;
     if (!outputDomainSignal.assigned())
-        return domainDp;
-
-    auto fillDmainPacket = [this](uint64_t ts)
-    {
-        DataPacketPtr domainDp = daq::DataPacket(outputDomainSignal.getDescriptor(), 1);
-        std::memcpy(domainDp.getRawData(), &ts, sizeof(ts));
-        return domainDp;
-    };
+        return std::nullopt;
 
     if (config.domainSource == DomainSource::ServerTimestamp && value.hasServerTimestamp())
+        return static_cast<uint64_t>(value.getServerTimestampUnixEpoch());
+
+    if (config.domainSource == DomainSource::SourceTimestamp && value.hasSourceTimestamp())
+        return static_cast<uint64_t>(value.getSourceTimestampUnixEpoch());
+
+    if (config.domainSource == DomainSource::LocalSystemTimestamp)
     {
-        domainDp = fillDmainPacket(value.getServerTimestampUnixEpoch());
-    }
-    else if (config.domainSource == DomainSource::SourceTimestamp && value.hasSourceTimestamp())
-    {
-        domainDp = fillDmainPacket(value.getSourceTimestampUnixEpoch());
-    }
-    else if (config.domainSource == DomainSource::LocalSystemTimestamp)
-    {
-        const uint64_t epochTime = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        domainDp = fillDmainPacket(epochTime);
+        const auto sinceEpoch = std::chrono::system_clock::now().time_since_epoch();
+        return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(sinceEpoch).count());
     }
 
+    return std::nullopt;
+}
+
+bool OpcUaMonitoredItemFbImpl::isNewDomainTimestamp(uint64_t ts) const
+{
+    return !lastPublishedDomainTs.has_value() || *lastPublishedDomainTs != ts;
+}
+
+DataPacketPtr OpcUaMonitoredItemFbImpl::buildDomainDataPacket(uint64_t ts)
+{
+    DataPacketPtr domainDp = daq::DataPacket(outputDomainSignal.getDescriptor(), 1);
+    std::memcpy(domainDp.getRawData(), &ts, sizeof(ts));
     return domainDp;
 }
 
