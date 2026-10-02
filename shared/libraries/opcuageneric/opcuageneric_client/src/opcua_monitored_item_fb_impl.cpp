@@ -316,12 +316,11 @@ void OpcUaMonitoredItemFbImpl::propertyChanged()
 
     statuses->resetAll();
 
-    auto prevConfig = config;
     readProperties();
 
     validateNode();
     adjustSignalDescriptor();
-    reconfigureSignal(prevConfig);
+    reconfigureSignal();
     updateStatuses();
 }
 
@@ -463,7 +462,7 @@ void OpcUaMonitoredItemFbImpl::createSignal()
         outputSignal.setDomainSignal(createDomainSignal());
 }
 
-void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
+void OpcUaMonitoredItemFbImpl::reconfigureSignal()
 {
     auto lock = this->getRecursiveConfigLock2();
     auto lockProcessing = std::scoped_lock(processingMutex);
@@ -567,7 +566,7 @@ void OpcUaMonitoredItemFbImpl::onConnectionRestored()
 
     validateNode();
     adjustSignalDescriptor();
-    reconfigureSignal(config);
+    reconfigureSignal();
     updateStatuses();
 }
 

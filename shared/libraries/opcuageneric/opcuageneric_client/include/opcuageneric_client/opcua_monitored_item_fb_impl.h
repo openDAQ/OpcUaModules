@@ -102,7 +102,7 @@ protected:
     static DataDescriptorPtr buildTimeDescriptor(daq::SampleType sampleType);
     void adjustSignalDescriptor();
     void createSignal();
-    void reconfigureSignal(const FbConfig& prevConfig);
+    void reconfigureSignal();
     SignalConfigPtr createDomainSignal();
 
     void initProperties(const PropertyObjectPtr& config, DomainSource initialDomainSource, uint32_t initialSamplingIntervalMs);
