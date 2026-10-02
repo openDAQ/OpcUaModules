@@ -20,6 +20,7 @@
 #include <open62541/server_config_default.h>
 #include <chrono>
 #include <future>
+#include <optional>
 #include <thread>
 #include "opcuaclient/opcuaclient.h"
 #include "opcuashared/opcua.h"
@@ -32,7 +33,20 @@ BEGIN_NAMESPACE_OPENDAQ_OPCUA
 namespace helper::constants
 {
     constexpr uint16_t TEST_NS = 1;
+    // an object with device info that is not a part of the Device Integration model
+    constexpr const char* PLAIN_DEVICE_STRING_ID = "TestPlainDevice";
     constexpr const char* DI_DEVICE_STRING_ID = "TestDiDevice";
+    constexpr const char* DI_FOREIGN_OBJECT_STRING_ID = "TestDiForeignObject";
+    constexpr const char* DI_STANDALONE_DEVICE_STRING_ID = "TestDiStandaloneDevice";
+    constexpr uint32_t DI_STANDALONE_DEVICE_NUMERIC_ID = 2001;
+    constexpr const char* DI_DEVICE_TYPE_STRING_ID = "TestDiDeviceType";
+
+    // OPC UA Device Integration model (OPC 10000-100)
+    constexpr const char* DI_NAMESPACE_URI = "http://opcfoundation.org/UA/DI/";
+    constexpr uint32_t DI_TOPOLOGY_ELEMENT_TYPE_ID = 1001;
+    constexpr uint32_t DI_DEVICE_TYPE_ID = 1002;
+    constexpr uint32_t DI_DEVICE_SET_ID = 5001;
+    constexpr uint32_t DI_COMPONENT_TYPE_ID = 15063;
 
     constexpr const char* EXPECTED_MANUFACTURER = "openDAQ test manufacturer";
     constexpr const char* EXPECTED_MANUFACTURER_URI = "https://www.opendaq.com/opcua-test-manufacturer";
@@ -41,6 +55,8 @@ namespace helper::constants
     constexpr const char* EXPECTED_SW_REVISION = "SW-2.3.4";
     constexpr const char* EXPECTED_DEV_REVISION = "DEV-5.6.7";
     constexpr const char* EXPECTED_SERIAL = "SN-1234567";
+    constexpr const char* EXPECTED_STANDALONE_SERIAL = "SN-STANDALONE";
+    constexpr const char* EXPECTED_PLAIN_SERIAL = "SN-PLAIN";
     constexpr const char* EXPECTED_PRODUCT_CODE = "TEST PRODUCT CODE";
     constexpr const char* EXPECTED_DEVICE_MANUAL = "TEST DEVICE MANUAL";
     constexpr const char* EXPECTED_DEVICE_CLASS = "TEST DEVICE CLASS";
@@ -55,10 +71,21 @@ class OpcUaServerTestHelper final
 public:
     using OnConfigureCallback = std::function<void(UA_ServerConfig* config)>;
 
+    // What the server publishes of the OPC UA Device Integration model
+    struct DiModel
+    {
+        size_t deviceCount = 0;            // devices referenced from the DeviceSet
+        bool foreignObject = false;        // a TopologyElementType object in the DeviceSet, which is not a device
+        bool legacyTypeHierarchy = false;  // DeviceType derived from TopologyElementType directly, as before DI 1.2
+        bool standaloneDevices = false;    // devices outside the DeviceSet, one with a string and one with a numeric node ID
+    };
+
     OpcUaServerTestHelper();
     ~OpcUaServerTestHelper();
 
     void setSessionTimeout(double sessionTimeoutMs);
+    // Takes effect on the next startServer(). Without it the server has no Device Integration model at all.
+    void setDiModel(const DiModel& model);
 
     void onConfigure(const OnConfigureCallback& callback);
     void onTweakConfig(const OnConfigureCallback& callback);
@@ -91,6 +118,14 @@ public:
 private:
     void runServer();
     void createModel();
+    void createDiModel(const DiModel& model);
+    void publishObjectType(const OpcUaNodeId& nodeId, const char* name, const OpcUaNodeId& superTypeId);
+    void publishObject(const OpcUaNodeId& nodeId,
+                       const char* name,
+                       const OpcUaNodeId& parentNodeId,
+                       const OpcUaNodeId& referenceTypeId,
+                       const OpcUaNodeId& typeDefinitionId);
+    void publishDeviceInfoProperties(OpcUaNodeId deviceNodeId, const char* serialNumber);
     void publishFolder(const char* identifier, UA_NodeId* parentNodeId, const char* locale = "en_US", int nodeIndex = 1);
     void publishMethod(std::string identifier, UA_NodeId* parentNodeId, const char* locale = "en_US", int nodeIndex = 1);
 
@@ -125,6 +160,7 @@ private:
                                              UA_Variant* output);
 
     double sessionTimeoutMs;
+    std::optional<DiModel> diModel;
     UA_Server* server{};
     std::unique_ptr<std::thread> serverThreadPtr;
     std::atomic<UA_Boolean> serverRunning = false;

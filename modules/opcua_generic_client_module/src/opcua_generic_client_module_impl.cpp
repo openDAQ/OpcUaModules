@@ -92,10 +92,8 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
 
     std::scoped_lock lock(sync);
 
-    // we let a user to set device local id in the config, but if it's not set, we will try to get it from the server's
-    // ApplicationDescription. If that's also not set, we will generate a local id for the device.
-    // A user need to have this opportunity to set local id in the config when they want to have a stable local id for the device across
-    // different runs of the application, and they don't want to rely on the server to provide it (especially it the server uses default values).
+    // A local ID set in the config gives the device a stable ID across application runs that does not depend
+    // on what the server reports (servers often keep default values).
     const std::string userSpecifiedLocalId = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID);
 
     const auto username = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME);
@@ -103,13 +101,15 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
     auto client = initOpcuaClient(opcuaConnStr, username, password);
 
     const auto desc = readApplicationDescription(client);
-    const auto deviceName = buildDeviceName(desc);  // will be rewrite if user set root device ID in the config and we can read it from the server
+    const auto deviceName = buildDeviceName(desc);
 
-    const auto rootDevId = readRootNodeIdFromConfig(configPtr);
-    DeviceInfoList devInfoList;
-    if (!rootDevId.isNull())
-        devInfoList = readDeviceInfoFromRootDevice(client, rootDevId);
+    const auto devInfoList = readDeviceInfo(client, readRootNodeIdFromConfig(configPtr));
 
+    // The local ID is the first of these that is not empty and not taken by a sibling under the parent:
+    //   1. LocalId from the config;
+    //   2. <Manufacturer>_<SerialNumber> read from the device node;
+    //   3. the server's ApplicationUri, with '/' replaced by '-';
+    //   4. an empty string, which makes the device generate GenericOPCUAClientPseudoDevice<N>.
     const auto deviceLocalId = buildDeviceLocalId(parent, userSpecifiedLocalId, devInfoList, desc);
 
     DevicePtr device(createWithImplementation<IDevice, OpcuaGenericClientDeviceImpl>(context, parent, client, deviceLocalId, deviceName));
@@ -121,6 +121,45 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
     return device;
 }
 
+std::optional<uint16_t> OpcUaGenericClientModule::findNamespaceIndex(const std::shared_ptr<opcua::OpcUaClient>& client,
+                                                                     const std::string& namespaceUri)
+{
+    const auto namespaces = client->readValue(OpcUaNodeId(0, UA_NS0ID_SERVER_NAMESPACEARRAY));
+    const UA_Variant& value = namespaces.getValue();
+    if (!UA_Variant_hasArrayType(&value, &UA_TYPES[UA_TYPES_STRING]))
+        return std::nullopt;
+
+    const auto* uris = static_cast<const UA_String*>(value.data);
+    for (size_t i = 0; i < value.arrayLength; ++i)
+    {
+        if (daq::opcua::utils::ToStdString(uris[i]) == namespaceUri)
+            return static_cast<uint16_t>(i);
+    }
+    return std::nullopt;
+}
+
+bool OpcUaGenericClientModule::isSubtypeOfAny(const std::shared_ptr<opcua::OpcUaClient>& client,
+                                              const opcua::OpcUaNodeId& typeId,
+                                              const std::vector<opcua::OpcUaNodeId>& baseTypeIds)
+{
+    // the depth limit protects against a server whose type hierarchy has a cycle
+    static constexpr int maxTypeHierarchyDepth = 32;
+
+    OpcUaNodeId currentTypeId = typeId;
+    for (int depth = 0; depth < maxTypeHierarchyDepth && !currentTypeId.isNull(); ++depth)
+    {
+        if (std::find(baseTypeIds.cbegin(), baseTypeIds.cend(), currentTypeId) != baseTypeIds.cend())
+            return true;
+
+        BrowseRequest request(
+            currentTypeId, OpcUaNodeClass::ObjectType, OpcUaNodeId(0, UA_NS0ID_HASSUBTYPE), OpcUaBrowseDirection::Inverse);
+        OpcUaBrowser browser(request, client);
+        const auto& supertypes = browser.browse();
+        currentTypeId = supertypes.empty() ? OpcUaNodeId() : OpcUaNodeId(supertypes.front().nodeId.nodeId);
+    }
+    return false;
+}
+
 opcua::OpcUaNodeId OpcUaGenericClientModule::readRootNodeIdFromConfig(const PropertyObjectPtr& config)
 {
     using namespace property_helper;
@@ -129,29 +168,109 @@ opcua::OpcUaNodeId OpcUaGenericClientModule::readRootNodeIdFromConfig(const Prop
     const int deviceNodeIdNum = readProperty<int, IInteger>(config, PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC, 0);
     const int deviceNamespaceIdx = readProperty<int, IInteger>(config, PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX, 0);
 
-    OpcUaNodeId rootDeviceNodeId;
+    // an empty string ID or numeric 0 in namespace 0 means the node is not set
     if (deviceNodeIdType == static_cast<int>(NodeIDType::String))
+        return deviceNodeIdStr.empty() ? OpcUaNodeId() : OpcUaNodeId(static_cast<uint16_t>(deviceNamespaceIdx), deviceNodeIdStr);
+
+    return OpcUaNodeId(static_cast<uint16_t>(deviceNamespaceIdx), static_cast<uint32_t>(deviceNodeIdNum));
+}
+
+opcua::OpcUaNodeId OpcUaGenericClientModule::findDeviceNodeInDeviceSet(const std::shared_ptr<opcua::OpcUaClient>& client)
+{
+    if (!client)
     {
-        if (deviceNodeIdStr.empty())
+        LOG_W("OPCUA client is not initialized. Cannot look for a device node in the DeviceSet.");
+        return {};
+    }
+
+    try
+    {
+        const auto diNamespaceIndex = findNamespaceIndex(client, OPCUA_DI_NAMESPACE_URI);
+        if (!diNamespaceIndex.has_value())
         {
-            LOG_W("{} property is empty", PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING);
+            LOG_I("The server does not provide the {} namespace. It has no DeviceSet to look for a device in.", OPCUA_DI_NAMESPACE_URI);
+            return {};
+        }
+
+        const OpcUaNodeId deviceSetNodeId(*diNamespaceIndex, OPCUA_DI_DEVICE_SET_ID);
+        if (!client->nodeExists(deviceSetNodeId))
+        {
+            LOG_W("The server provides the {} namespace but has no DeviceSet node {}.", OPCUA_DI_NAMESPACE_URI, deviceSetNodeId.toString());
+            return {};
+        }
+
+        BrowseRequest request(deviceSetNodeId, OpcUaNodeClass::Object, OpcUaNodeId(0, UA_NS0ID_HIERARCHICALREFERENCES));
+        OpcUaBrowser browser(request, client);
+
+        const std::vector<OpcUaNodeId> deviceBaseTypeIds = {OpcUaNodeId(*diNamespaceIndex, OPCUA_DI_COMPONENT_TYPE_ID),
+                                                            OpcUaNodeId(*diNamespaceIndex, OPCUA_DI_DEVICE_TYPE_ID)};
+        std::vector<OpcUaNodeId> deviceNodeIds;
+        std::string deviceNames;
+        for (const auto& ref : browser.browse())
+        {
+            if (!isSubtypeOfAny(client, OpcUaNodeId(ref.typeDefinition.nodeId), deviceBaseTypeIds))
+                continue;
+
+            deviceNodeIds.emplace_back(ref.nodeId.nodeId);
+            deviceNames += (deviceNames.empty() ? "" : ", ") + daq::opcua::utils::ToStdString(ref.browseName.name);
+        }
+
+        if (deviceNodeIds.empty())
+        {
+            LOG_W("The DeviceSet node {} references no devices.", deviceSetNodeId.toString());
+            return {};
+        }
+
+        if (deviceNodeIds.size() > 1)
+        {
+            LOG_W("The DeviceSet node {} references {} devices ({}), none of them describes the server as a whole.",
+                  deviceSetNodeId.toString(),
+                  deviceNodeIds.size(),
+                  deviceNames);
+            return {};
+        }
+
+        LOG_I("Found the device {} ({}) in the DeviceSet.", deviceNames, deviceNodeIds.front().toString());
+        return deviceNodeIds.front();
+    }
+    catch (const OpcUaException& e)
+    {
+        if (e.getStatusCode() == UA_STATUSCODE_BADUSERACCESSDENIED)
+        {
+            LOG_W("Access denied when looking for a device node in the DeviceSet.");
         }
         else
         {
-            rootDeviceNodeId = OpcUaNodeId{static_cast<uint16_t>(deviceNamespaceIdx), deviceNodeIdStr};
+            LOG_W("Failed to look for a device node in the DeviceSet. Error: {}", e.what());
         }
     }
-    else
+    return {};
+}
+
+OpcUaGenericClientModule::DeviceInfoList OpcUaGenericClientModule::readDeviceInfo(const std::shared_ptr<opcua::OpcUaClient>& client,
+                                                                                  const opcua::OpcUaNodeId& configuredNodeId)
+{
+    // the node set in the config is accepted by what it provides, not by its type
+    // it does not have to be a part of the Device Integration model
+    if (!configuredNodeId.isNull())
     {
-        rootDeviceNodeId = OpcUaNodeId{static_cast<uint16_t>(deviceNamespaceIdx), static_cast<uint32_t>(deviceNodeIdNum)};
+        auto list = readDeviceInfoFromRootDevice(client, configuredNodeId);
+        if (!list.empty())
+        {
+            LOG_I("Device info is read from the node {} set in the config.", configuredNodeId.toString());
+            return list;
+        }
+        LOG_W("No device info is read from the node {} set in the config. Looking for a device in the DeviceSet instead.",
+              configuredNodeId.toString());
     }
 
-    if (rootDeviceNodeId.isNull())
+    const auto deviceSetDeviceNodeId = findDeviceNodeInDeviceSet(client);
+    if (deviceSetDeviceNodeId.isNull())
     {
-        LOG_W("Root device node id is not set in the config, using default root node id");
+        LOG_I("Device info is not read from the server.");
+        return {};
     }
-
-    return rootDeviceNodeId;
+    return readDeviceInfoFromRootDevice(client, deviceSetDeviceNodeId);
 }
 
 PropertyObjectPtr OpcUaGenericClientModule::populateDefaultConfig(const PropertyObjectPtr& config)
@@ -626,7 +745,9 @@ PropertyObjectPtr OpcUaGenericClientModule::createDefaultConfig()
         auto builder =
             SelectionPropertyBuilder(
                 PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE, List<IString>("Numeric", "String"), static_cast<int>(NodeIDType::String))
-                .setDescription("Node ID type of the DeviceType/ComponentType node to read device info from.");
+                .setDescription("Node ID type of the DeviceType/ComponentType node to read device info from. The node is optional: "
+                                "when it is not set, does not exist or provides no device info, the device is looked up in the "
+                                "DeviceSet.");
         defaultConfig.addProperty(builder.build());
     }
     {
