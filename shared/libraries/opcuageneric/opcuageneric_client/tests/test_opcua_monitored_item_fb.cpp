@@ -896,32 +896,6 @@ TEST_F(GenericOpcuaMonitoredItemTest, FbTypeDefaultConfigHasNoTsModeAndSamplingI
     EXPECT_FALSE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL));
 }
 
-TEST_F(GenericOpcuaMonitoredItemTest, FbGetsFallbackSamplingIntervalIfDevSamplingIntervalInvalid)
-{
-    StartUp();
-
-    auto makeConfig = [this]
-    {
-        auto config = device.getAvailableFunctionBlockTypes().get(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME).createDefaultConfig();
-        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, ".i32");
-        config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
-        return config;
-    };
-
-    for (const Int invalid : {Int(0), Int(-1), static_cast<Int>(std::numeric_limits<uint32_t>::max()) + 1})
-    {
-        device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, invalid);
-
-        daq::FunctionBlockPtr localFb;
-        ASSERT_NO_THROW(localFb = device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, makeConfig()));
-        EXPECT_EQ(localFb.getStatusContainer().getStatus("ComponentStatus"), okStatus()) << "value: " << invalid;
-        EXPECT_EQ(localFb.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL).asPtr<IInteger>(),
-                  static_cast<Int>(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL))
-            << "value: " << invalid;
-        device.removeFunctionBlock(localFb);
-    }
-}
-
 TEST_F(GenericOpcuaMonitoredItemTest, FbTsModeInheritDevTsModeWithPlainPartialConfig)
 {
     StartUp(DomainSource::None);

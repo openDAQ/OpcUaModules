@@ -59,6 +59,8 @@ void OpcuaGenericClientDeviceImpl::initProperties()
     {
         auto builder =
             IntPropertyBuilder(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, Integer(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL))
+                .setMinValue(1)
+                .setMaxValue(std::numeric_limits<uint32_t>::max())
                 .setDescription(fmt::format("Default sampling interval in milliseconds for newly added monitored items. By default it is "
                                             "set to {} ms.",
                                             DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL));
@@ -85,20 +87,8 @@ void OpcuaGenericClientDeviceImpl::readProperties()
         defaultDomainSource = DS::ServerTimestamp;
     }
 
-    const auto samplingInterval =
+    defaultSamplingIntervalMs =
         readProperty<Int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
-    if (samplingInterval <= 0 || samplingInterval > static_cast<Int>(std::numeric_limits<uint32_t>::max()))
-    {
-        LOG_W("Invalid value {} for the \"{}\" property! Sampling interval must be a positive integer. Using {} ms instead.",
-              samplingInterval,
-              PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL,
-              DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
-        defaultSamplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
-    }
-    else
-    {
-        defaultSamplingIntervalMs = static_cast<uint32_t>(samplingInterval);
-    }
 }
 
 void OpcuaGenericClientDeviceImpl::propertyChanged()
