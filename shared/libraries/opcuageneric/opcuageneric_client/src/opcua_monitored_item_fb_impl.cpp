@@ -560,8 +560,12 @@ void OpcUaMonitoredItemFbImpl::onConnectionRestored()
     auto lockProcessing = std::scoped_lock(processingMutex);
 
     // The node may have disappeared or changed its data type while the connection was down, so the
-    // validation done at construction time is redone against the reconnected server.
-    statuses->resetAll();
+    // validation done at construction time is redone against the reconnected server. Whatever the
+    // reads reported before the connection went down is void as well. The config error stays: the
+    // properties are not read again here.
+    responseValidationErr.reset();
+    valueValidationErr.reset();
+    exceptionErr.reset();
 
     validateNode();
     adjustSignalDescriptor();

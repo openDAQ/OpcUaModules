@@ -1363,6 +1363,36 @@ public:
 
     std::promise<void> revalidated;
 };
+
+// A block driven by a scheduler of its own, which lets a test ask for a revalidation without taking
+// the server down.
+struct StandaloneMonitoredItem
+{
+    StandaloneMonitoredItem(const daq::ContextPtr& context, const std::shared_ptr<OpcUaClient>& client)
+    {
+        const auto type = OpcUaMonitoredItemFbImpl::CreateType();
+        auto config = type.createDefaultConfig();
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
+
+        block = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
+            context, nullptr, type, client, "", DomainSource::SourceTimestamp, 20u, &scheduler, config);
+        scheduler.registerItem(static_cast<OpcUaMonitoredItemFbImpl*>(block.getObject()));
+        scheduler.registerItem(&probe);
+        scheduler.start();
+    }
+
+    // Returns once the block has been revalidated, or false if that did not happen in time. One-shot.
+    bool revalidate(std::chrono::milliseconds timeout)
+    {
+        scheduler.onReconnected();
+        return probe.revalidated.get_future().wait_for(timeout) == std::future_status::ready;
+    }
+
+    RevalidationProbe probe;
+    SamplingScheduler scheduler{nullptr};
+    daq::FunctionBlockPtr block;
+};
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, RevalidationDoesNotNeedConfigLock)
@@ -1372,33 +1402,39 @@ TEST_F(GenericOpcuaMonitoredItemTest, RevalidationDoesNotNeedConfigLock)
     DaqInstanceInit();
     auto client = std::make_shared<OpcUaClient>(testHelper.getServerUrl());
     ASSERT_NO_THROW(client->connect());
+    StandaloneMonitoredItem item(daqInstance.getContext(), client);
 
-    const auto type = OpcUaMonitoredItemFbImpl::CreateType();
-    auto config = type.createDefaultConfig();
-    config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, std::string(".i32"));
-    config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, 1);
-
-    // A scheduler of its own lets the test ask for a revalidation without taking the server down.
-    RevalidationProbe probe;
-    SamplingScheduler scheduler(nullptr);
-    const auto block = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
-        daqInstance.getContext(), nullptr, type, client, "", DomainSource::SourceTimestamp, 20u, &scheduler, config);
-    scheduler.registerItem(static_cast<OpcUaMonitoredItemFbImpl*>(block.getObject()));
-    scheduler.registerItem(&probe);
-    scheduler.start();
-
-    auto revalidated = probe.revalidated.get_future();
-    std::future_status status;
+    bool revalidated;
     {
         // remove() holds this lock while removed() waits for the scheduler to let go of the block, so a
         // revalidation that needed it as well would never return and the removal would deadlock.
-        const auto lock = block.asPtr<IPropertyObjectInternal>(true).getRecursiveLockGuard();
-        scheduler.onReconnected();
-        status = revalidated.wait_for(patience);
+        const auto lock = item.block.asPtr<IPropertyObjectInternal>(true).getRecursiveLockGuard();
+        revalidated = item.revalidate(patience);
     }
-    EXPECT_EQ(status, std::future_status::ready) << "onConnectionRestored() is waiting for the config lock of its block";
+    EXPECT_TRUE(revalidated) << "onConnectionRestored() is waiting for the config lock of its block";
 
-    ASSERT_NO_THROW(block.remove());
+    ASSERT_NO_THROW(item.block.remove());
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, RevalidationKeepsConfigError)
+{
+    constexpr auto patience = std::chrono::seconds(5);
+
+    DaqInstanceInit();
+    auto client = std::make_shared<OpcUaClient>(testHelper.getServerUrl());
+    ASSERT_NO_THROW(client->connect());
+    StandaloneMonitoredItem item(daqInstance.getContext(), client);
+
+    item.block.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, 0);
+    const auto statuses = item.block.getStatusContainer();
+    ASSERT_EQ(statuses.getStatus("ComponentStatus"), errStatus());
+    const auto message = statuses.getStatusMessage("ComponentStatus");
+
+    // A reconnect says nothing about the properties: they are not read again, so what was wrong with
+    // them before is still wrong.
+    ASSERT_TRUE(item.revalidate(patience));
+    EXPECT_EQ(statuses.getStatus("ComponentStatus"), errStatus());
+    EXPECT_EQ(statuses.getStatusMessage("ComponentStatus"), message);
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
