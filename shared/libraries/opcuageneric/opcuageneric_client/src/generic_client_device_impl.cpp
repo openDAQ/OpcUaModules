@@ -234,6 +234,20 @@ FunctionBlockPtr OpcuaGenericClientDeviceImpl::onAddFunctionBlock(const StringPt
     return nestedFunctionBlock;
 }
 
+void OpcuaGenericClientDeviceImpl::onRemoveFunctionBlock(const FunctionBlockPtr& functionBlock)
+{
+    // The base class removes the block with the locks of this device and of its FB folder held. Waiting
+    // for the scheduler under those would deadlock with a core event handler or a packet callback that
+    // looks at the device from within the sample in progress, so the wait is done up front.
+    if (functionBlock.assigned() && functionBlock.getParent() == functionBlocks &&
+        functionBlock.getFunctionBlockType().getId() == GENERIC_OPCUA_MONITORED_ITEM_FB_NAME)
+    {
+        static_cast<OpcUaMonitoredItemFbImpl*>(*functionBlock)->detachFromScheduler();
+    }
+
+    Device::onRemoveFunctionBlock(functionBlock);
+}
+
 std::string OpcuaGenericClientDeviceImpl::generateLocalId()
 {
     return std::string(GENERIC_OPCUA_CLIENT_DEVICE_NAME + std::to_string(localIndex++));

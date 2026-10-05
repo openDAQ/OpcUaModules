@@ -50,6 +50,10 @@ public:
     void onConnectionRestored() override;
     void onSchedulerDestroyed() override;
 
+    // Stops the scheduler from calling this block and waits for a call in progress to return. Must not
+    // be called with a lock held that a core event handler or a packet callback could ask for.
+    void detachFromScheduler();
+
 protected:
     struct DataPackets
     {
@@ -83,7 +87,7 @@ protected:
     std::optional<uint64_t> lastPublishedDomainTs;
 
     // Not owned. The device owns the scheduler and destroys it before the component tree releases this
-    // block, so the scheduler clears this pointer from its destructor. Atomic because removed() and that
+    // block, so the scheduler clears this pointer from its destructor. Atomic because a removal and that
     // teardown can reach it from different threads.
     std::atomic<SamplingScheduler*> scheduler;
     std::recursive_mutex processingMutex;
@@ -95,7 +99,7 @@ protected:
     utils::Error valueValidationErr;
     utils::Error exceptionErr;
 
-    void removed() override;
+    void removedNoLock() override;
     static std::string generateLocalId();
 
     void initStatusContainer();
@@ -114,8 +118,6 @@ protected:
     void validateNode();
     bool validateResponse(const OpcUaDataValue& value);
     bool validateValueDataType(const OpcUaDataValue& value);
-
-    void detachFromScheduler();
 
     std::optional<uint64_t> resolveDomainTimestamp(const OpcUaDataValue& value) const;
     bool isNewDomainTimestamp(uint64_t ts) const;

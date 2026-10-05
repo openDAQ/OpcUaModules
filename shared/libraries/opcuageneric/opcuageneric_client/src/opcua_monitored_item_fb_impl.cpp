@@ -94,15 +94,18 @@ OpcUaMonitoredItemFbImpl::~OpcUaMonitoredItemFbImpl()
     detachFromScheduler();
 }
 
-void OpcUaMonitoredItemFbImpl::removed()
+void OpcUaMonitoredItemFbImpl::removedNoLock()
 {
+    // Not in removed(): that one runs with the config lock of this block held, and the sample that
+    // detachFromScheduler() waits for calls core event handlers and packet callbacks, which are free
+    // to ask for that lock.
     detachFromScheduler();
-    FunctionBlock::removed();
+    FunctionBlock::removedNoLock();
 }
 
 void OpcUaMonitoredItemFbImpl::detachFromScheduler()
 {
-    // Returns only once an in-progress processSample() on this item has finished, so the object can
+    // Returns only once a scheduler callback in progress on this item has finished, so the object can
     // be torn down afterwards.
     if (auto* sched = scheduler.exchange(nullptr); sched != nullptr)
         sched->unregisterItem(this);

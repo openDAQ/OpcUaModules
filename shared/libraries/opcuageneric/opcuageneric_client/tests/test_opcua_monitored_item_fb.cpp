@@ -10,7 +10,9 @@
 #include "opendaq/reader_factory.h"
 #include "test_daq_test_helper.h"
 #include "timer.h"
+#include <atomic>
 #include <chrono>
+#include <functional>
 #include <future>
 #include <limits>
 #include <thread>
@@ -1500,6 +1502,113 @@ TEST_F(GenericOpcuaMonitoredItemTest, RemoveWaitsForRevalidationInProgress)
         FAIL() << "remove() did not return although the revalidation it waited for was free to finish";
     }
     remover.join();
+}
+
+namespace
+{
+// Keeps one processSample() of a block in progress: the data callback of a reader on the block's signal
+// runs inside of it, on the scheduler thread, and does not return until release() is called.
+// To be created once the signal has its descriptor, i.e. after the first sample. The packet that announces
+// a descriptor is sent by openDAQ with the lock of the signal held, and remove() needs that lock with the
+// config lock of the block already taken
+class SampleInProgress
+{
+public:
+    explicit SampleInProgress(const daq::FunctionBlockPtr& block)
+        : releasedFuture(released.get_future().share())
+        , reader(makeCountingReader(block.getSignals()[0]))
+    {
+        reader.setOnDataAvailable(
+            [this]
+            {
+                if (std::this_thread::get_id() == owner || parked.exchange(true))
+                    return;
+
+                entered.set_value();
+                releasedFuture.wait();
+            });
+    }
+
+    ~SampleInProgress()
+    {
+        release();
+    }
+
+    bool waitUntilEntered(std::chrono::milliseconds timeout)
+    {
+        return entered.get_future().wait_for(timeout) == std::future_status::ready;
+    }
+
+    void release()
+    {
+        if (!releaseRequested.exchange(true))
+            released.set_value();
+    }
+
+private:
+    const std::thread::id owner{std::this_thread::get_id()};
+    std::atomic<bool> parked{false};
+    std::atomic<bool> releaseRequested{false};
+    std::promise<void> entered;
+    std::promise<void> released;
+    std::shared_future<void> releasedFuture;
+    daq::StreamReaderPtr reader;
+};
+
+// Starts `remove` while a sample of the block is in progress and checks that it does not keep `probes`
+// from returning. The probes stand for what a core event handler or a packet callback of an application
+// does on the scheduler thread; if the removal held a lock they need, neither side could ever continue.
+void expectRemovalDoesNotBlock(const daq::FunctionBlockPtr& block, const std::function<void()>& remove, const std::function<void()>& probes)
+{
+    constexpr auto patience = std::chrono::seconds(5);
+
+    SampleInProgress sample(block);
+    ASSERT_TRUE(sample.waitUntilEntered(patience));
+
+    auto removed = std::async(std::launch::async, remove);
+    // Lets the removal get to the point where it waits for the sample. Probing earlier than that can
+    // only make the check below easier to pass.
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    auto probed = std::async(std::launch::async, probes);
+    EXPECT_EQ(probed.wait_for(patience), std::future_status::ready) << "the removal holds a lock while it waits for the sample in progress";
+
+    sample.release();
+    ASSERT_EQ(removed.wait_for(patience), std::future_status::ready);
+    EXPECT_NO_THROW(removed.get());
+    EXPECT_NO_THROW(probed.get());
+}
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockHoldsNoLocksWhileWaitingForSample)
+{
+    StartUp();
+    CreateMonitoredItemFB(".i32", 1, 20);
+    const daq::FunctionBlockPtr block = fb;
+    fb = nullptr;  // removed by the test itself
+    ASSERT_TRUE(readValueWithTout(block.getSignals()[0], 5000).assigned());
+
+    expectRemovalDoesNotBlock(
+        block,
+        [&] { device.removeFunctionBlock(block); },
+        [&]
+        {
+            block.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL);           // config lock of the block
+            device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL);  // config lock of the device
+            device.getFunctionBlocks();                                              // lock of its FB folder
+        });
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, RemoveHoldsNoConfigLockWhileWaitingForSample)
+{
+    StartUp();
+    CreateMonitoredItemFB(".i32", 1, 20);
+    const daq::FunctionBlockPtr block = fb;
+    fb = nullptr;  // removed by the test itself
+    ASSERT_TRUE(readValueWithTout(block.getSignals()[0], 5000).assigned());
+
+    // Not through the device, so that the block has to take care of it on its own.
+    expectRemovalDoesNotBlock(block, [&] { block.remove(); }, [&] { block.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL); });
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
