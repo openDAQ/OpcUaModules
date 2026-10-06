@@ -45,10 +45,13 @@ public:
 
     void start();
     void stop();
-    void registerItem(ISampledItem* item);
 
-    // Removes the item and waits for an in-progress processSample() on it to return, so that the
-    // caller can destroy the item afterwards.
+    // The scheduler holds a reference to the owner for the duration of every call into the item, so the
+    // item cannot be destroyed under a call in progress. Without an owner it is up to the caller to keep
+    // the item alive until no call can be in progress any more.
+    void registerItem(ISampledItem* item, const WeakRefPtr<IBaseObject>& owner = nullptr);
+
+    // Stops further calls into the item. Does not wait for one that is in progress.
     void unregisterItem(ISampledItem* item);
 
     // Requests onConnectionRestored() for every item.
@@ -60,6 +63,7 @@ private:
     struct Entry
     {
         ISampledItem* item;
+        WeakRefPtr<IBaseObject> owner;
         TimePoint nextDue;
     };
 
@@ -68,8 +72,16 @@ private:
     void loop();
     void revalidateItems(std::unique_lock<std::mutex>& lock);
 
-    // Runs fn on the item outside of the mutex while keeping unregisterItem() correct.
-    void invokeUnlocked(std::unique_lock<std::mutex>& lock, ISampledItem* item, const std::function<void(ISampledItem*)>& fn);
+    // Takes the reference that keeps the item of the entry alive during a call into it; it stays
+    // unassigned for an item without an owner. Returns false if the owner is already being destroyed,
+    // in which case the item must not be touched.
+    static bool acquireOwner(const Entry& entry, BaseObjectPtr& owner);
+
+    // Runs fn on the item outside of the mutex and lets go of the owner there as well.
+    void invokeUnlocked(std::unique_lock<std::mutex>& lock,
+                        ISampledItem* item,
+                        BaseObjectPtr owner,
+                        const std::function<void(ISampledItem*)>& fn);
 
     std::function<bool()> isConnected;
 
@@ -80,9 +92,6 @@ private:
     std::condition_variable cv;
     std::vector<Entry> items;
     bool revalidatePending{false};
-
-    ISampledItem* inFlight{nullptr};
-    std::condition_variable inFlightCv;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_GENERIC

@@ -22,7 +22,11 @@ SamplingScheduler::~SamplingScheduler()
     }
 
     for (const auto& entry : leftover)
-        entry.item->onSchedulerDestroyed();
+    {
+        BaseObjectPtr owner;
+        if (acquireOwner(entry, owner))
+            entry.item->onSchedulerDestroyed();
+    }
 }
 
 SamplingScheduler::TimePoint SamplingScheduler::advanceDeadline(TimePoint due, TimePoint now, std::chrono::milliseconds interval)
@@ -54,14 +58,14 @@ void SamplingScheduler::stop()
         thread.join();
 }
 
-void SamplingScheduler::registerItem(ISampledItem* item)
+void SamplingScheduler::registerItem(ISampledItem* item, const WeakRefPtr<IBaseObject>& owner)
 {
     if (item == nullptr)
         return;
 
     {
         std::scoped_lock lock(mutex);
-        items.push_back({item, Clock::now()});
+        items.push_back({item, owner, Clock::now()});
     }
     cv.notify_all();
 }
@@ -69,9 +73,8 @@ void SamplingScheduler::registerItem(ISampledItem* item)
 void SamplingScheduler::unregisterItem(ISampledItem* item)
 {
     {
-        std::unique_lock lock(mutex);
+        std::scoped_lock lock(mutex);
         items.erase(std::remove_if(items.begin(), items.end(), [item](const Entry& e) { return e.item == item; }), items.end());
-        inFlightCv.wait(lock, [this, item] { return inFlight != item; });
     }
     cv.notify_all();
 }
@@ -85,9 +88,20 @@ void SamplingScheduler::onReconnected()
     cv.notify_all();
 }
 
-void SamplingScheduler::invokeUnlocked(std::unique_lock<std::mutex>& lock, ISampledItem* item, const std::function<void(ISampledItem*)>& fn)
+bool SamplingScheduler::acquireOwner(const Entry& entry, BaseObjectPtr& owner)
 {
-    inFlight = item;
+    if (!entry.owner.assigned())
+        return true;
+
+    owner = entry.owner.getRef();
+    return owner.assigned();
+}
+
+void SamplingScheduler::invokeUnlocked(std::unique_lock<std::mutex>& lock,
+                                       ISampledItem* item,
+                                       BaseObjectPtr owner,
+                                       const std::function<void(ISampledItem*)>& fn)
+{
     lock.unlock();
 
     try
@@ -100,9 +114,10 @@ void SamplingScheduler::invokeUnlocked(std::unique_lock<std::mutex>& lock, ISamp
         // so that one misbehaving item cannot tear down sampling for the whole device.
     }
 
+    // This can be the last reference, in which case the item is destroyed right here and unregisters
+    // itself on the way.
+    owner.release();
     lock.lock();
-    inFlight = nullptr;
-    inFlightCv.notify_all();
 }
 
 void SamplingScheduler::revalidateItems(std::unique_lock<std::mutex>& lock)
@@ -118,11 +133,15 @@ void SamplingScheduler::revalidateItems(std::unique_lock<std::mutex>& lock)
         if (!running)
             return;
 
-        const bool stillRegistered = std::any_of(items.begin(), items.end(), [item](const Entry& e) { return e.item == item; });
-        if (!stillRegistered)
+        const auto entry = std::find_if(items.begin(), items.end(), [item](const Entry& e) { return e.item == item; });
+        if (entry == items.end())
             continue;
 
-        invokeUnlocked(lock, item, [](ISampledItem* i) { i->onConnectionRestored(); });
+        BaseObjectPtr owner;
+        if (!acquireOwner(*entry, owner))
+            continue;
+
+        invokeUnlocked(lock, item, std::move(owner), [](ISampledItem* i) { i->onConnectionRestored(); });
     }
 }
 
@@ -166,9 +185,17 @@ void SamplingScheduler::loop()
             continue;
         }
 
+        BaseObjectPtr owner;
+        if (!acquireOwner(*next, owner))
+        {
+            // Being destroyed on another thread, which has not got as far as unregistering it yet.
+            items.erase(next);
+            continue;
+        }
+
         next->nextDue = advanceDeadline(next->nextDue, now, std::chrono::milliseconds(next->item->getSamplingInterval()));
 
-        invokeUnlocked(lock, next->item, [](ISampledItem* i) { i->processSample(); });
+        invokeUnlocked(lock, next->item, std::move(owner), [](ISampledItem* i) { i->processSample(); });
     }
 }
 

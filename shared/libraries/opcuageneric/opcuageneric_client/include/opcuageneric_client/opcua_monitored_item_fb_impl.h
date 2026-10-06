@@ -50,10 +50,6 @@ public:
     void onConnectionRestored() override;
     void onSchedulerDestroyed() override;
 
-    // Stops the scheduler from calling this block and waits for a call in progress to return. Must not
-    // be called with a lock held that a core event handler or a packet callback could ask for.
-    void detachFromScheduler();
-
 protected:
     struct DataPackets
     {
@@ -99,7 +95,8 @@ protected:
     utils::Error valueValidationErr;
     utils::Error exceptionErr;
 
-    void removedNoLock() override;
+    void removed() override;
+    void detachFromScheduler();
     static std::string generateLocalId();
 
     void initStatusContainer();

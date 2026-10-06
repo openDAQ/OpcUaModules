@@ -357,19 +357,19 @@ device.removeFunctionBlock(fb);
 instance.removeDevice(device);
 ```
 
-Both calls wait for the read that is in progress to finish, so they have to come from a thread of your
-application. Code that the module calls runs on the module's own threads: core event handlers
-(`context.getOnCoreEvent()`, `daq.EventHandler` in Python) and the `setOnDataAvailable` callback of a
-reader on a block's signal. For that code:
+Removing the device waits for the module's threads to finish what they are doing; removing a block does
+not wait. Both have to come from a thread of your application. Code that the module calls runs on the
+module's own threads: core event handlers (`context.getOnCoreEvent()`, `daq.EventHandler` in Python) and
+the `setOnDataAvailable` callback of a reader on a block's signal. For that code:
 
-* **Do not remove a block or the device from it.** The removal would wait for the very call it was made
-  from: removing a block hangs, removing the device throws and leaves it half-removed. Hand the request
-  to another thread and return.
-* **Do not make it wait for the thread that removes blocks or devices** — no blocking cross-thread call.
+* **Do not remove a block or the device from it.** Removing the device there would wait for the very call
+  it was made from: it throws and leaves the device half-removed. Hand the request to another thread and
+  return.
+* **Do not make it wait for a thread that removes the device** — no blocking cross-thread call.
 * **Keep it to data and status.** Reading samples, `getName()`, `getGlobalId()` and the status container
   are fine. Do not read properties of the device in a core event handler, and do not read properties of
-  the block or of the device in a data callback: if the device, or the block directly, is being removed
-  at that moment, the two can end up waiting for each other.
+  the block or of the device in a data callback: if the block or the device is being removed at that
+  moment, the two can end up waiting for each other.
 
 Remove a block with `device.removeFunctionBlock(fb)`, not with `fb.remove()`.
 

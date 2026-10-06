@@ -131,12 +131,6 @@ namespace daq::opcua::generic
     class GenericOpcuaMonitoredItemTest : public testing::Test, public GenericOpcuaMonitoredItemHelper
     {
     protected:
-        // Whoever holds this mutex keeps a scheduler callback on the block from returning.
-        static std::recursive_mutex& processingMutexOf(const daq::FunctionBlockPtr& block)
-        {
-            return static_cast<OpcUaMonitoredItemFbImpl*>(block.getObject())->processingMutex;
-        }
-
         void SetUp() override
         {
             testing::Test::SetUp();
@@ -1347,7 +1341,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockWhileSampling)
 namespace
 {
 // Tells when the scheduler revalidates it. Items are revalidated in registration order, so one of
-// these on either side of a block brackets the revalidation of that block.
+// these registered after a block is revalidated once the block has been.
 class RevalidationProbe : public ISampledItem
 {
 public:
@@ -1385,8 +1379,7 @@ struct StandaloneMonitoredItem
 
         block = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
             context, nullptr, type, client, "", DomainSource::SourceTimestamp, samplingIntervalMs, &scheduler, config);
-        scheduler.registerItem(&before);
-        scheduler.registerItem(static_cast<OpcUaMonitoredItemFbImpl*>(block.getObject()));
+        scheduler.registerItem(static_cast<OpcUaMonitoredItemFbImpl*>(block.getObject()), block);
         scheduler.registerItem(&after);
         scheduler.start();
     }
@@ -1398,22 +1391,6 @@ struct StandaloneMonitoredItem
         return after.revalidated.get_future().wait_for(timeout) == std::future_status::ready;
     }
 
-    // Returns once the scheduler is inside the block's onConnectionRestored(), or false if it did not
-    // get there in time. Meant for a caller that keeps that call from returning. One-shot.
-    bool enterRevalidation(std::chrono::milliseconds timeout)
-    {
-        scheduler.onReconnected();
-        if (before.revalidated.get_future().wait_for(timeout) != std::future_status::ready)
-            return false;
-
-        // The block is next, but not necessarily marked as in progress yet. The scheduler keeps its
-        // mutex from the return of `before` until that mark is set, and unregisterItem() waits for
-        // the former and needs the mutex, so it cannot return before the latter.
-        scheduler.unregisterItem(&before);
-        return true;
-    }
-
-    RevalidationProbe before;
     RevalidationProbe after;
     SamplingScheduler scheduler{nullptr};
     daq::FunctionBlockPtr block;
@@ -1431,8 +1408,8 @@ TEST_F(GenericOpcuaMonitoredItemTest, RevalidationDoesNotNeedConfigLock)
 
     bool revalidated;
     {
-        // remove() holds this lock while removed() waits for the scheduler to let go of the block, so a
-        // revalidation that needed it as well would never return and the removal would deadlock.
+        // Whoever holds this lock, e.g. a property write or a removal in progress, must not be able to
+        // hold up the scheduler thread, and with it the sampling of every other block of the device.
         const auto lock = item.block.asPtr<IPropertyObjectInternal>(true).getRecursiveLockGuard();
         revalidated = item.revalidate(patience);
     }
@@ -1462,55 +1439,13 @@ TEST_F(GenericOpcuaMonitoredItemTest, RevalidationKeepsConfigError)
     EXPECT_EQ(statuses.getStatusMessage("ComponentStatus"), message);
 }
 
-TEST_F(GenericOpcuaMonitoredItemTest, RemoveWaitsForRevalidationInProgress)
-{
-    constexpr auto patience = std::chrono::seconds(5);
-    constexpr uint32_t onceOnly = 3'600'000;  // one sample when the scheduler starts, none after it
-
-    DaqInstanceInit();
-    auto client = std::make_shared<OpcUaClient>(testHelper.getServerUrl());
-    ASSERT_NO_THROW(client->connect());
-    auto item = std::make_unique<StandaloneMonitoredItem>(daqInstance.getContext(), client, onceOnly);
-
-    // With its only sample behind it, the next thing the scheduler does with the block is the revalidation.
-    ASSERT_TRUE(readValueWithTout(item->block.getSignals()[0], std::chrono::milliseconds(patience).count()).assigned());
-
-    std::unique_lock revalidationGate(processingMutexOf(item->block));
-    ASSERT_TRUE(item->enterRevalidation(patience));
-
-    std::promise<void> removed;
-    auto removedFuture = removed.get_future();
-    std::thread remover(
-        [&removed, block = item->block]
-        {
-            block.remove();
-            removed.set_value();
-        });
-
-    // removed() takes the block apart, so it must not get there under a call that is still running on
-    // the block. A slow runner only makes this easier to pass.
-    EXPECT_EQ(removedFuture.wait_for(std::chrono::milliseconds(200)), std::future_status::timeout)
-        << "remove() returned while onConnectionRestored() was still running on the block";
-
-    revalidationGate.unlock();
-    if (removedFuture.wait_for(patience) != std::future_status::ready)
-    {
-        // remove() and the scheduler are stuck on each other for good, and so would be the destructors
-        // of the item. Leaving all of it behind lets the rest of the suite run.
-        remover.detach();
-        (void) item.release();
-        FAIL() << "remove() did not return although the revalidation it waited for was free to finish";
-    }
-    remover.join();
-}
-
 namespace
 {
 // Keeps one processSample() of a block in progress: the data callback of a reader on the block's signal
 // runs inside of it, on the scheduler thread, and does not return until release() is called.
 // To be created once the signal has its descriptor, i.e. after the first sample. The packet that announces
-// a descriptor is sent by openDAQ with the lock of the signal held, and remove() needs that lock with the
-// config lock of the block already taken
+// a descriptor is sent by openDAQ with the lock of the signal held, and a removal needs that lock, so it
+// would wait for the callback inside of openDAQ.
 class SampleInProgress
 {
 public:
@@ -1555,10 +1490,10 @@ private:
     daq::StreamReaderPtr reader;
 };
 
-// Starts `remove` while a sample of the block is in progress and checks that it does not keep `probes`
-// from returning. The probes stand for what a core event handler or a packet callback of an application
-// does on the scheduler thread; if the removal held a lock they need, neither side could ever continue.
-void expectRemovalDoesNotBlock(const daq::FunctionBlockPtr& block, const std::function<void()>& remove, const std::function<void()>& probes)
+// Runs `remove` while a sample of the block is in progress and checks that it returns without waiting for
+// that sample. A removal that waited could never be made from, or be waited for by, the code that runs
+// inside of the sample: core event handlers and packet callbacks of an application.
+void expectRemovalDoesNotWaitForSample(const daq::FunctionBlockPtr& block, const std::function<void()>& remove)
 {
     constexpr auto patience = std::chrono::seconds(5);
 
@@ -1566,21 +1501,14 @@ void expectRemovalDoesNotBlock(const daq::FunctionBlockPtr& block, const std::fu
     ASSERT_TRUE(sample.waitUntilEntered(patience));
 
     auto removed = std::async(std::launch::async, remove);
-    // Lets the removal get to the point where it waits for the sample. Probing earlier than that can
-    // only make the check below easier to pass.
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-    auto probed = std::async(std::launch::async, probes);
-    EXPECT_EQ(probed.wait_for(patience), std::future_status::ready) << "the removal holds a lock while it waits for the sample in progress";
+    EXPECT_EQ(removed.wait_for(patience), std::future_status::ready) << "the removal waits for the sample in progress";
 
     sample.release();
-    ASSERT_EQ(removed.wait_for(patience), std::future_status::ready);
     EXPECT_NO_THROW(removed.get());
-    EXPECT_NO_THROW(probed.get());
 }
 }
 
-TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockHoldsNoLocksWhileWaitingForSample)
+TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockDoesNotWaitForSampleInProgress)
 {
     StartUp();
     CreateMonitoredItemFB(".i32", 1, 20);
@@ -1588,18 +1516,10 @@ TEST_F(GenericOpcuaMonitoredItemTest, RemoveFunctionBlockHoldsNoLocksWhileWaitin
     fb = nullptr;  // removed by the test itself
     ASSERT_TRUE(readValueWithTout(block.getSignals()[0], 5000).assigned());
 
-    expectRemovalDoesNotBlock(
-        block,
-        [&] { device.removeFunctionBlock(block); },
-        [&]
-        {
-            block.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL);           // config lock of the block
-            device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL);  // config lock of the device
-            device.getFunctionBlocks();                                              // lock of its FB folder
-        });
+    expectRemovalDoesNotWaitForSample(block, [&] { device.removeFunctionBlock(block); });
 }
 
-TEST_F(GenericOpcuaMonitoredItemTest, RemoveHoldsNoConfigLockWhileWaitingForSample)
+TEST_F(GenericOpcuaMonitoredItemTest, RemoveDoesNotWaitForSampleInProgress)
 {
     StartUp();
     CreateMonitoredItemFB(".i32", 1, 20);
@@ -1608,7 +1528,34 @@ TEST_F(GenericOpcuaMonitoredItemTest, RemoveHoldsNoConfigLockWhileWaitingForSamp
     ASSERT_TRUE(readValueWithTout(block.getSignals()[0], 5000).assigned());
 
     // Not through the device, so that the block has to take care of it on its own.
-    expectRemovalDoesNotBlock(block, [&] { block.remove(); }, [&] { block.getPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL); });
+    expectRemovalDoesNotWaitForSample(block, [&] { block.remove(); });
+}
+
+TEST_F(GenericOpcuaMonitoredItemTest, BlockOutlivesSampleInProgress)
+{
+    constexpr auto patience = std::chrono::seconds(5);
+
+    StartUp();
+    CreateMonitoredItemFB(".i32", 1, 20);
+    daq::FunctionBlockPtr block = fb;
+    fb = nullptr;  // removed by the test itself
+    ASSERT_TRUE(readValueWithTout(block.getSignals()[0], 5000).assigned());
+    const daq::WeakRefPtr<daq::IFunctionBlock> weak(block);
+
+    SampleInProgress sample(block);
+    ASSERT_TRUE(sample.waitUntilEntered(patience));
+
+    // Nothing waits for the sample any more, so nothing but the scheduler keeps the block from being
+    // destroyed under it: the device lets go of the block here, and the test right after.
+    device.removeFunctionBlock(block);
+    block.release();
+    EXPECT_TRUE(weak.getRef().assigned()) << "the block was destroyed while the scheduler was calling it";
+
+    sample.release();
+    const auto deadline = std::chrono::steady_clock::now() + patience;
+    while (weak.getRef().assigned() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    EXPECT_FALSE(weak.getRef().assigned()) << "the scheduler did not let go of the block after the sample";
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
