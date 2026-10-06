@@ -15,6 +15,7 @@
 #include <functional>
 #include <future>
 #include <limits>
+#include <memory>
 #include <thread>
 
 #define ASSERT_DOUBLE_NE(val1, val2) ASSERT_GT(std::abs((val1) - (val2)), 1e-9)
@@ -465,6 +466,10 @@ TEST_P(GenericOpcuaMonitoredItemPTest, ReadValue)
             }
 
             // write new value to the node
+            // The source timestamp is given explicitly: one stamped by the server can repeat the timestamp of
+            // the sample published just before (its clock is coarse on Windows), and such a sample is dropped.
+            dataValue.getValue().hasSourceTimestamp = true;
+            dataValue.getValue().sourceTimestamp = OpcUaDataValue::fromUnixTimeUs(getTime());
             ASSERT_NO_THROW(testHelper.writeDataValueNode(param.first, dataValue));
 
             {
@@ -1273,8 +1278,8 @@ TEST_F(GenericOpcuaMonitoredItemTest, NumericNodeIdReadValue)
     daq::BaseObjectPtr prevVal = readValueWithTout(fb.getSignals()[0], interval * multiplier);
     ASSERT_TRUE(prevVal.assigned());
 
-    const OpcUaVariant variant(int32_t{42});
-    ASSERT_NO_THROW(testHelper.writeValueNode(nodeId, variant));
+    // With a source timestamp of its own, see GenericOpcuaMonitoredItemPTest.ReadValue.
+    writeWithSourceTimestamp(nodeId, int32_t{42}, getTime());
 
     daq::BaseObjectPtr val = readValueWithTout(fb.getSignals()[0], interval * multiplier, prevVal);
     ASSERT_NE(val, prevVal);
@@ -1458,17 +1463,18 @@ class SampleInProgress
 {
 public:
     explicit SampleInProgress(const daq::FunctionBlockPtr& block)
-        : releasedFuture(released.get_future().share())
-        , reader(makeCountingReader(block.getSignals()[0]))
+        : reader(makeCountingReader(block.getSignals()[0]))
     {
+        // The callback shares the state instead of pointing to this object. Nothing waits for the callback
+        // to return, so it can still be on its way out of wait() when this object is already gone.
         reader.setOnDataAvailable(
-            [this]
+            [state = state]
             {
-                if (std::this_thread::get_id() == owner || parked.exchange(true))
+                if (std::this_thread::get_id() == state->owner || state->parked.exchange(true))
                     return;
 
-                entered.set_value();
-                releasedFuture.wait();
+                state->entered.set_value();
+                state->releasedFuture.wait();
             });
     }
 
@@ -1479,22 +1485,27 @@ public:
 
     bool waitUntilEntered(std::chrono::milliseconds timeout)
     {
-        return entered.get_future().wait_for(timeout) == std::future_status::ready;
+        return state->entered.get_future().wait_for(timeout) == std::future_status::ready;
     }
 
     void release()
     {
-        if (!releaseRequested.exchange(true))
-            released.set_value();
+        if (!state->releaseRequested.exchange(true))
+            state->released.set_value();
     }
 
 private:
-    const std::thread::id owner{std::this_thread::get_id()};
-    std::atomic<bool> parked{false};
-    std::atomic<bool> releaseRequested{false};
-    std::promise<void> entered;
-    std::promise<void> released;
-    std::shared_future<void> releasedFuture;
+    struct State
+    {
+        const std::thread::id owner{std::this_thread::get_id()};
+        std::atomic<bool> parked{false};
+        std::atomic<bool> releaseRequested{false};
+        std::promise<void> entered;
+        std::promise<void> released;
+        std::shared_future<void> releasedFuture{released.get_future().share()};
+    };
+
+    const std::shared_ptr<State> state{std::make_shared<State>()};
     daq::StreamReaderPtr reader;
 };
 
