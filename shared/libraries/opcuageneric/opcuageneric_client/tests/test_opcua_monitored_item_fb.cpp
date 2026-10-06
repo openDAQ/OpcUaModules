@@ -114,6 +114,14 @@ namespace daq::opcua::generic
             }
         }
 
+        // Waits until the block that monitors the node has dealt with `samples` more reads of it. The
+        // scheduler reads the node again only once the block is done with the previous read, so that is
+        // the case when one more read than asked for has come in.
+        bool waitForProcessedSamples(const OpcUaNodeId& nodeId, size_t samples, std::chrono::milliseconds timeout)
+        {
+            return testHelper.waitForReadCount(nodeId, testHelper.getReadCount(nodeId) + samples + 1, timeout);
+        }
+
     protected:
         void SetUp()
         {
@@ -1590,7 +1598,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
 TEST_F(GenericOpcuaMonitoredItemTest, UnchangedSourceTimestampIsNotRepublished)
 {
     constexpr uint32_t interval = 20;
-    constexpr auto quietWindow = std::chrono::milliseconds(15 * interval);
+    constexpr size_t quietSamples = 10;
     constexpr auto patience = std::chrono::seconds(10);
     const OpcUaNodeId nodeId(1, ".i64");
     StartUp(DomainSource::SourceTimestamp);
@@ -1608,7 +1616,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, UnchangedSourceTimestampIsNotRepublished)
     auto reader = makeCountingReader(fb.getSignals()[0]);
 
     // The node is still read every interval, but its timestamp does not change, so nothing is published.
-    std::this_thread::sleep_for(quietWindow);
+    ASSERT_TRUE(waitForProcessedSamples(nodeId, quietSamples, patience));
     EXPECT_EQ(reader.getAvailableCount(), 0u);
     EXPECT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
@@ -1617,7 +1625,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, UnchangedSourceTimestampIsNotRepublished)
 
     // A new timestamp is published exactly once.
     ASSERT_TRUE(waitForPackets(reader, 1u, patience));
-    std::this_thread::sleep_for(quietWindow);
+    ASSERT_TRUE(waitForProcessedSamples(nodeId, quietSamples, patience));
     ASSERT_EQ(reader.getAvailableCount(), 1u);
 
     SizeT count{1};
@@ -1629,39 +1637,69 @@ TEST_F(GenericOpcuaMonitoredItemTest, UnchangedSourceTimestampIsNotRepublished)
     EXPECT_EQ(domain, secondTs);
 }
 
+namespace
+{
+// A block that no scheduler samples: the test takes every sample by hand, so it knows how many of
+// them the block has seen and does not have to wait for any.
+struct ManuallySampledItem
+{
+    ManuallySampledItem(const daq::ContextPtr& context, const std::shared_ptr<OpcUaClient>& client, const OpcUaNodeId& nodeId)
+    {
+        const auto type = OpcUaMonitoredItemFbImpl::CreateType();
+        auto config = type.createDefaultConfig();
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, nodeId.getIdentifier());
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, nodeId.getNamespaceIndex());
+
+        block = createWithImplementation<IFunctionBlock, OpcUaMonitoredItemFbImpl>(
+            context, nullptr, type, client, "", DomainSource::SourceTimestamp, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL, nullptr, config);
+    }
+
+    void sample(size_t times = 1)
+    {
+        auto* item = static_cast<OpcUaMonitoredItemFbImpl*>(block.getObject());
+        for (size_t i = 0; i < times; ++i)
+            item->processSample();
+    }
+
+    daq::FunctionBlockPtr block;
+};
+}
+
 TEST_F(GenericOpcuaMonitoredItemTest, NewValueWithUnchangedTimestampIsNotPublished)
 {
-    constexpr uint32_t interval = 20;
-    constexpr auto quietWindow = std::chrono::milliseconds(15 * interval);
-    constexpr auto patience = std::chrono::seconds(10);
+    constexpr size_t samples = 10;
     const OpcUaNodeId nodeId(1, ".i64");
-    StartUp(DomainSource::SourceTimestamp);
+    DaqInstanceInit();
+    auto client = std::make_shared<OpcUaClient>(testHelper.getServerUrl());
+    ASSERT_NO_THROW(client->connect());
 
     const uint64_t ts = getTime();
     writeWithSourceTimestamp(nodeId, int64_t{1}, ts);
 
-    CreateMonitoredItemFB(nodeId.getIdentifier(), nodeId.getNamespaceIndex(), interval);
-    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    ManuallySampledItem item(daqInstance.getContext(), client, nodeId);
+    ASSERT_EQ(item.block.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
-    auto domainSig = fb.getSignals()[0].getDomainSignal();
+    item.sample();
+    const auto signal = item.block.getSignals()[0];
+    auto domainSig = signal.getDomainSignal();
     ASSERT_TRUE(domainSig.assigned());
-    ASSERT_TRUE(waitForDomainValue(domainSig, ts, patience));
+    ASSERT_EQ(domainSig.getLastValue().asPtr<INumber>().getValue<uint64_t>(uint64_t(0)), ts);
 
-    auto reader = makeCountingReader(fb.getSignals()[0]);
+    auto reader = makeCountingReader(signal);
 
     writeWithSourceTimestamp(nodeId, int64_t{2}, ts);
 
-    std::this_thread::sleep_for(quietWindow);
+    item.sample(samples);
     EXPECT_EQ(reader.getAvailableCount(), 0u);
-    EXPECT_EQ(fb.getSignals()[0].getLastValue().asPtr<INumber>().getValue<int64_t>(int64_t(0)), 1);
-    EXPECT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    EXPECT_EQ(signal.getLastValue().asPtr<INumber>().getValue<int64_t>(int64_t(0)), 1);
+    EXPECT_EQ(item.block.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, SamplingIntervalChangeDoesNotRepublishUnchangedTimestamp)
 {
     constexpr uint32_t interval = 20;
     constexpr uint32_t otherInterval = 10;
-    constexpr auto quietWindow = std::chrono::milliseconds(15 * interval);
+    constexpr size_t quietSamples = 10;
     constexpr auto patience = std::chrono::seconds(10);
     const OpcUaNodeId nodeId(1, ".i64");
     StartUp(DomainSource::SourceTimestamp);
@@ -1678,35 +1716,38 @@ TEST_F(GenericOpcuaMonitoredItemTest, SamplingIntervalChangeDoesNotRepublishUnch
 
     fb.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, otherInterval);
 
-    std::this_thread::sleep_for(quietWindow);
+    ASSERT_TRUE(waitForProcessedSamples(nodeId, quietSamples, patience));
     EXPECT_EQ(reader.getAvailableCount(), 0u);
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, NodeIdChangeDoesNotPublishSampleWithSameTimestamp)
 {
-    constexpr uint32_t interval = 20;
-    constexpr auto quietWindow = std::chrono::milliseconds(15 * interval);
-    constexpr auto patience = std::chrono::seconds(10);
+    constexpr size_t samples = 10;
     const OpcUaNodeId firstNodeId(1, ".i64");
     const OpcUaNodeId secondNodeId(1, ".i32");
-    StartUp(DomainSource::SourceTimestamp);
+    DaqInstanceInit();
+    auto client = std::make_shared<OpcUaClient>(testHelper.getServerUrl());
+    ASSERT_NO_THROW(client->connect());
 
     // Both nodes report the same source timestamp.
     const uint64_t ts = getTime();
     writeWithSourceTimestamp(firstNodeId, int64_t{1}, ts);
     writeWithSourceTimestamp(secondNodeId, int32_t{2}, ts);
 
-    CreateMonitoredItemFB(firstNodeId.getIdentifier(), firstNodeId.getNamespaceIndex(), interval);
-    auto domainSig = fb.getSignals()[0].getDomainSignal();
+    ManuallySampledItem item(daqInstance.getContext(), client, firstNodeId);
+
+    item.sample();
+    const auto signal = item.block.getSignals()[0];
+    auto domainSig = signal.getDomainSignal();
     ASSERT_TRUE(domainSig.assigned());
-    ASSERT_TRUE(waitForDomainValue(domainSig, ts, patience));
+    ASSERT_EQ(domainSig.getLastValue().asPtr<INumber>().getValue<uint64_t>(uint64_t(0)), ts);
 
-    auto reader = makeCountingReader(fb.getSignals()[0]);
+    auto reader = makeCountingReader(signal);
 
-    fb.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, secondNodeId.getIdentifier());
-    ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"), okStatus());
+    item.block.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, secondNodeId.getIdentifier());
+    ASSERT_EQ(item.block.getStatusContainer().getStatus("ComponentStatus"), okStatus());
 
-    std::this_thread::sleep_for(quietWindow);
+    item.sample(samples);
     EXPECT_EQ(reader.getAvailableCount(), 0u);
 }
 

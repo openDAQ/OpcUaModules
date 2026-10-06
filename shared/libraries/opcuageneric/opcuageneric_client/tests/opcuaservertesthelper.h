@@ -19,7 +19,10 @@
 #include <gtest/gtest.h>
 #include <open62541/server_config_default.h>
 #include <chrono>
+#include <condition_variable>
 #include <future>
+#include <map>
+#include <mutex>
 #include <optional>
 #include <thread>
 #include "opcuaclient/opcuaclient.h"
@@ -119,6 +122,11 @@ public:
     void writeValueNode(const OpcUaNodeId& nodeId, const OpcUaVariant& value);
     void writeDataValueNode(const OpcUaNodeId& nodeId, const OpcUaDataValue& value);
 
+    // How many times the value of a published variable has been read, by anyone, since the server started.
+    size_t getReadCount(const OpcUaNodeId& nodeId) const;
+    // Waits until getReadCount() of the node reaches `count`.
+    bool waitForReadCount(const OpcUaNodeId& nodeId, size_t count, std::chrono::milliseconds timeout) const;
+
 private:
     void runServer();
     void createModel();
@@ -162,6 +170,18 @@ private:
                                              const UA_Variant* input,
                                              size_t outputSize,
                                              UA_Variant* output);
+
+    static void valueReadCallback(UA_Server* server,
+                                  const UA_NodeId* sessionId,
+                                  void* sessionContext,
+                                  const UA_NodeId* nodeId,
+                                  void* nodeContext,
+                                  const UA_NumericRange* range,
+                                  const UA_DataValue* value);
+
+    mutable std::mutex readCountsMutex;
+    mutable std::condition_variable readCountsCv;
+    std::map<OpcUaNodeId, size_t> readCounts;
 
     double sessionTimeoutMs;
     std::optional<DiModel> diModel;

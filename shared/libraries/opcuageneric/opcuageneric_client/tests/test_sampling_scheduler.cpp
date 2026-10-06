@@ -57,7 +57,10 @@ namespace
 
         void onConnectionRestored() override
         {
-            revalidations++;
+            {
+                std::scoped_lock lock(mutex);
+                revalidations++;
+            }
             cv.notify_all();
         }
 
@@ -84,6 +87,13 @@ namespace
         {
             std::unique_lock lock(mutex);
             return cv.wait_for(lock, timeout, [&] { return sampleTimes.size() >= count; });
+        }
+
+        // Blocks until the item was revalidated at least count times, or the timeout elapses.
+        bool waitForRevalidations(size_t count, std::chrono::milliseconds timeout)
+        {
+            std::unique_lock lock(mutex);
+            return cv.wait_for(lock, timeout, [&] { return revalidations.load() >= count; });
         }
 
         std::atomic<std::chrono::milliseconds> sampleDelay{0ms};
@@ -375,6 +385,7 @@ TEST(SamplingSchedulerTest, UnregisterDoesNotWaitForSampleInProgress)
     constexpr auto patience = 5s;
     Gate sample;
     std::atomic<size_t> samples{0};
+    FakeItem witness(20);
     SamplingScheduler scheduler(nullptr);
 
     OwnedItem::Hooks hooks;
@@ -393,8 +404,11 @@ TEST(SamplingSchedulerTest, UnregisterDoesNotWaitForSampleInProgress)
     sample.open();
     unregistered.get();
 
-    // The call that was in progress is the last one. A slow runner cannot add samples.
-    std::this_thread::sleep_for(100ms);
+    // The call that was in progress is the last one. The scheduler serves the earliest deadline first,
+    // and the witness has a longer interval than the item: were the item still registered, it would
+    // have been sampled again before the second sample of the witness.
+    scheduler.registerItem(&witness);
+    ASSERT_TRUE(witness.waitForSamples(2, patience));
     EXPECT_EQ(samples.load(), 1u);
 
     scheduler.stop();
@@ -465,6 +479,7 @@ TEST(SamplingSchedulerTest, ItemWhoseOwnerIsBeingDestroyedIsNotCalled)
     constexpr auto patience = 5s;
     Gate destructor;
     std::atomic<size_t> calls{0};
+    FakeItem witness(20);
     SamplingScheduler scheduler(nullptr);
 
     OwnedItem::Hooks hooks;
@@ -472,16 +487,20 @@ TEST(SamplingSchedulerTest, ItemWhoseOwnerIsBeingDestroyedIsNotCalled)
     hooks.onRevalidation = [&] { calls++; };
     hooks.onDestroy = [&] { destructor.pass(); };
     auto handle = registerOwnedItem(scheduler, hooks);
+    scheduler.registerItem(&witness);
 
     // The destructor is held back before it unregisters the item: the scheduler still has the item in
     // its list, but there is nothing left that it could hold on to.
     auto released = std::async(std::launch::async, [&] { handle.owner.release(); });
     ASSERT_TRUE(destructor.waitUntilEntered(patience));
 
-    scheduler.start();
+    // Requested before the start, so that the revalidation is the first thing the scheduler does and
+    // finds the item still in the list. The witness was registered after the item and comes after it
+    // in both passes: once it has been revalidated and sampled, the scheduler has been past the item.
     scheduler.onReconnected();
-    // Dozens of sampling intervals. A slow runner can only pass this.
-    std::this_thread::sleep_for(200ms);
+    scheduler.start();
+    ASSERT_TRUE(witness.waitForRevalidations(1, patience));
+    ASSERT_TRUE(witness.waitForSamples(1, patience));
     EXPECT_EQ(calls.load(), 0u);
 
     destructor.open();

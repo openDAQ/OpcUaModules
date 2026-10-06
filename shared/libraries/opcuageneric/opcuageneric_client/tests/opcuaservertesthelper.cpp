@@ -48,6 +48,10 @@ void OpcUaServerTestHelper::onTweakConfig(const OnConfigureCallback& callback)
 void OpcUaServerTestHelper::startServer()
 {
     serverRunning = true;
+    {
+        std::scoped_lock lock(readCountsMutex);
+        readCounts.clear();
+    }
 
     UA_ServerConfig initConfig;
     std::memset(&initConfig, 0, sizeof(UA_ServerConfig));
@@ -426,10 +430,49 @@ void OpcUaServerTestHelper::publishVariableImpl(OpcUaNodeId nodeId,
                                             *qualifiedName,
                                             UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
                                             *attr,
-                                            NULL,
+                                            this,
                                             NULL);
 
     CheckStatusCodeException(status);
+
+    UA_ValueCallback callback{};
+    callback.onRead = valueReadCallback;
+    CheckStatusCodeException(UA_Server_setVariableNode_valueCallback(server, *nodeId, callback));
+}
+
+void OpcUaServerTestHelper::valueReadCallback(UA_Server* /*server*/,
+                                              const UA_NodeId* /*sessionId*/,
+                                              void* /*sessionContext*/,
+                                              const UA_NodeId* nodeId,
+                                              void* nodeContext,
+                                              const UA_NumericRange* /*range*/,
+                                              const UA_DataValue* /*value*/)
+{
+    auto* self = static_cast<OpcUaServerTestHelper*>(nodeContext);
+    {
+        std::scoped_lock lock(self->readCountsMutex);
+        self->readCounts[OpcUaNodeId(*nodeId)]++;
+    }
+    self->readCountsCv.notify_all();
+}
+
+size_t OpcUaServerTestHelper::getReadCount(const OpcUaNodeId& nodeId) const
+{
+    std::scoped_lock lock(readCountsMutex);
+    const auto it = readCounts.find(nodeId);
+    return it == readCounts.end() ? 0 : it->second;
+}
+
+bool OpcUaServerTestHelper::waitForReadCount(const OpcUaNodeId& nodeId, size_t count, std::chrono::milliseconds timeout) const
+{
+    std::unique_lock lock(readCountsMutex);
+    return readCountsCv.wait_for(lock,
+                                 timeout,
+                                 [&]
+                                 {
+                                     const auto it = readCounts.find(nodeId);
+                                     return it != readCounts.end() && it->second >= count;
+                                 });
 }
 
 void OpcUaServerTestHelper::addPropertyImpl(const std::string& name,
