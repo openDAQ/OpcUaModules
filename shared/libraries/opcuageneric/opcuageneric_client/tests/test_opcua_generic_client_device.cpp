@@ -10,6 +10,7 @@
 #include "opcuageneric_client/constants.h"
 #include "opcuageneric_client/generic_client_device_impl.h"
 #include "opcuaservertesthelper.h"
+#include "opendaq/reader_factory.h"
 #include "test_daq_test_helper.h"
 #include <chrono>
 #include <thread>
@@ -43,7 +44,7 @@ public:
         DaqInstanceInit();
         auto client = std::make_shared<daq::opcua::OpcUaClient>(serverUrl);
         device = daq::createWithImplementation<daq::IDevice, daq::opcua::generic::OpcuaGenericClientDeviceImpl>(
-            daqInstance.getContext(), daqInstance, nullptr, client, "", "", 100);
+            daqInstance.getContext(), daqInstance, client, "", "", 100);
         return device;
     }
 
@@ -54,16 +55,37 @@ public:
         config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_TYPE, static_cast<int>(NT::String));
         config.setPropertyValue(PROPERTY_NAME_OPCUA_NODE_ID_STRING, nodeId);
         config.setPropertyValue(PROPERTY_NAME_OPCUA_NAMESPACE_INDEX, nsIndex);
-        config.setPropertyValue(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, interval);
+        // SamplingInterval is not part of the config: the FB starts with the device's DefaultSamplingInterval
+        device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, interval);
         return device.addFunctionBlock(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME, config);
     }
 
-protected:
-    void SetUp() override
+    void startServerWithDiModel(const OpcUaServerTestHelper::DiModel& model)
     {
-        testing::Test::SetUp();
+        testHelper.setDiModel(model);
         testHelper.startServer();
     }
+
+    static daq::PropertyObjectPtr createConfigWithDeviceNode(const std::string& nodeId, uint16_t nsIndex)
+    {
+        auto config = CreateModule().getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE, static_cast<int>(NodeIDType::String));
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING, nodeId);
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX, nsIndex);
+        return config;
+    }
+
+    static daq::PropertyObjectPtr createConfigWithDeviceNode(uint32_t nodeId, uint16_t nsIndex)
+    {
+        auto config = CreateModule().getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE, static_cast<int>(NodeIDType::Numeric));
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC, nodeId);
+        config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX, nsIndex);
+        return config;
+    }
+
+protected:
+    // every test starts the server on its own, with the model it needs; the fixture only stops it
     void TearDown() override
     {
         testHelper.stop();
@@ -88,12 +110,11 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     auto defaultConfig = deviceTypes.get("OPCUAGeneric").createDefaultConfig();
     ASSERT_TRUE(defaultConfig.assigned());
 
-    ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 8u);
+    ASSERT_EQ(defaultConfig.getAllProperties().getCount(), 7u);
 
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_USERNAME));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_PASSWORD));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID));
-    ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING));
     ASSERT_TRUE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC));
@@ -102,7 +123,6 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_USERNAME).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_PASSWORD).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID).getValueType(), CoreType::ctString);
-    ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_TS_MODE).getValueType(), CoreType::ctInt);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE).getValueType(), CoreType::ctInt);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING).getValueType(), CoreType::ctString);
     ASSERT_EQ(defaultConfig.getProperty(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC).getValueType(), CoreType::ctInt);
@@ -111,13 +131,15 @@ TEST_F(GenericOpcuaClientDeviceTest, DefaultDeviceConfig)
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME), DEFAULT_OPCUA_USERNAME);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD), DEFAULT_OPCUA_PASSWORD);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID), "");
-    EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
-              static_cast<int>(DomainSource::SourceTimestamp));
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE).asPtr<IInteger>(),
               static_cast<int>(NodeIDType::String));
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING), "");
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC), 0);
     EXPECT_EQ(defaultConfig.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX), 0);
+
+    // the defaults for new monitored items are device properties, not part of the config
+    EXPECT_FALSE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+    EXPECT_FALSE(defaultConfig.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL));
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, PropertyVisibilityTogglesWithNodeIdType)
@@ -141,6 +163,7 @@ TEST_F(GenericOpcuaClientDeviceTest, PropertyVisibilityTogglesWithNodeIdType)
 
 TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
 {
+    testHelper.startServer();
     const auto instance = DaqInstanceInit();
     const std::string deviceName("open62541-based OPC UA Application");
     daq::GenericDevicePtr<daq::IDevice> device;
@@ -165,12 +188,14 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithDefaultConfig)
     ASSERT_EQ(deviceFromList.getInfo().getName(), device.getInfo().getName());
     ASSERT_TRUE(deviceFromList == device);
 
-    ASSERT_EQ(device.getAllProperties().getCount(), 1u);
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
+    ASSERT_EQ(device.getAllProperties().getCount(), 2u);
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL));
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithLocalId)
 {
+    testHelper.startServer();
     const auto module = CreateModule();
     const auto instance = DaqInstanceInit();
     const std::string deviceLocalId("myCustomLocalId");
@@ -184,20 +209,15 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithLocalId)
     ASSERT_NE(device.getGlobalId().toStdString().find(deviceLocalId), std::string::npos);
 }
 
-TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithRootDeviceId)
+TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithSingleDeviceInDeviceSet)
 {
-    using NT = NodeIDType;
     using namespace daq::opcua::helper::constants;
 
-    const auto module = CreateModule();
     const auto instance = DaqInstanceInit();
+    startServerWithDiModel({1});
 
     daq::GenericDevicePtr<daq::IDevice> device;
-    auto config = module.getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
-    config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE, static_cast<int>(NT::String));
-    config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING, DI_DEVICE_STRING_ID);
-    config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX, TEST_NS);
-    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842"));
     ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
               Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
     const std::string expectedLocalId = std::string(EXPECTED_MANUFACTURER) + "_" + EXPECTED_SERIAL;
@@ -205,8 +225,235 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithRootDeviceId)
     ASSERT_NE(device.getGlobalId().toStdString().find(expectedLocalId), std::string::npos);
 }
 
+TEST_F(GenericOpcuaClientDeviceTest, LocalIdFromConfigWinsOverDeviceSet)
+{
+    using namespace daq::opcua::helper::constants;
+
+    const auto module = CreateModule();
+    const auto instance = DaqInstanceInit();
+    startServerWithDiModel({1});
+
+    auto config = module.getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
+    config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID, "myCustomLocalId");
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    EXPECT_EQ(device.getLocalId(), "myCustomLocalId");
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_SERIAL);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, SeveralDevicesInDeviceSetAreIgnored)
+{
+    const auto instance = DaqInstanceInit();
+    startServerWithDiModel({2});
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842"));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+
+    EXPECT_EQ(device.getLocalId(), "urn:open62541.server.application");
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), "");
+    EXPECT_EQ(device.getInfo().getManufacturer().toStdString(), "");
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, EmptyDeviceSetIsIgnored)
+{
+    const auto instance = DaqInstanceInit();
+    startServerWithDiModel({0});
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842"));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+
+    EXPECT_EQ(device.getLocalId(), "urn:open62541.server.application");
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), "");
+}
+
+// An object in the DeviceSet that is derived neither from ComponentType nor from DeviceType is not a device
+TEST_F(GenericOpcuaClientDeviceTest, ForeignObjectInDeviceSetIsSkipped)
+{
+    using namespace daq::opcua::helper::constants;
+
+    const auto instance = DaqInstanceInit();
+    startServerWithDiModel({1, true});
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842"));
+    EXPECT_EQ(device.getLocalId(), std::string(EXPECTED_MANUFACTURER) + "_" + EXPECTED_SERIAL);
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_SERIAL);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, ForeignObjectAloneInDeviceSetIsIgnored)
+{
+    const auto instance = DaqInstanceInit();
+    startServerWithDiModel({0, true});
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842"));
+    EXPECT_EQ(device.getLocalId(), "urn:open62541.server.application");
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), "");
+}
+
+// Before DI 1.2 DeviceType was not derived from ComponentType; such a device is still found
+TEST_F(GenericOpcuaClientDeviceTest, DeviceOfLegacyDeviceTypeIsFound)
+{
+    using namespace daq::opcua::helper::constants;
+
+    const auto instance = DaqInstanceInit();
+    startServerWithDiModel({1, false, true});
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842"));
+    EXPECT_EQ(device.getLocalId(), std::string(EXPECTED_MANUFACTURER) + "_" + EXPECTED_SERIAL);
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_SERIAL);
+}
+
+// The node set in the config is the primary source, it wins over the device in the DeviceSet
+TEST_F(GenericOpcuaClientDeviceTest, DeviceNodeFromConfigWinsOverDeviceSet)
+{
+    using namespace daq::opcua::helper::constants;
+
+    const auto instance = DaqInstanceInit();
+    daq::opcua::OpcUaServerTestHelper::DiModel model;
+    model.deviceCount = 1;
+    model.standaloneDevices = true;
+    startServerWithDiModel(model);
+
+    const auto config = createConfigWithDeviceNode(DI_STANDALONE_DEVICE_STRING_ID, TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    EXPECT_EQ(device.getLocalId(), std::string(EXPECTED_MANUFACTURER) + "_" + EXPECTED_STANDALONE_SERIAL);
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_STANDALONE_SERIAL);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, NumericDeviceNodeFromConfigWinsOverDeviceSet)
+{
+    using namespace daq::opcua::helper::constants;
+
+    const auto instance = DaqInstanceInit();
+    daq::opcua::OpcUaServerTestHelper::DiModel model;
+    model.deviceCount = 1;
+    model.standaloneDevices = true;
+    startServerWithDiModel(model);
+
+    const auto config = createConfigWithDeviceNode(DI_STANDALONE_DEVICE_NUMERIC_ID, TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_STANDALONE_SERIAL);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, MissingDeviceNodeFromConfigFallsBackToDeviceSet)
+{
+    using namespace daq::opcua::helper::constants;
+
+    const auto instance = DaqInstanceInit();
+    daq::opcua::OpcUaServerTestHelper::DiModel model;
+    model.deviceCount = 1;
+    model.standaloneDevices = true;
+    startServerWithDiModel(model);
+
+    const auto config = createConfigWithDeviceNode("NoSuchNode", TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_SERIAL);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, DeviceNodeFromConfigWithoutDeviceInfoFallsBackToDeviceSet)
+{
+    using namespace daq::opcua::helper::constants;
+
+    const auto instance = DaqInstanceInit();
+    startServerWithDiModel({1, true});
+
+    const auto config = createConfigWithDeviceNode(DI_FOREIGN_OBJECT_STRING_ID, TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_SERIAL);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, VariableAsDeviceNodeFromConfigFallsBackToDeviceSet)
+{
+    using namespace daq::opcua::helper::constants;
+
+    const auto instance = DaqInstanceInit();
+    startServerWithDiModel({1});
+
+    const auto config = createConfigWithDeviceNode(1001u, TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_SERIAL);
+}
+
+// The node set in the config is accepted by what it provides, not by its type: it works on a server
+// that has no Device Integration model at all.
+TEST_F(GenericOpcuaClientDeviceTest, DeviceNodeFromConfigUsedWithoutDiNamespace)
+{
+    testHelper.startServer();
+    using namespace daq::opcua::helper::constants;
+
+    const auto instance = DaqInstanceInit();
+
+    const auto config = createConfigWithDeviceNode(PLAIN_DEVICE_STRING_ID, TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+    const std::string expectedLocalId = std::string(EXPECTED_MANUFACTURER) + "_" + EXPECTED_PLAIN_SERIAL;
+    EXPECT_EQ(device.getLocalId(), expectedLocalId);
+    EXPECT_NE(device.getGlobalId().toStdString().find(expectedLocalId), std::string::npos);
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_PLAIN_SERIAL);
+}
+
+// The node set in the config is accepted by what it provides, not by its type: it works
+// on a server that has one, even though the node is neither a DeviceType nor a ComponentType object.
+TEST_F(GenericOpcuaClientDeviceTest, DeviceNodeFromConfigNotOfDeviceTypeWinsOverDeviceSet)
+{
+    using namespace daq::opcua::helper::constants;
+
+    const auto instance = DaqInstanceInit();
+    startServerWithDiModel({1});
+
+    const auto config = createConfigWithDeviceNode(PLAIN_DEVICE_STRING_ID, TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_PLAIN_SERIAL);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, LocalIdFromSerialNumberWithoutManufacturer)
+{
+    using namespace daq::opcua::helper::constants;
+
+    testHelper.startServer();
+    const auto instance = DaqInstanceInit();
+
+    const auto config = createConfigWithDeviceNode(SERIAL_ONLY_DEVICE_STRING_ID, TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    EXPECT_EQ(device.getLocalId(), EXPECTED_SERIAL_ONLY_SERIAL);
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), EXPECTED_SERIAL_ONLY_SERIAL);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, LocalIdWithoutSerialNumberFallsBackToApplicationUri)
+{
+    using namespace daq::opcua::helper::constants;
+
+    testHelper.startServer();
+    const auto instance = DaqInstanceInit();
+
+    const auto config = createConfigWithDeviceNode(MANUFACTURER_ONLY_DEVICE_STRING_ID, TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    EXPECT_EQ(device.getLocalId(), "urn:open62541.server.application");
+    EXPECT_EQ(device.getInfo().getManufacturer().toStdString(), EXPECTED_MANUFACTURER);
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, DeviceNodeFromConfigWithoutDeviceInfoAndWithoutDiNamespace)
+{
+    testHelper.startServer();
+    const auto instance = DaqInstanceInit();
+
+    const auto config = createConfigWithDeviceNode("f1", daq::opcua::helper::constants::TEST_NS);
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+    EXPECT_EQ(device.getLocalId(), "urn:open62541.server.application");
+    EXPECT_EQ(device.getInfo().getSerialNumber().toStdString(), "");
+}
+
 TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithApplicationUri)
 {
+    testHelper.startServer();
     const auto module = CreateModule();
     const auto instance = DaqInstanceInit();
     const std::string deviceLocalId("urn:open62541.server.application");
@@ -224,7 +471,6 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithoutApplicationUri)
 {
     const auto module = CreateModule();
     const auto instance = DaqInstanceInit();
-    testHelper.stop();
     testHelper.onTweakConfig(
         [&](UA_ServerConfig* config)
         {
@@ -261,6 +507,7 @@ TEST_F(GenericOpcuaClientDeviceTest, CreatingDeviceWithoutApplicationUri)
 
 TEST_F(GenericOpcuaClientDeviceTest, RemovingDevice)
 {
+    testHelper.startServer();
     const auto instance = DaqInstanceInit();
     daq::GenericDevicePtr<daq::IDevice> device;
     {
@@ -280,6 +527,7 @@ TEST_F(GenericOpcuaClientDeviceTest, RemovingDevice)
 
 TEST_F(GenericOpcuaClientDeviceTest, CheckDeviceFunctionalBlocks)
 {
+    testHelper.startServer();
     StartUp();
     daq::DictPtr<daq::IString, daq::IFunctionBlockType> fbTypes;
     ASSERT_NO_THROW(fbTypes = device.getAvailableFunctionBlockTypes());
@@ -289,6 +537,7 @@ TEST_F(GenericOpcuaClientDeviceTest, CheckDeviceFunctionalBlocks)
 
 TEST_F(GenericOpcuaClientDeviceTest, CheckDeviceNameLocalId)
 {
+    testHelper.startServer();
     StartUp();
     EXPECT_EQ(device.getLocalId().toStdString(), std::string("urn:open62541.server.application"));
     EXPECT_EQ(device.getName().toStdString(), std::string("open62541-based OPC UA Application"));
@@ -296,6 +545,7 @@ TEST_F(GenericOpcuaClientDeviceTest, CheckDeviceNameLocalId)
 
 TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_StatusBecomesReconnectingAfterServerStop)
 {
+    testHelper.startServer();
     DaqInstanceInit();
     createDeviceWithShortInterval(testHelper.getServerUrl());
     ASSERT_TRUE(waitForConnectionStatus("Connected"));
@@ -307,6 +557,7 @@ TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_StatusBecomesReconnectingA
 
 TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_ReconnectsAfterServerRestart)
 {
+    testHelper.startServer();
     DaqInstanceInit();
     createDeviceWithShortInterval(testHelper.getServerUrl());
     ASSERT_TRUE(waitForConnectionStatus("Connected"));
@@ -318,8 +569,90 @@ TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_ReconnectsAfterServerResta
     ASSERT_TRUE(waitForConnectionStatus("Connected"));
 }
 
+TEST_F(GenericOpcuaClientDeviceTest, SamplingPausesWhileServerIsDownAndResumesWithoutBurst)
+{
+    testHelper.startServer();
+    constexpr uint32_t interval = 20;
+    constexpr auto downtime = std::chrono::milliseconds(600);
+    constexpr auto burstWindow = std::chrono::milliseconds(100);  // five intervals
+    constexpr auto patience = std::chrono::seconds(10);
+
+    DaqInstanceInit();
+    createDeviceWithShortInterval(testHelper.getServerUrl());
+    ASSERT_TRUE(waitForConnectionStatus("Connected"));
+
+    daq::FunctionBlockPtr fb;
+    ASSERT_NO_THROW(fb = addMonitoredItemFB(".i32", 1, interval));
+
+    auto reader = daq::StreamReaderBuilder()
+                      .setSignal(fb.getSignals()[0])
+                      .setValueReadType(daq::SampleType::Int64)
+                      .setDomainReadType(daq::SampleType::UInt64)
+                      .setSkipEvents(true)
+                      .build();
+
+    // Wait for the packets rather than for a deadline: a slow runner needs longer, but it still gets
+    // there, so the assertion keeps its meaning without assuming the 20 ms rate is achieved.
+    ASSERT_TRUE(waitForPackets(reader, 6u, patience));
+
+    testHelper.stop();
+    ASSERT_TRUE(waitForConnectionStatus("Reconnecting"));
+
+    const auto afterDisconnect = reader.getAvailableCount();
+    std::this_thread::sleep_for(downtime);
+    // Nothing is sampled while the client is down, so no packets appear.
+    EXPECT_LE(reader.getAvailableCount(), afterDisconnect + 1u);
+
+    const auto beforeRestart = reader.getAvailableCount();
+    const auto restartedAt = std::chrono::steady_clock::now();
+    testHelper.startServer();
+    ASSERT_TRUE(waitForConnectionStatus("Connected"));
+    std::this_thread::sleep_for(burstWindow);
+
+    // The ~30 reads missed during the downtime must not arrive at once. Sampling resumes as soon as
+    // the client is back, which is slightly before the status property flips, so the span is measured
+    // from the restart itself and compared with what the interval allows over it. Being slow only
+    // lowers the packet count, never the span, so this cannot fail spuriously.
+    const auto span = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - restartedAt);
+    EXPECT_LE(reader.getAvailableCount() - beforeRestart, static_cast<daq::SizeT>(span.count() / interval) + 5u);
+
+    // Sampling did resume, at whatever pace the runner manages.
+    EXPECT_TRUE(waitForPackets(reader, beforeRestart + 6u, patience));
+
+    ASSERT_NO_THROW(device.removeFunctionBlock(fb));
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, DroppingDeviceWithLiveMonitoredItemDoesNotUseDestroyedScheduler)
+{
+    testHelper.startServer();
+    // The device here is standalone, so removed() never runs and teardown goes through the destructors:
+    // the device destroys its SamplingScheduler member, and only afterwards does the base Device release
+    // the function block. The block must not try to unregister from that dead scheduler.
+    DaqInstanceInit();
+    createDeviceWithShortInterval(testHelper.getServerUrl());
+    ASSERT_TRUE(waitForConnectionStatus("Connected"));
+
+    daq::FunctionBlockPtr fb;
+    ASSERT_NO_THROW(fb = addMonitoredItemFB(".i32", 1, 20));
+
+    auto reader = daq::StreamReaderBuilder()
+                      .setSignal(fb.getSignals()[0])
+                      .setValueReadType(daq::SampleType::Int64)
+                      .setDomainReadType(daq::SampleType::UInt64)
+                      .setSkipEvents(true)
+                      .build();
+
+    // Let the scheduler pick the item up, so it is still registered when the device goes away.
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    reader.release();
+    ASSERT_NO_THROW(fb.release());
+    ASSERT_NO_THROW(device.release());
+}
+
 TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_StopsCleanlyOnDeviceRemoval)
 {
+    testHelper.startServer();
     DaqInstanceInit();
     device = daqInstance.addDevice("daq.opcua.generic://127.0.0.1:4842");
     ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
@@ -333,38 +666,38 @@ TEST_F(GenericOpcuaClientDeviceTest, ReconnectMonitor_StopsCleanlyOnDeviceRemova
     ASSERT_LT(elapsedMs, 1000);
 }
 
-TEST_F(GenericOpcuaClientDeviceTest, TimestampModeFromConfigIsAppliedToDevice)
+TEST_F(GenericOpcuaClientDeviceTest, DefaultsForMonitoredItemsStartWithDefaultValues)
 {
-    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
+    testHelper.startServer();
+    StartUp();
 
-    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_TS_MODE));
-    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE).asPtr<IInteger>(),
-              static_cast<int>(DomainSource::ServerTimestamp));
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::SourceTimestamp));
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL).asPtr<IInteger>(),
+              static_cast<Int>(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL));
 }
 
-TEST_F(GenericOpcuaClientDeviceTest, TimestampModeChangePropagatesToMultipleFBs)
+TEST_F(GenericOpcuaClientDeviceTest, DefaultsForMonitoredItemsCanBeChangedOnDevice)
 {
-    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
+    testHelper.startServer();
+    StartUp();
 
-    auto fb1 = addMonitoredItemFB(".i32", 1);
-    auto fb2 = addMonitoredItemFB(".i64", 1);
+    ASSERT_NO_THROW(device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DomainSource::ServerTimestamp)));
+    ASSERT_NO_THROW(device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, 500));
 
-    ASSERT_EQ(fb1.getSignals(daq::search::Any()).getCount(), 2u);
-    ASSERT_EQ(fb2.getSignals(daq::search::Any()).getCount(), 2u);
-
-    device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::None));
-
-    EXPECT_EQ(fb1.getSignals(daq::search::Any()).getCount(), 1u);
-    EXPECT_FALSE(fb1.getSignals()[0].getDomainSignal().assigned());
-    EXPECT_EQ(fb2.getSignals(daq::search::Any()).getCount(), 1u);
-    EXPECT_FALSE(fb2.getSignals()[0].getDomainSignal().assigned());
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::ServerTimestamp));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL).asPtr<IInteger>(), 500);
 }
 
 TEST_F(GenericOpcuaClientDeviceTest, TimestampModeNewFBInheritsCurrentDeviceMode)
 {
-    StartUp(buildDeviceConfig(DomainSource::SourceTimestamp));
+    testHelper.startServer();
+    StartUp(DomainSource::SourceTimestamp);
 
-    device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::None));
+    device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DomainSource::None));
 
     auto fb = addMonitoredItemFB(".i32", 1);
 
@@ -376,27 +709,130 @@ TEST_F(GenericOpcuaClientDeviceTest, TimestampModeNewFBInheritsCurrentDeviceMode
 
 TEST_F(GenericOpcuaClientDeviceTest, RemovedFBIsIgnoredOnSubsequentTimestampModeChange)
 {
-    StartUp(buildDeviceConfig(DomainSource::ServerTimestamp));
+    testHelper.startServer();
+    StartUp(DomainSource::ServerTimestamp);
 
     auto fb = addMonitoredItemFB(".i32", 1);
     ASSERT_EQ(fb.getStatusContainer().getStatus("ComponentStatus"),
               Enumeration("ComponentStatusType", "Ok", daqInstance.getContext().getTypeManager()));
 
     ASSERT_NO_THROW(device.removeFunctionBlock(fb));
-    ASSERT_NO_THROW(device.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DomainSource::None)));    
+    ASSERT_NO_THROW(device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DomainSource::None)));
 }
 
-TEST_F(GenericOpcuaClientDeviceTest, DeviceInfoFilledFromDeviceTypeNode)
+TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithDefaultAddDeviceConfig)
 {
-    using NT = NodeIDType;
+    testHelper.startServer();
+    const auto instance = DaqInstanceInit();
+
+    PropertyObjectPtr config;
+    ASSERT_NO_THROW(config = instance.createDefaultAddDeviceConfig());
+    ASSERT_TRUE(config.assigned());
+
+    PropertyObjectPtr deviceTypeConfigs = config.getPropertyValue("Device");
+    ASSERT_TRUE(deviceTypeConfigs.hasProperty("OPCUAGeneric"));
+
+    PropertyObjectPtr ourConfig = deviceTypeConfigs.getPropertyValue("OPCUAGeneric");
+    EXPECT_FALSE(ourConfig.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+    EXPECT_FALSE(ourConfig.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL));
+    ourConfig.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID, "nestedSectionLocalId");
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+
+    // the value set in the nested section must reach the device
+    EXPECT_EQ(device.getLocalId(), "nestedSectionLocalId");
+    // the defaults for new monitored items are still there, with their default values
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::SourceTimestamp));
+    ASSERT_TRUE(device.hasProperty(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL));
+}
+
+// A config that is not derived from the device type and carries only a subset of the properties.
+TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithPlainPartialConfig)
+{
+    testHelper.startServer();
+    const auto instance = DaqInstanceInit();
+
+    auto config = PropertyObject();
+    config.addProperty(StringProperty(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID, "plainConfigLocalId"));
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+
+    EXPECT_EQ(device.getLocalId(), "plainConfigLocalId");
+}
+
+// The defaults for new monitored items are not configurable through the add-device config.
+TEST_F(GenericOpcuaClientDeviceTest, DefaultsForMonitoredItemsInConfigAreIgnored)
+{
+    testHelper.startServer();
+    const auto instance = DaqInstanceInit();
+
+    auto config = PropertyObject();
+    config.addProperty(IntProperty(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(DomainSource::LocalSystemTimestamp)));
+    config.addProperty(IntProperty(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, 500));
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE).asPtr<IInteger>(),
+              static_cast<int>(DomainSource::SourceTimestamp));
+    EXPECT_EQ(device.getPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL).asPtr<IInteger>(),
+              static_cast<Int>(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL));
+}
+
+// Properties the module knows nothing about must be ignored, not rejected.
+TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithUnknownPropertiesInConfig)
+{
+    testHelper.startServer();
+    const auto module = CreateModule();
+    const auto instance = DaqInstanceInit();
+
+    auto config = module.getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
+    config.addProperty(StringProperty("SomeForeignProperty", "value"));
+    config.addProperty(IntProperty("AnotherForeignProperty", 42));
+
+    ASSERT_NO_THROW(device = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(device.getStatusContainer().getStatus("ComponentStatus"),
+              Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager()));
+
+    EXPECT_FALSE(device.hasProperty("SomeForeignProperty"));
+    EXPECT_FALSE(device.hasProperty("AnotherForeignProperty"));
+}
+
+// Adding with an explicit config must behave the same as adding with a null config.
+TEST_F(GenericOpcuaClientDeviceTest, AddDeviceWithConfigMatchesNullConfig)
+{
+    testHelper.startServer();
+    const auto module = CreateModule();
+    const auto instance = DaqInstanceInit();
+    const auto okStatus = Enumeration("ComponentStatusType", "Ok", instance.getContext().getTypeManager());
+
+    daq::DevicePtr withNullConfig;
+    ASSERT_NO_THROW(withNullConfig = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", nullptr));
+    ASSERT_EQ(withNullConfig.getStatusContainer().getStatus("ComponentStatus"), okStatus);
+
+    auto config = module.getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
+    daq::DevicePtr withConfig;
+    ASSERT_NO_THROW(withConfig = instance.addDevice("daq.opcua.generic://127.0.0.1:4842", config));
+    ASSERT_EQ(withConfig.getStatusContainer().getStatus("ComponentStatus"), okStatus);
+
+    EXPECT_EQ(withConfig.getInfo().getName(), withNullConfig.getInfo().getName());
+    EXPECT_EQ(withConfig.getAllProperties().getCount(), withNullConfig.getAllProperties().getCount());
+}
+
+TEST_F(GenericOpcuaClientDeviceTest, DeviceInfoFilledFromDeviceInDeviceSet)
+{
     using namespace daq::opcua::helper::constants;
 
-    auto config = CreateModule().getAvailableDeviceTypes().get("OPCUAGeneric").createDefaultConfig();
-    config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE, static_cast<int>(NT::String));
-    config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING, DI_DEVICE_STRING_ID);
-    config.setPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX, TEST_NS);
+    startServerWithDiModel({1});
 
-    ASSERT_NO_THROW(StartUp(config));
+    ASSERT_NO_THROW(StartUp());
 
     auto info = device.getInfo();
     EXPECT_EQ(info.getManufacturer().toStdString(), EXPECTED_MANUFACTURER);

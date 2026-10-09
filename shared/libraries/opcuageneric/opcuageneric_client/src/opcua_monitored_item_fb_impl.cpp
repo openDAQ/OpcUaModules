@@ -4,6 +4,8 @@
 #include "opendaq/binary_data_packet_factory.h"
 #include "opendaq/packet_factory.h"
 #include <chrono>
+#include <limits>
+#include <utility>
 
 #define DISABLE_NODE_DATATYPE_VALIDATION
 
@@ -65,46 +67,50 @@ OpcUaMonitoredItemFbImpl::OpcUaMonitoredItemFbImpl(const ContextPtr& ctx,
                                                    const FunctionBlockTypePtr& type,
                                                    daq::opcua::OpcUaClientPtr client,
                                                    const std::string& localId,
-                                                   DomainSource defaultDomainSource,
+                                                   DomainSource initialDomainSource,
+                                                   uint32_t initialSamplingIntervalMs,
+                                                   SamplingScheduler* scheduler,
                                                    const PropertyObjectPtr& config)
     : FunctionBlock(type, ctx, parent, localId.empty() ? generateLocalId() : localId)
     , client(client)
-    , running(false)
+    , scheduler(scheduler)
     , statuses(std::make_shared<utils::StatusContainer>())
 {
     initComponentStatus();
     initStatusContainer();
     if (config.assigned())
-        initProperties(property_helper::populateDefaultConfig(type.createDefaultConfig(), config));
+        initProperties(property_helper::populateDefaultConfig(type.createDefaultConfig(), config), initialDomainSource, initialSamplingIntervalMs);
     else
-        initProperties(type.createDefaultConfig());
-
-    this->config.domainSource = defaultDomainSource;
+        initProperties(type.createDefaultConfig(), initialDomainSource, initialSamplingIntervalMs);
 
     validateNode();
     adjustSignalDescriptor();
     createSignal();
     updateStatuses();
-    runReaderThread();
 }
 
 OpcUaMonitoredItemFbImpl::~OpcUaMonitoredItemFbImpl()
 {
-    if (readerThread.joinable())
-    {
-        running = false;
-        readerThread.join();
-    }
+    detachFromScheduler();
 }
 
 void OpcUaMonitoredItemFbImpl::removed()
 {
-    if (readerThread.joinable())
-    {
-        running = false;
-        readerThread.join();
-    }
+    detachFromScheduler();
     FunctionBlock::removed();
+}
+
+void OpcUaMonitoredItemFbImpl::detachFromScheduler()
+{
+    // Stops further calls from the scheduler. One that is in progress is not waited for: the scheduler
+    // keeps this block alive until it returns.
+    if (auto* sched = scheduler.exchange(nullptr); sched != nullptr)
+        sched->unregisterItem(this);
+}
+
+void OpcUaMonitoredItemFbImpl::onSchedulerDestroyed()
+{
+    scheduler.store(nullptr);
 }
 
 void OpcUaMonitoredItemFbImpl::initStatusContainer()
@@ -158,15 +164,6 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
         defaultConfig.addProperty(builder.build());
     }
 
-    {
-        auto builder =
-            IntPropertyBuilder(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, Integer(DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL))
-                .setDescription(fmt::format(
-                    "Specifies the sampling interval in milliseconds for monitoring the OPCUA node. By default it is set to {} ms.",
-                    DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL));
-        defaultConfig.addProperty(builder.build());
-    }
-
     const auto fbType = FunctionBlockType(GENERIC_OPCUA_MONITORED_ITEM_FB_NAME,
                                           GENERIC_OPCUA_MONITORED_ITEM_FB_NAME,
                                           "Monitors a specified OPCUA node and outputs the value and timestamp as signals.",
@@ -174,21 +171,20 @@ FunctionBlockTypePtr OpcUaMonitoredItemFbImpl::CreateType()
     return fbType;
 }
 
-void OpcUaMonitoredItemFbImpl::setDomainSource(DomainSource domainSource)
-{
-    auto lock = this->getRecursiveConfigLock();
-    auto lockProcessing = std::scoped_lock(processingMutex);
-    if (config.domainSource != domainSource)
-    {
-        auto prevConfig = config;
-        config.domainSource = domainSource;
-        reconfigureSignal(prevConfig);
-    }
-}
-
 std::string OpcUaMonitoredItemFbImpl::generateLocalId()
 {
     return std::string(OPCUA_LOCAL_MONITORED_ITEM_FB_ID_PREFIX + std::to_string(localIndex++));
+}
+
+DataDescriptorPtr OpcUaMonitoredItemFbImpl::buildTimeDescriptor(daq::SampleType sampleType)
+{
+    return DataDescriptorBuilder()
+        .setSampleType(sampleType)
+        .setRule(ExplicitDataRule())
+        .setUnit(Unit("s", -1, "seconds", "time"))
+        .setTickResolution(Ratio(1, 1'000'000))
+        .setOrigin("1970-01-01T00:00:00Z")
+        .build();
 }
 
 void OpcUaMonitoredItemFbImpl::adjustSignalDescriptor()
@@ -196,7 +192,10 @@ void OpcUaMonitoredItemFbImpl::adjustSignalDescriptor()
     auto lockProcessing = std::scoped_lock(processingMutex);
     if (nodeValidationErr.ok() && supportedDataTypeNodeIds.count(nodeDataType) != 0)
     {
-        outputSignalDescriptor = DataDescriptorBuilder().setSampleType(supportedDataTypeNodeIds[nodeDataType]).build();
+        if (nodeDataType == OpcUaNodeId(0, UA_NS0ID_DATETIME))
+            outputSignalDescriptor = buildTimeDescriptor(supportedDataTypeNodeIds[nodeDataType]);
+        else
+            outputSignalDescriptor = DataDescriptorBuilder().setSampleType(supportedDataTypeNodeIds[nodeDataType]).build();
     }
     else
     {
@@ -204,7 +203,9 @@ void OpcUaMonitoredItemFbImpl::adjustSignalDescriptor()
     }
 }
 
-void OpcUaMonitoredItemFbImpl::initProperties(const PropertyObjectPtr& config)
+void OpcUaMonitoredItemFbImpl::initProperties(const PropertyObjectPtr& config,
+                                              DomainSource initialDomainSource,
+                                              uint32_t initialSamplingIntervalMs)
 {
     for (const auto& prop : config.getAllProperties())
     {
@@ -226,6 +227,30 @@ void OpcUaMonitoredItemFbImpl::initProperties(const PropertyObjectPtr& config)
             objPtr.setPropertyValue(propName, prop.getValue());
         }
     }
+
+    // TimestampMode and SamplingInterval are not part of the config: their initial values come from the parent device's
+    // DefaultTimestampMode and DefaultSamplingInterval, and they can be changed on the function block afterwards.
+    {
+        auto builder = SelectionPropertyBuilder(PROPERTY_NAME_OPCUA_TS_MODE,
+                                                List<IString>("None", "ServerTimestamp", "SourceTimestamp", "LocalSystemTimestamp"),
+                                                static_cast<int>(initialDomainSource))
+                           .setDescription(fmt::format("Defines what to use as a domain signal. Initially set to the value of the "
+                                                       "device's \"{}\" property.",
+                                                       PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE));
+        objPtr.addProperty(builder.build());
+        objPtr.getOnPropertyValueWrite(PROPERTY_NAME_OPCUA_TS_MODE) += [this](PropertyObjectPtr&, PropertyValueEventArgsPtr&) { propertyChanged(); };
+    }
+
+    {
+        auto builder =
+            IntPropertyBuilder(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, Integer(initialSamplingIntervalMs))
+                .setDescription(fmt::format("Specifies the sampling interval in milliseconds for monitoring the OPCUA node. Initially set "
+                                            "to the value of the device's \"{}\" property.",
+                                            PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL));
+        objPtr.addProperty(builder.build());
+        objPtr.getOnPropertyValueWrite(PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL) += [this](PropertyObjectPtr&, PropertyValueEventArgsPtr&) { propertyChanged(); };
+    }
+
     readProperties();
 }
 
@@ -233,7 +258,7 @@ void OpcUaMonitoredItemFbImpl::readProperties()
 {
     using namespace property_helper;
 
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
     auto lockProcessing = std::scoped_lock(processingMutex);
 
     configErr.reset();
@@ -256,13 +281,29 @@ void OpcUaMonitoredItemFbImpl::readProperties()
         config.nodeId = OpcUaNodeId{static_cast<uint16_t>(namespaceIndex), nodeIdNumeric};
     }
 
-    config.samplingInterval =
-        readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
-    if (config.samplingInterval <= 0)
+    using DS = DomainSource;
+    const auto tmpDomainSource =
+        readProperty<int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(DS::SourceTimestamp));
+    if (tmpDomainSource < static_cast<int>(DS::_count) && tmpDomainSource >= 0)
+    {
+        config.domainSource = static_cast<DS>(tmpDomainSource);
+    }
+    else
+    {
+        config.domainSource = DS::ServerTimestamp;
+    }
+
+    const auto samplingInterval =
+        readProperty<Int, IInteger>(objPtr, PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL, DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL);
+    if (samplingInterval <= 0 || samplingInterval > static_cast<Int>(std::numeric_limits<uint32_t>::max()))
     {
         configErr.add(fmt::format("Invalid value for the \"{}\" property! Sampling interval must be a positive integer.",
                                   PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL));
-        config.samplingInterval = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
+        samplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL;
+    }
+    else
+    {
+        samplingIntervalMs = static_cast<uint32_t>(samplingInterval);
     }
 
     updateStatuses();
@@ -270,16 +311,16 @@ void OpcUaMonitoredItemFbImpl::readProperties()
 
 void OpcUaMonitoredItemFbImpl::propertyChanged()
 {
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
     auto lockProcessing = std::scoped_lock(processingMutex);
 
     statuses->resetAll();
 
-    auto prevConfig = config;
     readProperties();
+
     validateNode();
     adjustSignalDescriptor();
-    reconfigureSignal(prevConfig);
+    reconfigureSignal();
     updateStatuses();
 }
 
@@ -366,6 +407,11 @@ bool OpcUaMonitoredItemFbImpl::validateResponse(const OpcUaDataValue& value)
         responseValidationErr.set(std::string("Reading value error: response without a value."));
         return false;
     }
+    if (value.isNull())
+    {
+        responseValidationErr.set(std::string("Reading value error: response with an empty value."));
+        return false;
+    }
     if (config.domainSource == DomainSource::ServerTimestamp && (!value.getValue().hasServerTimestamp || value.getValue().serverTimestamp == 0))
     {
         responseValidationErr.set(std::string("Reading value error: there is no required server timestamp"));
@@ -407,7 +453,7 @@ bool OpcUaMonitoredItemFbImpl::validateValueDataType(const OpcUaDataValue& value
 
 void OpcUaMonitoredItemFbImpl::createSignal()
 {
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
     LOG_I("Creating a signal...");
 
     outputSignal = createAndAddSignal(OPCUA_VALUE_SIGNAL_LOCAL_ID, outputSignalDescriptor);
@@ -416,9 +462,9 @@ void OpcUaMonitoredItemFbImpl::createSignal()
         outputSignal.setDomainSignal(createDomainSignal());
 }
 
-void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
+void OpcUaMonitoredItemFbImpl::reconfigureSignal()
 {
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
     auto lockProcessing = std::scoped_lock(processingMutex);
 
     if (config.domainSource == DomainSource::None)
@@ -433,6 +479,8 @@ void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
     else if (!outputDomainSignal.assigned())
     {
         outputSignal.setDomainSignal(createDomainSignal());
+        // A new domain signal has not carried any timestamp yet, so the next sample is published
+        lastPublishedDomainTs.reset();
     }
     if (outputSignal.getDescriptor() != outputSignalDescriptor)
     {
@@ -442,72 +490,96 @@ void OpcUaMonitoredItemFbImpl::reconfigureSignal(const FbConfig& prevConfig)
 
 SignalConfigPtr OpcUaMonitoredItemFbImpl::createDomainSignal()
 {
-    auto lock = this->getRecursiveConfigLock();
+    auto lock = this->getRecursiveConfigLock2();
 
-    const auto domainSignalDsc = DataDescriptorBuilder()
-                                     .setSampleType(SampleType::UInt64)
-                                     .setRule(ExplicitDataRule())
-                                     .setUnit(Unit("s", -1, "seconds", "time"))
-                                     .setTickResolution(Ratio(1, 1'000'000))
-                                     .setOrigin("1970-01-01T00:00:00Z")
-                                     .setName("Time")
-                                     .build();
+    const auto domainSignalDsc = buildTimeDescriptor(SampleType::UInt64);
     outputDomainSignal = createAndAddSignal(OPCUA_TS_SIGNAL_LOCAL_ID, domainSignalDsc, false);
     outputDomainSignal.setName(localId.toStdString() + "DomainSignal");
     return outputDomainSignal;
 }
 
-void OpcUaMonitoredItemFbImpl::runReaderThread()
+uint32_t OpcUaMonitoredItemFbImpl::getSamplingInterval() const
 {
-    running = true;
-    readerThread = std::thread([this] { readerLoop(); });
+    return samplingIntervalMs.load();
 }
 
-void OpcUaMonitoredItemFbImpl::readerLoop()
+void OpcUaMonitoredItemFbImpl::processSample()
 {
-    auto start = std::chrono::high_resolution_clock::now();
-    while (running)
     {
-        auto nextTP = start;
+        auto lockProcessing = std::scoped_lock(processingMutex);
+        if (configErr.ok() && nodeValidationErr.ok())
         {
-            auto lockProcessing = std::scoped_lock(processingMutex);
-            nextTP += std::chrono::milliseconds(config.samplingInterval);
-            if (configErr.ok() && nodeValidationErr.ok())
+            OpcUaDataValue dataValue;
+            try
             {
-                OpcUaDataValue dataValue;
-                try
-                {
-                    dataValue = client->readDataValue(config.nodeId);
+                dataValue = client->readDataValue(config.nodeId);
 
-                    exceptionErr.reset();
-                    if (validateResponse(dataValue) && validateValueDataType(dataValue))
+                exceptionErr.reset();
+                if (validateResponse(dataValue) && validateValueDataType(dataValue))
+                {
+                    // An unchanged node comes back with the timestamp that was
+                    // already published. Such a sample is dropped, whatever its value
+                    const auto domainTs = resolveDomainTimestamp(dataValue);
+                    if (!domainTs.has_value() || isNewDomainTimestamp(*domainTs))
                     {
-                        const auto dps = buildDataPacket(dataValue);
-                        if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
-                            outputDomainSignal.sendPacket(dps.domainDataPacket);
-                        outputSignal.sendPacket(dps.dataPacket);
+                        const auto dps = buildDataPacket(dataValue, domainTs);
+                        if (dps.dataPacket.assigned())
+                        {
+                            if (dps.domainDataPacket.assigned() && outputDomainSignal.assigned())
+                                outputDomainSignal.sendPacket(dps.domainDataPacket);
+                            outputSignal.sendPacket(dps.dataPacket);
+                            lastPublishedDomainTs = domainTs;
+                        }
+                        else
+                        {
+                            valueValidationErr.set(fmt::format("Failed to build a packet for value type ({}).",
+                                                               static_cast<int>(dataValue.getValue().value.type->typeKind)));
+                        }
                     }
                 }
-                catch (OpcUaException&)
-                {
-                    exceptionErr.set("Exception while reading.");
-                }
+            }
+            catch (const OpcUaException&)
+            {
+                exceptionErr.set("Exception while reading.");
+            }
+            catch (const std::exception& e)
+            {
+                exceptionErr.set(fmt::format("Exception while reading: {}", e.what()));
+            }
+            catch (...)
+            {
+                exceptionErr.set("Unknown exception while reading.");
             }
         }
-        updateStatuses();
-        auto now = std::chrono::high_resolution_clock::now();
-        std::chrono::microseconds sleepTime(0);
-        if (now < nextTP)
-            sleepTime = std::chrono::duration_cast<std::chrono::microseconds>(nextTP - now);
-        start = nextTP;
-        std::this_thread::sleep_for(sleepTime);
     }
+    updateStatuses();
 }
 
-OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(const OpcUaDataValue& value)
+void OpcUaMonitoredItemFbImpl::onConnectionRestored()
+{
+    auto lockProcessing = std::scoped_lock(processingMutex);
+
+    // The node may have disappeared or changed its data type while the connection was down, so the
+    // validation done at construction time is redone against the reconnected server. Whatever the
+    // reads reported before the connection went down is void as well. The config error stays: the
+    // properties are not read again here.
+    responseValidationErr.reset();
+    valueValidationErr.reset();
+    exceptionErr.reset();
+
+    validateNode();
+    adjustSignalDescriptor();
+    if (outputSignal.getDescriptor() != outputSignalDescriptor)
+        outputSignal.setDescriptor(outputSignalDescriptor);
+    updateStatuses();
+}
+
+OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(const OpcUaDataValue& value,
+                                                                                const std::optional<uint64_t>& domainTs)
 {
     DataPackets dps;
-    dps.domainDataPacket = buildDomainDataPacket(value);
+    if (domainTs.has_value())
+        dps.domainDataPacket = buildDomainDataPacket(*domainTs);
 
     if (value.isString())
     {
@@ -515,7 +587,7 @@ OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(
         dps.dataPacket = daq::BinaryDataPacket(dps.domainDataPacket, outputSignalDescriptor, convertedValue.size());
         std::memcpy(dps.dataPacket.getRawData(), convertedValue.data(), convertedValue.size());
     }
-    else if (value.isInteger() || value.isReal())
+    else if (value.isInteger() || value.isReal() || value.isDateTime())
     {
         if (dps.domainDataPacket.assigned())
             dps.dataPacket = daq::DataPacketWithDomain(dps.domainDataPacket, outputSignalDescriptor, 1);
@@ -549,7 +621,8 @@ OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(
                 *(static_cast<uint64_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_UInt64>();
                 break;
             case UA_DATATYPEKIND_DATETIME:
-                *(static_cast<int64_t*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Int64>();
+                // OPC UA counts 100 ns ticks from 1601-01-01; the descriptor declares us from the UNIX epoch
+                *(static_cast<int64_t*>(dps.dataPacket.getRawData())) = value.getDateTimeValueUnixEpoch();
                 break;
             case UA_DATATYPEKIND_FLOAT:
                 *(static_cast<float*>(dps.dataPacket.getRawData())) = value.readScalar<UA_Float>();
@@ -565,33 +638,35 @@ OpcUaMonitoredItemFbImpl::DataPackets OpcUaMonitoredItemFbImpl::buildDataPacket(
     return dps;
 }
 
-DataPacketPtr OpcUaMonitoredItemFbImpl::buildDomainDataPacket(const OpcUaDataValue& value)
+std::optional<uint64_t> OpcUaMonitoredItemFbImpl::resolveDomainTimestamp(const OpcUaDataValue& value) const
 {
-    DataPacketPtr domainDp;
     if (!outputDomainSignal.assigned())
-        return domainDp;
-
-    auto fillDmainPacket = [this](uint64_t ts)
-    {
-        DataPacketPtr domainDp = daq::DataPacket(outputDomainSignal.getDescriptor(), 1);
-        std::memcpy(domainDp.getRawData(), &ts, sizeof(ts));
-        return domainDp;
-    };
+        return std::nullopt;
 
     if (config.domainSource == DomainSource::ServerTimestamp && value.hasServerTimestamp())
+        return static_cast<uint64_t>(value.getServerTimestampUnixEpoch());
+
+    if (config.domainSource == DomainSource::SourceTimestamp && value.hasSourceTimestamp())
+        return static_cast<uint64_t>(value.getSourceTimestampUnixEpoch());
+
+    if (config.domainSource == DomainSource::LocalSystemTimestamp)
     {
-        domainDp = fillDmainPacket(value.getServerTimestampUnixEpoch());
-    }
-    else if (config.domainSource == DomainSource::SourceTimestamp && value.hasSourceTimestamp())
-    {
-        domainDp = fillDmainPacket(value.getSourceTimestampUnixEpoch());
-    }
-    else if (config.domainSource == DomainSource::LocalSystemTimestamp)
-    {
-        const uint64_t epochTime = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        domainDp = fillDmainPacket(epochTime);
+        const auto sinceEpoch = std::chrono::system_clock::now().time_since_epoch();
+        return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(sinceEpoch).count());
     }
 
+    return std::nullopt;
+}
+
+bool OpcUaMonitoredItemFbImpl::isNewDomainTimestamp(uint64_t ts) const
+{
+    return !lastPublishedDomainTs.has_value() || *lastPublishedDomainTs != ts;
+}
+
+DataPacketPtr OpcUaMonitoredItemFbImpl::buildDomainDataPacket(uint64_t ts)
+{
+    DataPacketPtr domainDp = daq::DataPacket(outputDomainSignal.getDescriptor(), 1);
+    std::memcpy(domainDp.getRawData(), &ts, sizeof(ts));
     return domainDp;
 }
 

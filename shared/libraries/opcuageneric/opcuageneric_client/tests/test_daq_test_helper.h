@@ -5,6 +5,8 @@
 #include "opcuageneric_client/common.h"
 #include "opcuageneric_client/constants.h"
 #include <opcuageneric_client/generic_client_device_impl.h>
+#include <chrono>
+#include <thread>
 
 namespace daq::opcua::generic
 {
@@ -14,17 +16,17 @@ public:
     daq::InstancePtr daqInstance;
     daq::DevicePtr device;
 
-    static daq::PropertyObjectPtr buildDeviceConfig(DomainSource ds)
-    {
-        auto deviceConfig = OpcuaGenericClientDeviceImpl::createDefaultConfig();
-        deviceConfig.setPropertyValue(PROPERTY_NAME_OPCUA_TS_MODE, static_cast<int>(ds));
-        return deviceConfig;
-    }
-
     void StartUp(daq::PropertyObjectPtr config = nullptr, std::string connectionStr = "daq.opcua.generic://127.0.0.1:4842")
     {
         DaqInstanceInit();
         DaqOpcuaGenericClientDeviceInit(connectionStr, config);
+    }
+
+    void StartUp(DomainSource defaultDomainSource, uint32_t defaultSamplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL)
+    {
+        StartUp();
+        device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE, static_cast<int>(defaultDomainSource));
+        device.setPropertyValue(PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL, defaultSamplingIntervalMs);
     }
 
     daq::InstancePtr DaqInstanceInit()
@@ -40,6 +42,20 @@ public:
             device = daqInstance.addDevice(connectionStr, config);
 
         return device;
+    }
+
+    // Waits until the reader holds at least `count` packets
+    template <typename ReaderPtr>
+    static bool waitForPackets(const ReaderPtr& reader, daq::SizeT count, std::chrono::milliseconds timeout)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (reader.getAvailableCount() < count)
+        {
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return true;
     }
 
     static daq::ModulePtr CreateModule()

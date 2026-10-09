@@ -8,6 +8,7 @@ set(TEST_SOURCES test_app.cpp
                  timer.h
                  test_opcua_generic_client_device.cpp
                  test_opcua_monitored_item_fb.cpp
+                 test_sampling_scheduler.cpp
 )
 
 set(SUPPORTS_ASAN 0)

@@ -18,13 +18,16 @@
 #include <opcuageneric_client/opcuageneric.h>
 #include <opcuageneric_client/status_container.h>
 #include <opcuageneric_client/common.h>
+#include <opcuageneric_client/constants.h>
+#include <opcuageneric_client/sampling_scheduler.h>
 #include <opendaq/data_packet_ptr.h>
 #include <opendaq/function_block_impl.h>
+#include <optional>
 #include "opcuaclient/opcuaclient.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
 
-class OpcUaMonitoredItemFbImpl final : public FunctionBlock
+class OpcUaMonitoredItemFbImpl final : public FunctionBlock, public ISampledItem
 {
     friend class GenericOpcuaMonitoredItemTest;
 
@@ -34,12 +37,18 @@ public:
                                       const FunctionBlockTypePtr& type,
                                       daq::opcua::OpcUaClientPtr client,
                                       const std::string& localId,
-                                      DomainSource defaultDomainSource,
+                                      DomainSource initialDomainSource = DomainSource::SourceTimestamp,
+                                      uint32_t initialSamplingIntervalMs = DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL,
+                                      SamplingScheduler* scheduler = nullptr,
                                       const PropertyObjectPtr& config = nullptr);
     ~OpcUaMonitoredItemFbImpl();
+
     DAQ_OPCUA_GENERIC_MODULE_API static FunctionBlockTypePtr CreateType();
 
-    void setDomainSource(DomainSource domainSource);
+    uint32_t getSamplingInterval() const override;
+    void processSample() override;
+    void onConnectionRestored() override;
+    void onSchedulerDestroyed() override;
 
 protected:
     struct DataPackets
@@ -51,7 +60,6 @@ protected:
     struct FbConfig
     {
         OpcUaNodeId nodeId;
-        uint32_t samplingInterval;
         DomainSource domainSource;
     };
 
@@ -68,8 +76,16 @@ protected:
     daq::opcua::OpcUaClientPtr client;
     OpcUaNodeId nodeDataType;
 
-    std::thread readerThread;
-    std::atomic<bool> running;
+    std::atomic<uint32_t> samplingIntervalMs{DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL};
+
+    // Domain value (us since the Unix epoch) of the last published sample
+    // A sample resolving to the same value is not published again
+    std::optional<uint64_t> lastPublishedDomainTs;
+
+    // Not owned. The device owns the scheduler and destroys it before the component tree releases this
+    // block, so the scheduler clears this pointer from its destructor. Atomic because a removal and that
+    // teardown can reach it from different threads.
+    std::atomic<SamplingScheduler*> scheduler;
     std::recursive_mutex processingMutex;
 
     std::shared_ptr<utils::StatusContainer> statuses;
@@ -80,15 +96,17 @@ protected:
     utils::Error exceptionErr;
 
     void removed() override;
+    void detachFromScheduler();
     static std::string generateLocalId();
 
     void initStatusContainer();
+    static DataDescriptorPtr buildTimeDescriptor(daq::SampleType sampleType);
     void adjustSignalDescriptor();
     void createSignal();
-    void reconfigureSignal(const FbConfig& prevConfig);
+    void reconfigureSignal();
     SignalConfigPtr createDomainSignal();
 
-    void initProperties(const PropertyObjectPtr& config);
+    void initProperties(const PropertyObjectPtr& config, DomainSource initialDomainSource, uint32_t initialSamplingIntervalMs);
     void readProperties();
     void propertyChanged();
 
@@ -98,11 +116,11 @@ protected:
     bool validateResponse(const OpcUaDataValue& value);
     bool validateValueDataType(const OpcUaDataValue& value);
 
-    void runReaderThread();
-    void readerLoop();
+    std::optional<uint64_t> resolveDomainTimestamp(const OpcUaDataValue& value) const;
+    bool isNewDomainTimestamp(uint64_t ts) const;
 
-    DataPackets buildDataPacket(const OpcUaDataValue& value);
-    daq::DataPacketPtr buildDomainDataPacket(const OpcUaDataValue& value);
+    DataPackets buildDataPacket(const OpcUaDataValue& value, const std::optional<uint64_t>& domainTs);
+    daq::DataPacketPtr buildDomainDataPacket(uint64_t ts);
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_GENERIC

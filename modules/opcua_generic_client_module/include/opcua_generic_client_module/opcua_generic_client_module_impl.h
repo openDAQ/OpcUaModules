@@ -20,6 +20,7 @@
 #include <daq_discovery/daq_discovery_client.h>
 #include <opendaq/device_ptr.h>
 #include "opcuaclient/opcuaclient.h"
+#include <optional>
 #include <unordered_map>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC_CLIENT_MODULE
@@ -65,7 +66,13 @@ private:
     static PropertyObjectPtr populateDefaultConfig(const PropertyObjectPtr& config);
     static DeviceInfoPtr populateDiscoveredDevice(const discovery::MdnsDiscoveredDevice& discoveredDevice);
 
-    opcua::OpcUaNodeId readRootNodeIdFromConfig(const PropertyObjectPtr& config);
+    static std::optional<uint16_t> findNamespaceIndex(const std::shared_ptr<opcua::OpcUaClient>& client, const std::string& namespaceUri);
+    static bool isSubtypeOfAny(const std::shared_ptr<opcua::OpcUaClient>& client,
+                               const opcua::OpcUaNodeId& typeId,
+                               const std::vector<opcua::OpcUaNodeId>& baseTypeIds);
+    static opcua::OpcUaNodeId readRootNodeIdFromConfig(const PropertyObjectPtr& config);
+    opcua::OpcUaNodeId findDeviceNodeInDeviceSet(const std::shared_ptr<opcua::OpcUaClient>& client);
+    DeviceInfoList readDeviceInfo(const std::shared_ptr<opcua::OpcUaClient>& client, const opcua::OpcUaNodeId& configuredNodeId);
     void populateDeviceInfo(DeviceInfoPtr deviceInfo,
                             const StringPtr& connectionString,
                             const ParsedConnectionInfo& connectionInfo,

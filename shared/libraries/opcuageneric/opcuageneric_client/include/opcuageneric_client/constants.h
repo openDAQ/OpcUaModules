@@ -24,7 +24,8 @@ static constexpr const char* GENERIC_OPCUA_MONITORED_ITEM_FB_NAME = "MonitoredIt
 static constexpr const char* PROPERTY_NAME_OPCUA_USERNAME = "Username";
 static constexpr const char* PROPERTY_NAME_OPCUA_PASSWORD = "Password";
 static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID = "LocalId";
-static constexpr const char* PROPERTY_NAME_OPCUA_TS_MODE = "TimestampMode";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEFAULT_TS_MODE = "DefaultTimestampMode";
+static constexpr const char* PROPERTY_NAME_OPCUA_DEFAULT_SAMPLING_INTERVAL = "DefaultSamplingInterval";
 
 // MonitoredItem FB
 static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_TYPE = "NodeIDType";
@@ -33,12 +34,21 @@ static constexpr const char* PROPERTY_NAME_OPCUA_NODE_ID_NUMERIC = "NodeIDNumeri
 static constexpr const char* PROPERTY_NAME_OPCUA_NAMESPACE_INDEX = "NamespaceIndex";
 static constexpr const char* PROPERTY_NAME_OPCUA_SAMPLING_INTERVAL = "SamplingInterval";
 static constexpr const char* PROPERTY_NAME_OPCUA_MI_LOCAL_ID = "LocalId";
+static constexpr const char* PROPERTY_NAME_OPCUA_TS_MODE = "TimestampMode";
 
 // Device node ID for DeviceInfo reading
 static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_TYPE    = "DeviceNodeIDType";
 static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_STRING  = "DeviceNodeIDString";
 static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC = "DeviceNodeIDNumeric";
 static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX = "DeviceNamespaceIndex";
+// ----------
+
+// OPC UA Device Integration model (OPC 10000-100), used for DeviceInfo reading
+// ----------
+static constexpr const char* OPCUA_DI_NAMESPACE_URI = "http://opcfoundation.org/UA/DI/";
+static constexpr uint32_t OPCUA_DI_DEVICE_SET_ID = 5001;
+static constexpr uint32_t OPCUA_DI_DEVICE_TYPE_ID = 1002;
+static constexpr uint32_t OPCUA_DI_COMPONENT_TYPE_ID = 15063;
 // ----------
 
 // Defaults

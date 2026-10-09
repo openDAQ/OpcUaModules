@@ -21,6 +21,11 @@ void OpcUaServerTestHelper::setSessionTimeout(double sessionTimeoutMs)
     this->sessionTimeoutMs = sessionTimeoutMs;
 }
 
+void OpcUaServerTestHelper::setDiModel(const DiModel& model)
+{
+    diModel = model;
+}
+
 void OpcUaServerTestHelper::runServer()
 {
     while (serverRunning)
@@ -43,6 +48,10 @@ void OpcUaServerTestHelper::onTweakConfig(const OnConfigureCallback& callback)
 void OpcUaServerTestHelper::startServer()
 {
     serverRunning = true;
+    {
+        std::scoped_lock lock(readCountsMutex);
+        readCounts.clear();
+    }
 
     UA_ServerConfig initConfig;
     std::memset(&initConfig, 0, sizeof(UA_ServerConfig));
@@ -172,6 +181,13 @@ void OpcUaServerTestHelper::createModel()
     UA_StatusCode myStatus = UA_STATUSCODE_GOODSUBSCRIPTIONTRANSFERRED;
     publishVariable(".sc", &myStatus, &UA_TYPES[UA_TYPES_STATUSCODE], &uaObjectsFolder);
 
+    UA_DateTime myDateTime = UA_DateTime_fromUnixTime(1700000000);
+    publishVariable(".dt", &myDateTime, &UA_TYPES[UA_TYPES_DATETIME], &uaObjectsFolder);
+
+    // UtcTime is a subtype of DateTime and carries its own UA_DataType entry
+    UA_UtcTime myUtcTime = UA_DateTime_fromUnixTime(1700000001);
+    publishVariable(".utc", &myUtcTime, &UA_TYPES[UA_TYPES_UTCTIME], &uaObjectsFolder);
+
     // vectors
 
     UA_Int32 myVecInt32[] = {12, 13, 15, 18};
@@ -214,44 +230,141 @@ void OpcUaServerTestHelper::createModel()
     UA_String_clear(&mySctString);
 
     {
-        // device information
         using namespace daq::opcua::helper::constants;
 
-        const OpcUaObject<UA_LocalizedText> Manufacturer = UA_LOCALIZEDTEXT_ALLOC("en-US", EXPECTED_MANUFACTURER);
-        const OpcUaObject<UA_String> ManufacturerUri = UA_STRING_ALLOC(EXPECTED_MANUFACTURER_URI);
-        const OpcUaObject<UA_LocalizedText> Model = UA_LOCALIZEDTEXT_ALLOC("en-US", EXPECTED_MODEL);
-        const OpcUaObject<UA_String> HardwareRevision = UA_STRING_ALLOC(EXPECTED_HW_REVISION);
-        const OpcUaObject<UA_String> SoftwareRevision = UA_STRING_ALLOC(EXPECTED_SW_REVISION);
-        const OpcUaObject<UA_String> DeviceRevision = UA_STRING_ALLOC(EXPECTED_DEV_REVISION);
-        const OpcUaObject<UA_String> ProductCode = UA_STRING_ALLOC(EXPECTED_PRODUCT_CODE);
-        const OpcUaObject<UA_String> DeviceManual = UA_STRING_ALLOC(EXPECTED_DEVICE_MANUAL);
-        const OpcUaObject<UA_String> DeviceClass = UA_STRING_ALLOC(EXPECTED_DEVICE_CLASS);
-        const OpcUaObject<UA_String> SerialNumber = UA_STRING_ALLOC(EXPECTED_SERIAL);
-        const OpcUaObject<UA_String> ProductInstanceUri = UA_STRING_ALLOC(EXPECTED_PRODUCT_INSTANCE_URI);
-        const OpcUaObject<UA_String> AssetId = UA_STRING_ALLOC(EXPECTED_ASSET_ID);
-        const OpcUaObject<UA_String> ComponentName = UA_STRING_ALLOC(EXPECTED_COMPONENT_NAME);
+        publishFolder(PLAIN_DEVICE_STRING_ID, &uaObjectsFolder, "en_US", TEST_NS);
+        publishDeviceInfoProperties(OpcUaNodeId(TEST_NS, PLAIN_DEVICE_STRING_ID), EXPECTED_PLAIN_SERIAL);
 
+        const OpcUaObject<UA_String> serialNumber = UA_STRING_ALLOC(EXPECTED_SERIAL_ONLY_SERIAL);
+        publishFolder(SERIAL_ONLY_DEVICE_STRING_ID, &uaObjectsFolder, "en_US", TEST_NS);
+        addPropertyImpl(
+            "SerialNumber", serialNumber.get(), &UA_TYPES[UA_TYPES_STRING], OpcUaNodeId(TEST_NS, SERIAL_ONLY_DEVICE_STRING_ID).getPtr());
 
-
-        OpcUaNodeId deviceNodeId(TEST_NS, DI_DEVICE_STRING_ID);
-
-        publishFolder(DI_DEVICE_STRING_ID, &uaObjectsFolder, "en_US", TEST_NS);
-
-        addPropertyImpl("Manufacturer", Manufacturer.get(), &UA_TYPES[UA_TYPES_LOCALIZEDTEXT], deviceNodeId.getPtr());
-        addPropertyImpl("ManufacturerUri", ManufacturerUri.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("Model", Model.get(), &UA_TYPES[UA_TYPES_LOCALIZEDTEXT], deviceNodeId.getPtr());
-        addPropertyImpl("HardwareRevision", HardwareRevision.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("SoftwareRevision", SoftwareRevision.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("DeviceRevision", DeviceRevision.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("ProductCode", ProductCode.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("DeviceManual", DeviceManual.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("DeviceClass", DeviceClass.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("SerialNumber", SerialNumber.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("ProductInstanceUri", ProductInstanceUri.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("AssetId", AssetId.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("ComponentName", ComponentName.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
-        addPropertyImpl("RevisionCounter", &EXPECTED_REVISION_CNT, &UA_TYPES[UA_TYPES_INT32], deviceNodeId.getPtr());
+        const OpcUaObject<UA_LocalizedText> manufacturer = UA_LOCALIZEDTEXT_ALLOC("en-US", EXPECTED_MANUFACTURER);
+        publishFolder(MANUFACTURER_ONLY_DEVICE_STRING_ID, &uaObjectsFolder, "en_US", TEST_NS);
+        addPropertyImpl("Manufacturer",
+                        manufacturer.get(),
+                        &UA_TYPES[UA_TYPES_LOCALIZEDTEXT],
+                        OpcUaNodeId(TEST_NS, MANUFACTURER_ONLY_DEVICE_STRING_ID).getPtr());
     }
+
+    if (diModel.has_value())
+        createDiModel(*diModel);
+}
+
+void OpcUaServerTestHelper::createDiModel(const DiModel& model)
+{
+    using namespace daq::opcua::helper::constants;
+
+    // the namespace is added at runtime, so its index is whatever the server assigns
+    const UA_UInt16 diNs = UA_Server_addNamespace(server, DI_NAMESPACE_URI);
+
+    const OpcUaNodeId topologyElementTypeId(diNs, DI_TOPOLOGY_ELEMENT_TYPE_ID);
+    const OpcUaNodeId componentTypeId(diNs, DI_COMPONENT_TYPE_ID);
+    const OpcUaNodeId deviceTypeId(diNs, DI_DEVICE_TYPE_ID);
+    const OpcUaNodeId testDeviceTypeId(TEST_NS, DI_DEVICE_TYPE_STRING_ID);
+
+    publishObjectType(topologyElementTypeId, "TopologyElementType", OpcUaNodeId(0, UA_NS0ID_BASEOBJECTTYPE));
+    publishObjectType(componentTypeId, "ComponentType", topologyElementTypeId);
+    publishObjectType(deviceTypeId, "DeviceType", model.legacyTypeHierarchy ? topologyElementTypeId : componentTypeId);
+    publishObjectType(testDeviceTypeId, DI_DEVICE_TYPE_STRING_ID, deviceTypeId);
+
+    const OpcUaNodeId baseObjectTypeId(0, UA_NS0ID_BASEOBJECTTYPE);
+    const OpcUaNodeId organizesId(0, UA_NS0ID_ORGANIZES);
+    const OpcUaNodeId hasComponentId(0, UA_NS0ID_HASCOMPONENT);
+
+    const OpcUaNodeId deviceSetId(diNs, DI_DEVICE_SET_ID);
+    publishObject(deviceSetId, "DeviceSet", OpcUaNodeId(0, UA_NS0ID_OBJECTSFOLDER), organizesId, baseObjectTypeId);
+
+    if (model.foreignObject)
+        publishObject(
+            OpcUaNodeId(TEST_NS, DI_FOREIGN_OBJECT_STRING_ID), DI_FOREIGN_OBJECT_STRING_ID, deviceSetId, organizesId, topologyElementTypeId);
+
+    for (size_t i = 0; i < model.deviceCount; ++i)
+    {
+        const std::string identifier = (i == 0) ? DI_DEVICE_STRING_ID : DI_DEVICE_STRING_ID + std::to_string(i + 1);
+        const OpcUaNodeId deviceNodeId(TEST_NS, identifier);
+        // the specification only asks for a hierarchical reference, so the devices are attached with different ones
+        publishObject(deviceNodeId, identifier.c_str(), deviceSetId, (i % 2 == 0) ? organizesId : hasComponentId, testDeviceTypeId);
+        publishDeviceInfoProperties(deviceNodeId, EXPECTED_SERIAL);
+    }
+
+    if (model.standaloneDevices)
+    {
+        const OpcUaNodeId objectsFolderId(0, UA_NS0ID_OBJECTSFOLDER);
+        const OpcUaNodeId stringDeviceId(TEST_NS, DI_STANDALONE_DEVICE_STRING_ID);
+        const OpcUaNodeId numericDeviceId(TEST_NS, DI_STANDALONE_DEVICE_NUMERIC_ID);
+
+        publishObject(stringDeviceId, DI_STANDALONE_DEVICE_STRING_ID, objectsFolderId, organizesId, testDeviceTypeId);
+        publishDeviceInfoProperties(stringDeviceId, EXPECTED_STANDALONE_SERIAL);
+
+        publishObject(numericDeviceId, "TestDiStandaloneNumericDevice", objectsFolderId, organizesId, testDeviceTypeId);
+        publishDeviceInfoProperties(numericDeviceId, EXPECTED_STANDALONE_SERIAL);
+    }
+}
+
+void OpcUaServerTestHelper::publishObjectType(const OpcUaNodeId& nodeId, const char* name, const OpcUaNodeId& superTypeId)
+{
+    OpcUaObject<UA_ObjectTypeAttributes> attr = UA_ObjectTypeAttributes_default;
+    attr->displayName = UA_LOCALIZEDTEXT_ALLOC("en_US", name);
+
+    OpcUaObject<UA_QualifiedName> qualifiedName = UA_QUALIFIEDNAME_ALLOC(nodeId.getNamespaceIndex(), name);
+
+    auto status = UA_Server_addObjectTypeNode(
+        server, *nodeId, *superTypeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE), *qualifiedName, *attr, NULL, NULL);
+
+    CheckStatusCodeException(status);
+}
+
+void OpcUaServerTestHelper::publishObject(const OpcUaNodeId& nodeId,
+                                          const char* name,
+                                          const OpcUaNodeId& parentNodeId,
+                                          const OpcUaNodeId& referenceTypeId,
+                                          const OpcUaNodeId& typeDefinitionId)
+{
+    OpcUaObject<UA_ObjectAttributes> attr = UA_ObjectAttributes_default;
+    attr->displayName = UA_LOCALIZEDTEXT_ALLOC("en_US", name);
+
+    OpcUaObject<UA_QualifiedName> qualifiedName = UA_QUALIFIEDNAME_ALLOC(nodeId.getNamespaceIndex(), name);
+
+    auto status =
+        UA_Server_addObjectNode(server, *nodeId, *parentNodeId, *referenceTypeId, *qualifiedName, *typeDefinitionId, *attr, NULL, NULL);
+
+    CheckStatusCodeException(status);
+}
+
+void OpcUaServerTestHelper::publishDeviceInfoProperties(OpcUaNodeId deviceNodeId, const char* serialNumber)
+{
+    using namespace daq::opcua::helper::constants;
+
+    const OpcUaObject<UA_LocalizedText> Manufacturer = UA_LOCALIZEDTEXT_ALLOC("en-US", EXPECTED_MANUFACTURER);
+    const OpcUaObject<UA_String> ManufacturerUri = UA_STRING_ALLOC(EXPECTED_MANUFACTURER_URI);
+    const OpcUaObject<UA_LocalizedText> Model = UA_LOCALIZEDTEXT_ALLOC("en-US", EXPECTED_MODEL);
+    const OpcUaObject<UA_String> HardwareRevision = UA_STRING_ALLOC(EXPECTED_HW_REVISION);
+    const OpcUaObject<UA_String> SoftwareRevision = UA_STRING_ALLOC(EXPECTED_SW_REVISION);
+    const OpcUaObject<UA_String> DeviceRevision = UA_STRING_ALLOC(EXPECTED_DEV_REVISION);
+    const OpcUaObject<UA_String> ProductCode = UA_STRING_ALLOC(EXPECTED_PRODUCT_CODE);
+    const OpcUaObject<UA_String> DeviceManual = UA_STRING_ALLOC(EXPECTED_DEVICE_MANUAL);
+    const OpcUaObject<UA_String> DeviceClass = UA_STRING_ALLOC(EXPECTED_DEVICE_CLASS);
+    const OpcUaObject<UA_String> SerialNumber = UA_STRING_ALLOC(serialNumber);
+    const OpcUaObject<UA_String> ProductInstanceUri = UA_STRING_ALLOC(EXPECTED_PRODUCT_INSTANCE_URI);
+    const OpcUaObject<UA_String> AssetId = UA_STRING_ALLOC(EXPECTED_ASSET_ID);
+    const OpcUaObject<UA_String> ComponentName = UA_STRING_ALLOC(EXPECTED_COMPONENT_NAME);
+
+    addPropertyImpl("Manufacturer", Manufacturer.get(), &UA_TYPES[UA_TYPES_LOCALIZEDTEXT], deviceNodeId.getPtr());
+    addPropertyImpl("ManufacturerUri", ManufacturerUri.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("Model", Model.get(), &UA_TYPES[UA_TYPES_LOCALIZEDTEXT], deviceNodeId.getPtr());
+    addPropertyImpl("HardwareRevision", HardwareRevision.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("SoftwareRevision", SoftwareRevision.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("DeviceRevision", DeviceRevision.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("ProductCode", ProductCode.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("DeviceManual", DeviceManual.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("DeviceClass", DeviceClass.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("SerialNumber", SerialNumber.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("ProductInstanceUri", ProductInstanceUri.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("AssetId", AssetId.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("ComponentName", ComponentName.get(), &UA_TYPES[UA_TYPES_STRING], deviceNodeId.getPtr());
+    addPropertyImpl("RevisionCounter", &EXPECTED_REVISION_CNT, &UA_TYPES[UA_TYPES_INT32], deviceNodeId.getPtr());
 }
 
 void OpcUaServerTestHelper::publishVariable(std::string identifier,
@@ -317,10 +430,49 @@ void OpcUaServerTestHelper::publishVariableImpl(OpcUaNodeId nodeId,
                                             *qualifiedName,
                                             UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
                                             *attr,
-                                            NULL,
+                                            this,
                                             NULL);
 
     CheckStatusCodeException(status);
+
+    UA_ValueCallback callback{};
+    callback.onRead = valueReadCallback;
+    CheckStatusCodeException(UA_Server_setVariableNode_valueCallback(server, *nodeId, callback));
+}
+
+void OpcUaServerTestHelper::valueReadCallback(UA_Server* /*server*/,
+                                              const UA_NodeId* /*sessionId*/,
+                                              void* /*sessionContext*/,
+                                              const UA_NodeId* nodeId,
+                                              void* nodeContext,
+                                              const UA_NumericRange* /*range*/,
+                                              const UA_DataValue* /*value*/)
+{
+    auto* self = static_cast<OpcUaServerTestHelper*>(nodeContext);
+    {
+        std::scoped_lock lock(self->readCountsMutex);
+        self->readCounts[OpcUaNodeId(*nodeId)]++;
+    }
+    self->readCountsCv.notify_all();
+}
+
+size_t OpcUaServerTestHelper::getReadCount(const OpcUaNodeId& nodeId) const
+{
+    std::scoped_lock lock(readCountsMutex);
+    const auto it = readCounts.find(nodeId);
+    return it == readCounts.end() ? 0 : it->second;
+}
+
+bool OpcUaServerTestHelper::waitForReadCount(const OpcUaNodeId& nodeId, size_t count, std::chrono::milliseconds timeout) const
+{
+    std::unique_lock lock(readCountsMutex);
+    return readCountsCv.wait_for(lock,
+                                 timeout,
+                                 [&]
+                                 {
+                                     const auto it = readCounts.find(nodeId);
+                                     return it != readCounts.end() && it->second >= count;
+                                 });
 }
 
 void OpcUaServerTestHelper::addPropertyImpl(const std::string& name,

@@ -43,6 +43,10 @@ public:
     bool hasSourceTimestamp() const;
     UA_DateTime getSourceTimestampUnixEpoch() const;  // us
 
+    // Valid only when isDateTime(): the DateTime scalar re-based from OPC UA's 100 ns ticks since
+    // 1601-01-01 to microseconds since the UNIX epoch. Signed, so pre-1970 dates stay negative.
+    int64_t getDateTimeValueUnixEpoch() const;  // us
+
     bool isStatusOK() const;
 
     bool isInteger() const;
@@ -51,6 +55,7 @@ public:
     bool isNull() const;
     bool isReal() const;
     bool isNumber() const;
+    bool isDateTime() const;
 
     std::string toString() const;
     int64_t toInteger() const;
