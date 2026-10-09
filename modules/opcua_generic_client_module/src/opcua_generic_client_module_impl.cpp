@@ -257,7 +257,7 @@ OpcUaGenericClientModule::DeviceInfoList OpcUaGenericClientModule::readDeviceInf
         auto list = readDeviceInfoFromRootDevice(client, configuredNodeId);
         if (!list.empty())
         {
-            LOG_I("Device info is read from the node {} set in the config.", configuredNodeId.toString());
+            LOG_D("Device info is read from the node {} set in the config.", configuredNodeId.toString());
             return list;
         }
         LOG_W("No device info is read from the node {} set in the config. Looking for a device in the DeviceSet instead.",
@@ -573,11 +573,15 @@ OpcUaGenericClientModule::DeviceInfoList OpcUaGenericClientModule::readDeviceInf
 
         for (const auto& [browseName, ref] : refs)
         {
+            // properties that are not a part of the device info are not read at all
+            if (deviceInfoMap.count(browseName) == 0)
+                continue;
+
             OpcUaNodeId childId(ref->nodeId.nodeId);
             try
             {
                 const auto value = client->readValue(childId);
-                if ((deviceInfoMap.count(browseName) == 0) || !value.isScalar())
+                if (!value.isScalar())
                     continue;
                 list.emplace_back(browseName, value);
             }
