@@ -54,7 +54,7 @@ OpcUaNodeId TmsObjectTest::getChildNodeId(const OpcUaNodeId& parent, const std::
     br->nodesToBrowse[0].nodeId = parent.copyAndGetDetachedValue();
     br->nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL;
 
-    OpcUaObject<UA_BrowseResponse> result = UA_Client_Service_browse(client->getUaClient(), *br);
+    OpcUaObject<UA_BrowseResponse> result = UA_Client_Service_browse(client->getLockedUaClient(), *br);
 
     if (result->resultsSize == 0)
         return OpcUaNodeId(UA_NODEID_NULL);
@@ -82,7 +82,7 @@ OpcUaObject<UA_BrowseResponse> TmsObjectTest::browseNode(const daq::opcua::OpcUa
     br->nodesToBrowse[0].nodeId = nodeId.copyAndGetDetachedValue();
     br->nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL;
 
-    OpcUaObject<UA_BrowseResponse> result = UA_Client_Service_browse(client->getUaClient(), *br);
+    OpcUaObject<UA_BrowseResponse> result = UA_Client_Service_browse(client->getLockedUaClient(), *br);
     if (result->resultsSize == 0)
         throw OpcUaException(UA_STATUSCODE_BADUNEXPECTEDERROR, "");
     CheckStatusCodeException(result->results[0].statusCode);

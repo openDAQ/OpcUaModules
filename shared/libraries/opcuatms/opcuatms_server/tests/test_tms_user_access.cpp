@@ -107,7 +107,7 @@ public:
         br->nodesToBrowse[0].nodeId = parent.copyAndGetDetachedValue();
         br->nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL;
 
-        OpcUaObject<UA_BrowseResponse> result = UA_Client_Service_browse(adminClient->getUaClient(), *br);
+        OpcUaObject<UA_BrowseResponse> result = UA_Client_Service_browse(adminClient->getLockedUaClient(), *br);
 
         if (result->resultsSize == 0)
             return OpcUaNodeId(UA_NODEID_NULL);
@@ -129,14 +129,14 @@ public:
     auto readWriteMask(daq::opcua::OpcUaNodeId nodeId)
     {
         UA_UInt32 value;
-        CheckStatusCodeException(UA_Client_readWriteMaskAttribute(client->getUaClient(), *nodeId, &value));
+        CheckStatusCodeException(UA_Client_readWriteMaskAttribute(client->getLockedUaClient(), *nodeId, &value));
         return value;
     }
 
     auto readUserWriteMask(daq::opcua::OpcUaNodeId nodeId)
     {
         UA_UInt32 value;
-        CheckStatusCodeException(UA_Client_readUserWriteMaskAttribute(client->getUaClient(), *nodeId, &value));
+        CheckStatusCodeException(UA_Client_readUserWriteMaskAttribute(client->getLockedUaClient(), *nodeId, &value));
         return value;
     }
 
