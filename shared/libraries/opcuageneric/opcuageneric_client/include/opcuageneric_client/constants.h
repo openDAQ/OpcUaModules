@@ -43,6 +43,14 @@ static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NODE_ID_NUMERIC = "Devic
 static constexpr const char* PROPERTY_NAME_OPCUA_DEVICE_NAMESPACE_INDEX = "DeviceNamespaceIndex";
 // ----------
 
+// OPC UA Device Integration model (OPC 10000-100), used for DeviceInfo reading
+// ----------
+static constexpr const char* OPCUA_DI_NAMESPACE_URI = "http://opcfoundation.org/UA/DI/";
+static constexpr uint32_t OPCUA_DI_DEVICE_SET_ID = 5001;
+static constexpr uint32_t OPCUA_DI_DEVICE_TYPE_ID = 1002;
+static constexpr uint32_t OPCUA_DI_COMPONENT_TYPE_ID = 15063;
+// ----------
+
 // Defaults
 // ----------
 // Device and module

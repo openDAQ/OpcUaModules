@@ -44,9 +44,7 @@ public:
         return device;
     }
 
-    // Waits until the reader holds at least `count` packets. Tests wait for the evidence instead of
-    // assuming a sampling rate: a slow runner takes longer to deliver the packets, it does not deliver
-    // fewer of them, so a generous timeout keeps the assertion meaningful everywhere.
+    // Waits until the reader holds at least `count` packets
     template <typename ReaderPtr>
     static bool waitForPackets(const ReaderPtr& reader, daq::SizeT count, std::chrono::milliseconds timeout)
     {

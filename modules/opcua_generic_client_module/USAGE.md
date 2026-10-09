@@ -70,8 +70,9 @@ Set it when you want the same device to keep the same identifier across applicat
 example when configuration is stored per component path. Leave it empty to let the module derive one.
 
 The value is used as-is unless it is empty or already taken by a sibling device; in those cases the
-module falls back, in order, to `<Manufacturer>_<SerialNumber>` read from the device root node, then
-the server's `ApplicationUri` (with `/` replaced by `-`), then a generated
+module falls back, in order, to `<Manufacturer>_<SerialNumber>` read from the device node (see
+`DeviceNodeID*` below; the `SerialNumber` alone when the node has no `Manufacturer`), then the
+server's `ApplicationUri` (with `/` replaced by `-`), then a generated
 `GenericOPCUAClientPseudoDevice<N>`.
 
 Note this is not the device *name*: the name comes from the server's application description, and is
@@ -113,26 +114,48 @@ device.setPropertyValue("DefaultSamplingInterval", 500);   // blocks added from 
 ---
 
 **`DeviceNodeIDType` / `DeviceNodeIDString` / `DeviceNodeIDNumeric` / `DeviceNamespaceIndex`** — the
-address of one node on the server that describes the device itself, typically a `DeviceType` or
-`ComponentType` object from the OPC UA DI companion specification.
+address of the node on the server that describes the device itself — typically a `DeviceType` or
+`ComponentType` object from the OPC UA Device Integration model (OPC 10000-100), but any node that
+carries the properties listed below will do; its type is not checked.
 
 The four properties together form a single NodeID: `DeviceNodeIDType` selects which identifier is
 used (`1` = String → `DeviceNodeIDString`, `0` = Numeric → `DeviceNodeIDNumeric`), and
 `DeviceNamespaceIndex` is the namespace of that identifier. Only the matching identifier property is
 visible in a UI; the other one is hidden.
 
-The whole group is **optional** and serves two purposes:
+The node is used for two things:
 
 * filling in `device.getInfo()` — the module browses the node's `HasProperty` children and takes
   `SerialNumber`, `Manufacturer`, `Model`, `DeviceRevision`, `SoftwareRevision`, `HardwareRevision`,
   `DeviceManual`, `DeviceClass`, `RevisionCounter`, `ManufacturerUri`, `ProductCode`,
   `ProductInstanceUri`, `AssetId`, `ComponentName` from it;
-* deriving a stable `LocalId` from `Manufacturer` + `SerialNumber` when `LocalId` is empty.
+* deriving a stable `LocalId` when `LocalId` is empty: `<Manufacturer>_<SerialNumber>`, or the
+  `SerialNumber` alone when the node has no `Manufacturer`. A node without a `SerialNumber` gives no
+  `LocalId`.
 
-Leaving it unset (String type with an empty string, or numeric `0` in namespace `0`) simply skips
-that step and logs a warning. A node that does not exist, or properties you have no rights to read,
-are skipped as well — they never make `addDevice` fail. The data is read once, at connect time; it is
-not refreshed after a reconnect.
+The whole group is **optional**. The node from the config is tried first; the module falls back to
+the server's `DeviceSet` object when the node
+
+* is not set (String type with an empty string, or numeric `0` in namespace `0`),
+* does not exist on the server, or
+* provides none of the properties listed above.
+
+The fallback browses the hierarchical references of `DeviceSet` (`i=5001` in the
+`http://opcfoundation.org/UA/DI/` namespace) and keeps the objects whose type is `ComponentType` or
+`DeviceType`, or a vendor type derived from one of them. It uses the device only when **exactly one**
+is found:
+
+| Server | Result of the fallback |
+|---|---|
+| `DeviceSet` references one device | that device is used |
+| `DeviceSet` references no device | nothing is read |
+| `DeviceSet` references several devices | nothing is read — none of them stands for the server as a whole; point `DeviceNodeID*` at the one you want |
+| no Device Integration namespace | nothing is read — there is no `DeviceSet`; `DeviceNodeID*` is the only way to get device info from such a server |
+
+When nothing is read, `device.getInfo()` keeps its defaults and the `LocalId` falls back to the
+server's `ApplicationUri`. Properties you have no rights to read are skipped as well. The reason is
+always written to the log and none of this ever makes `addDevice` fail. The data is read once, at
+connect time; it is not refreshed after a reconnect.
 
 ```cpp
 cfg.setPropertyValue("DeviceNodeIDType", 1);          // String
@@ -333,5 +356,21 @@ and after a successful reconnect every block re-validates its node and resumes.
 device.removeFunctionBlock(fb);
 instance.removeDevice(device);
 ```
+
+Removing the device waits for the module's threads to finish what they are doing; removing a block does
+not wait. Both have to come from a thread of your application. Code that the module calls runs on the
+module's own threads: core event handlers (`context.getOnCoreEvent()`, `daq.EventHandler` in Python) and
+the `setOnDataAvailable` callback of a reader on a block's signal. For that code:
+
+* **Do not remove a block or the device from it.** Removing the device there would wait for the very call
+  it was made from: it throws and leaves the device half-removed. Hand the request to another thread and
+  return.
+* **Do not make it wait for a thread that removes the device** — no blocking cross-thread call.
+* **Keep it to data and status.** Reading samples, `getName()`, `getGlobalId()` and the status container
+  are fine. Do not read properties of the device in a core event handler, and do not read properties of
+  the block or of the device in a data callback: if the block or the device is being removed at that
+  moment, the two can end up waiting for each other.
+
+Remove a block with `device.removeFunctionBlock(fb)`, not with `fb.remove()`.
 
 ---

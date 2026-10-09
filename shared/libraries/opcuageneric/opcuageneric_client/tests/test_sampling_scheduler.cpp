@@ -6,6 +6,8 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <functional>
+#include <future>
 #include <limits>
 #include <mutex>
 #include <thread>
@@ -55,7 +57,10 @@ namespace
 
         void onConnectionRestored() override
         {
-            revalidations++;
+            {
+                std::scoped_lock lock(mutex);
+                revalidations++;
+            }
             cv.notify_all();
         }
 
@@ -82,6 +87,13 @@ namespace
         {
             std::unique_lock lock(mutex);
             return cv.wait_for(lock, timeout, [&] { return sampleTimes.size() >= count; });
+        }
+
+        // Blocks until the item was revalidated at least count times, or the timeout elapses.
+        bool waitForRevalidations(size_t count, std::chrono::milliseconds timeout)
+        {
+            std::unique_lock lock(mutex);
+            return cv.wait_for(lock, timeout, [&] { return revalidations.load() >= count; });
         }
 
         std::atomic<std::chrono::milliseconds> sampleDelay{0ms};
@@ -111,6 +123,112 @@ namespace
 
         std::sort(gaps.begin(), gaps.end());
         return gaps[gaps.size() / 2];
+    }
+
+    // Parks the first caller of pass() until open() is called.
+    class Gate
+    {
+    public:
+        void pass()
+        {
+            if (used.exchange(true))
+                return;
+
+            entered.set_value();
+            openedFuture.wait();
+        }
+
+        bool waitUntilEntered(std::chrono::milliseconds timeout)
+        {
+            return entered.get_future().wait_for(timeout) == std::future_status::ready;
+        }
+
+        void open()
+        {
+            if (!openRequested.exchange(true))
+                opened.set_value();
+        }
+
+    private:
+        std::atomic<bool> used{false};
+        std::atomic<bool> openRequested{false};
+        std::promise<void> entered;
+        std::promise<void> opened;
+        std::shared_future<void> openedFuture{opened.get_future().share()};
+    };
+
+    DECLARE_OPENDAQ_INTERFACE(IOwnedItem, daq::IBaseObject){};
+
+    // An item that is an openDAQ object, so that the scheduler can be given an owner to hold on to.
+    // Whatever a test wants to learn from it goes through the hooks, as the item itself may be gone by
+    // the time the test looks.
+    class OwnedItem : public daq::ImplementationOfWeak<IOwnedItem>, public ISampledItem
+    {
+    public:
+        struct Hooks
+        {
+            std::function<void()> onSample;
+            std::function<void()> onRevalidation;
+            // Runs first thing in the destructor, before the item unregisters.
+            std::function<void()> onDestroy;
+        };
+
+        OwnedItem(SamplingScheduler& scheduler, Hooks hooks)
+            : scheduler(&scheduler)
+            , hooks(std::move(hooks))
+        {
+        }
+
+        ~OwnedItem() override
+        {
+            if (hooks.onDestroy)
+                hooks.onDestroy();
+
+            if (auto* sched = scheduler.exchange(nullptr); sched != nullptr)
+                sched->unregisterItem(this);
+        }
+
+        uint32_t getSamplingInterval() const override
+        {
+            return 5;
+        }
+
+        void processSample() override
+        {
+            if (hooks.onSample)
+                hooks.onSample();
+        }
+
+        void onConnectionRestored() override
+        {
+            if (hooks.onRevalidation)
+                hooks.onRevalidation();
+        }
+
+        void onSchedulerDestroyed() override
+        {
+            scheduler = nullptr;
+        }
+
+    private:
+        std::atomic<SamplingScheduler*> scheduler;
+        Hooks hooks;
+    };
+
+    struct OwnedItemHandle
+    {
+        // The only reference to the item apart from those the scheduler takes for the duration of a call.
+        daq::ObjectPtr<IOwnedItem> owner;
+        OwnedItem* item;
+    };
+
+    OwnedItemHandle registerOwnedItem(SamplingScheduler& scheduler, OwnedItem::Hooks hooks)
+    {
+        OwnedItemHandle handle;
+        handle.owner = daq::createWithImplementation<IOwnedItem, OwnedItem>(scheduler, std::move(hooks));
+        handle.item = static_cast<OwnedItem*>(handle.owner.getObject());
+        scheduler.registerItem(handle.item, handle.owner);
+        return handle;
     }
 
     // Samples taken in [from, from + window). Bounding this from above is safe on any runner: being
@@ -262,28 +380,131 @@ TEST(SamplingSchedulerTest, ChangedIntervalTakesEffect)
     EXPECT_LT(medianGapMs(item.takeSampleTimes(), beforeChange + 1), slowInterval.count() / 2);
 }
 
-TEST(SamplingSchedulerTest, UnregisterWaitsForSampleInProgress)
+TEST(SamplingSchedulerTest, UnregisterDoesNotWaitForSampleInProgress)
 {
-    FakeItem item(20);
+    constexpr auto patience = 5s;
+    Gate sample;
+    std::atomic<size_t> samples{0};
+    FakeItem witness(20);
     SamplingScheduler scheduler(nullptr);
+
+    OwnedItem::Hooks hooks;
+    hooks.onSample = [&]
+    {
+        samples++;
+        sample.pass();
+    };
+    const auto handle = registerOwnedItem(scheduler, hooks);
     scheduler.start();
-    scheduler.registerItem(&item);
+    ASSERT_TRUE(sample.waitUntilEntered(patience));
 
-    ASSERT_TRUE(item.waitForSamples(1, 1s));
-    item.sampleDelay = 300ms;
-    ASSERT_TRUE(item.waitForSamples(2, 1s));  // the sample that sleeps has just started
+    auto unregistered = std::async(std::launch::async, [&] { scheduler.unregisterItem(handle.item); });
+    EXPECT_EQ(unregistered.wait_for(patience), std::future_status::ready) << "unregisterItem() waits for the sample in progress";
 
-    const auto start = Clock::now();
-    scheduler.unregisterItem(&item);
-    const auto elapsed = Clock::now() - start;
+    sample.open();
+    unregistered.get();
 
-    // unregisterItem must not return while the item is still being sampled.
-    EXPECT_GE(elapsed, 100ms);
+    // The call that was in progress is the last one. The scheduler serves the earliest deadline first,
+    // and the witness has a longer interval than the item: were the item still registered, it would
+    // have been sampled again before the second sample of the witness.
+    scheduler.registerItem(&witness);
+    ASSERT_TRUE(witness.waitForSamples(2, patience));
+    EXPECT_EQ(samples.load(), 1u);
 
-    const auto afterUnregister = item.sampleCount();
-    std::this_thread::sleep_for(100ms);
-    EXPECT_EQ(item.sampleCount(), afterUnregister);
+    scheduler.stop();
+}
 
+TEST(SamplingSchedulerTest, OwnerIsKeptAliveDuringSampleInProgress)
+{
+    constexpr auto patience = 5s;
+    Gate sample;
+    std::promise<void> destroyed;
+    auto destroyedFuture = destroyed.get_future();
+    FakeItem other(20);
+    SamplingScheduler scheduler(nullptr);
+
+    OwnedItem::Hooks hooks;
+    hooks.onSample = [&] { sample.pass(); };
+    hooks.onDestroy = [&] { destroyed.set_value(); };
+    auto handle = registerOwnedItem(scheduler, hooks);
+    scheduler.start();
+    ASSERT_TRUE(sample.waitUntilEntered(patience));
+
+    // Without the reference of the scheduler the item would be destroyed right here, under the call.
+    handle.owner.release();
+    EXPECT_EQ(destroyedFuture.wait_for(0ms), std::future_status::timeout);
+
+    sample.open();
+    ASSERT_EQ(destroyedFuture.wait_for(patience), std::future_status::ready);
+
+    // The item went away on the scheduler thread and unregistered itself from there. The scheduler has
+    // to be in working order after that.
+    scheduler.registerItem(&other);
+    EXPECT_TRUE(other.waitForSamples(1, patience));
+
+    scheduler.stop();
+}
+
+TEST(SamplingSchedulerTest, OwnerIsKeptAliveDuringRevalidationInProgress)
+{
+    constexpr auto patience = 5s;
+    Gate revalidation;
+    std::promise<void> destroyed;
+    auto destroyedFuture = destroyed.get_future();
+    FakeItem other(20);
+    SamplingScheduler scheduler(nullptr);
+
+    OwnedItem::Hooks hooks;
+    hooks.onRevalidation = [&] { revalidation.pass(); };
+    hooks.onDestroy = [&] { destroyed.set_value(); };
+    auto handle = registerOwnedItem(scheduler, hooks);
+    scheduler.start();
+    scheduler.onReconnected();
+    ASSERT_TRUE(revalidation.waitUntilEntered(patience));
+
+    handle.owner.release();
+    EXPECT_EQ(destroyedFuture.wait_for(0ms), std::future_status::timeout);
+
+    revalidation.open();
+    ASSERT_EQ(destroyedFuture.wait_for(patience), std::future_status::ready);
+
+    scheduler.registerItem(&other);
+    EXPECT_TRUE(other.waitForSamples(1, patience));
+
+    scheduler.stop();
+}
+
+TEST(SamplingSchedulerTest, ItemWhoseOwnerIsBeingDestroyedIsNotCalled)
+{
+    constexpr auto patience = 5s;
+    Gate destructor;
+    std::atomic<size_t> calls{0};
+    FakeItem witness(20);
+    SamplingScheduler scheduler(nullptr);
+
+    OwnedItem::Hooks hooks;
+    hooks.onSample = [&] { calls++; };
+    hooks.onRevalidation = [&] { calls++; };
+    hooks.onDestroy = [&] { destructor.pass(); };
+    auto handle = registerOwnedItem(scheduler, hooks);
+    scheduler.registerItem(&witness);
+
+    // The destructor is held back before it unregisters the item: the scheduler still has the item in
+    // its list, but there is nothing left that it could hold on to.
+    auto released = std::async(std::launch::async, [&] { handle.owner.release(); });
+    ASSERT_TRUE(destructor.waitUntilEntered(patience));
+
+    // Requested before the start, so that the revalidation is the first thing the scheduler does and
+    // finds the item still in the list. The witness was registered after the item and comes after it
+    // in both passes: once it has been revalidated and sampled, the scheduler has been past the item.
+    scheduler.onReconnected();
+    scheduler.start();
+    ASSERT_TRUE(witness.waitForRevalidations(1, patience));
+    ASSERT_TRUE(witness.waitForSamples(1, patience));
+    EXPECT_EQ(calls.load(), 0u);
+
+    destructor.open();
+    released.get();
     scheduler.stop();
 }
 

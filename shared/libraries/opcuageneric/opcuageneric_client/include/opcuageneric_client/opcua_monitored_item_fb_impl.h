@@ -22,6 +22,7 @@
 #include <opcuageneric_client/sampling_scheduler.h>
 #include <opendaq/data_packet_ptr.h>
 #include <opendaq/function_block_impl.h>
+#include <optional>
 #include "opcuaclient/opcuaclient.h"
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_GENERIC
@@ -77,8 +78,12 @@ protected:
 
     std::atomic<uint32_t> samplingIntervalMs{DEFAULT_OPCUA_MIFB_SAMPLING_INTERVAL};
 
+    // Domain value (us since the Unix epoch) of the last published sample
+    // A sample resolving to the same value is not published again
+    std::optional<uint64_t> lastPublishedDomainTs;
+
     // Not owned. The device owns the scheduler and destroys it before the component tree releases this
-    // block, so the scheduler clears this pointer from its destructor. Atomic because removed() and that
+    // block, so the scheduler clears this pointer from its destructor. Atomic because a removal and that
     // teardown can reach it from different threads.
     std::atomic<SamplingScheduler*> scheduler;
     std::recursive_mutex processingMutex;
@@ -91,13 +96,14 @@ protected:
     utils::Error exceptionErr;
 
     void removed() override;
+    void detachFromScheduler();
     static std::string generateLocalId();
 
     void initStatusContainer();
     static DataDescriptorPtr buildTimeDescriptor(daq::SampleType sampleType);
     void adjustSignalDescriptor();
     void createSignal();
-    void reconfigureSignal(const FbConfig& prevConfig);
+    void reconfigureSignal();
     SignalConfigPtr createDomainSignal();
 
     void initProperties(const PropertyObjectPtr& config, DomainSource initialDomainSource, uint32_t initialSamplingIntervalMs);
@@ -110,10 +116,11 @@ protected:
     bool validateResponse(const OpcUaDataValue& value);
     bool validateValueDataType(const OpcUaDataValue& value);
 
-    void detachFromScheduler();
+    std::optional<uint64_t> resolveDomainTimestamp(const OpcUaDataValue& value) const;
+    bool isNewDomainTimestamp(uint64_t ts) const;
 
-    DataPackets buildDataPacket(const OpcUaDataValue& value);
-    daq::DataPacketPtr buildDomainDataPacket(const OpcUaDataValue& value);
+    DataPackets buildDataPacket(const OpcUaDataValue& value, const std::optional<uint64_t>& domainTs);
+    daq::DataPacketPtr buildDomainDataPacket(uint64_t ts);
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA_GENERIC
