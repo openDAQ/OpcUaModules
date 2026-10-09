@@ -16,11 +16,11 @@
 
 #pragma once
 
+#include <deque>
 #include <functional>
 #include <future>
 #include <mutex>
 #include <string>
-#include <vector>
 #include <opendaq/utils/thread_ex.h>
 #include <unordered_set>
 
@@ -88,6 +88,7 @@ public:
     void setClientConnectedHandler(const OnClientConnectedCallback& callback);
     void setClientInfoHandler(const OnSetClientInfoCallback& callback);
     void setClientDisconnectedHandler(const OnClientDisconnectedCallback& callback);
+    void scheduleClientInfoChainTask(std::function<void()> task);
     void setAllowBrowsingNodeCallback(const OnAllowBrowsingNodeCallback& callback);
     void setGetUserRightsMaskCallback(const OnGetUserRightsMaskCallback& callback);
     void setGetUserAccessLevelCallback(const OnGetUserAccessLevelCallback& callback);
@@ -184,6 +185,8 @@ private:
                                  const sockaddr_storage& addr,
                                  socklen_t addrLen);
     void waitForPendingClientInfoFutures();
+    void processClientInfo(ClientConnectionInfo& info, const sockaddr_storage& addr, socklen_t addrLen);
+    void continueClientInfoChain();
 
     static UA_StatusCode activateSession(UA_Server* server,
                                          UA_AccessControl* ac,
@@ -220,8 +223,9 @@ private:
     OnClientConnectedCallback clientConnectedHandler;
     OnSetClientInfoCallback clientInfoHandler;
     OnClientDisconnectedCallback clientDisconnectedHandler;
-    std::vector<std::future<void>> pendingClientInfoFutures;
-    std::mutex pendingClientInfoFuturesMutex;
+    std::future<void> clientInfoChain;
+    std::deque<std::function<void()>> clientInfoChainWaiting;
+    std::mutex clientInfoChainMutex;
 };
 
 END_NAMESPACE_OPENDAQ_OPCUA
