@@ -44,7 +44,7 @@ public:
         DaqInstanceInit();
         auto client = std::make_shared<daq::opcua::OpcUaClient>(serverUrl);
         device = daq::createWithImplementation<daq::IDevice, daq::opcua::generic::OpcuaGenericClientDeviceImpl>(
-            daqInstance.getContext(), daqInstance, client, "", "", 100);
+            daqInstance.getContext(), daqInstance.getRootDevice(), client, "", "", 100);
         return device;
     }
 
