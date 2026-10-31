@@ -72,27 +72,27 @@ public:
     virtual void createNonhierarchicalReferences();
     virtual void onCoreEvent(const CoreEventArgsPtr& eventArgs);
 
-    static UA_Boolean allowBrowsingNodeCallback(UA_Server* server,
+    static UA_Boolean AllowBrowsingNodeCallback(UA_Server* server,
                    UA_AccessControl* ac,
                    const UA_NodeId* sessionId,
                    void* sessionContext,
                    const UA_NodeId* nodeId,
                    void* nodeContext);
 
-    static UA_UInt32 getUserRightsMaskCallback(UA_Server* server,
+    static UA_UInt32 GetUserRightsMaskCallback(UA_Server* server,
                                        UA_AccessControl* ac,
                                        const UA_NodeId* sessionId,
                                        void* sessionContext,
                                        const UA_NodeId* nodeId,
                                        void* nodeContext);
 
-    static UA_Byte getUserAccessLevelCallback(UA_Server* server,
+    static UA_Byte GetUserAccessLevelCallback(UA_Server* server,
                                               UA_AccessControl* ac,
                                               const UA_NodeId* sessionId,
                                               void* sessionContext,
                                               const UA_NodeId* nodeId,
                                               void* nodeContext);
-    static UA_Boolean getUserExecutableCallback(UA_Server* server,
+    static UA_Boolean GetUserExecutableCallback(UA_Server* server,
                                                 UA_AccessControl* ac,
                                                 const UA_NodeId* sessionId,
                                                 void* sessionContext,
@@ -110,7 +110,7 @@ public:
         return ptr;
     }
 
-    static bool checkPermission(const Permission permission, const UA_NodeId* const nodeId, void* const sessionContext, void* const nodeContext);
+    static bool CheckPermission(const Permission permission, const UA_NodeId* const nodeId, void* const sessionContext, void* const nodeContext);
     virtual bool checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext);
     std::string readBrowseName(const opcua::OpcUaNodeId& nodeId);
 

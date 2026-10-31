@@ -99,43 +99,43 @@ void TmsServerObject::onCoreEvent(const CoreEventArgsPtr& /*eventArgs*/)
 {
 }
 
-UA_Boolean TmsServerObject::allowBrowsingNodeCallback(UA_Server* server,
+UA_Boolean TmsServerObject::AllowBrowsingNodeCallback(UA_Server* server,
                                             UA_AccessControl* ac,
                                             const UA_NodeId* sessionId,
                                             void* sessionContext,
                                             const UA_NodeId* nodeId,
                                             void* nodeContext)
 {
-    return checkPermission(Permission::Read, nodeId, sessionContext, nodeContext);
+    return CheckPermission(Permission::Read, nodeId, sessionContext, nodeContext);
 }
 
-UA_UInt32 TmsServerObject::getUserRightsMaskCallback(UA_Server *server, UA_AccessControl *ac,
+UA_UInt32 TmsServerObject::GetUserRightsMaskCallback(UA_Server *server, UA_AccessControl *ac,
                                              const UA_NodeId *sessionId, void *sessionContext,
                                              const UA_NodeId *nodeId, void *nodeContext)
 {
-    return checkPermission(Permission::Write, nodeId, sessionContext, nodeContext) ? 0xFFFFFFFF : 0;
+    return CheckPermission(Permission::Write, nodeId, sessionContext, nodeContext) ? 0xFFFFFFFF : 0;
 }
 
-UA_Byte TmsServerObject::getUserAccessLevelCallback(
+UA_Byte TmsServerObject::GetUserAccessLevelCallback(
     UA_Server* server, UA_AccessControl* ac, const UA_NodeId* sessionId, void* sessionContext, const UA_NodeId* nodeId, void* nodeContext)
 {
     constexpr UA_Byte readMask = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_HISTORYREAD;
     constexpr UA_Byte writeMask = UA_ACCESSLEVELMASK_WRITE | UA_ACCESSLEVELMASK_HISTORYWRITE | UA_ACCESSLEVELMASK_SEMANTICCHANGE |
                                   UA_ACCESSLEVELMASK_STATUSWRITE | UA_ACCESSLEVELMASK_TIMESTAMPWRITE;
     UA_Byte mask = 0xFF;
-    mask = checkPermission(Permission::Read, nodeId, sessionContext, nodeContext) ? (mask | readMask) : (mask & ~readMask);
-    mask = checkPermission(Permission::Write, nodeId, sessionContext, nodeContext) ? (mask | writeMask) : (mask & ~writeMask);
+    mask = CheckPermission(Permission::Read, nodeId, sessionContext, nodeContext) ? (mask | readMask) : (mask & ~readMask);
+    mask = CheckPermission(Permission::Write, nodeId, sessionContext, nodeContext) ? (mask | writeMask) : (mask & ~writeMask);
     return mask;
 }
 
-UA_Boolean TmsServerObject::getUserExecutableCallback(UA_Server* server,
+UA_Boolean TmsServerObject::GetUserExecutableCallback(UA_Server* server,
                                                       UA_AccessControl* ac,
                                                       const UA_NodeId* sessionId,
                                                       void* sessionContext,
                                                       const UA_NodeId* methodId,
                                                       void* methodContext)
 {
-    return checkPermission(Permission::Execute, methodId, sessionContext, methodContext);
+    return CheckPermission(Permission::Execute, methodId, sessionContext, methodContext);
 }
 
 NodeEventManagerPtr TmsServerObject::addEvent(const StringPtr& nodeName)
@@ -206,14 +206,14 @@ bool TmsServerObject::hasChildNode(const std::string& nodeName) const
     return references.count(nodeName) != 0;
 }
 
-bool TmsServerObject::checkPermission(const Permission permission,
+bool TmsServerObject::CheckPermission(const Permission permission,
                                       const UA_NodeId* const nodeId,
                                       void* const sessionContext,
                                       void* const nodeContext)
 {
     if (nodeContext == nullptr || sessionContext == nullptr)
         return true;
-    return static_cast<TmsServerObject*>(nodeContext)->checkPermission(permission, nodeId, static_cast<OpcUaSession*>(sessionContext));;
+    return static_cast<TmsServerObject*>(nodeContext)->checkPermission(permission, nodeId, static_cast<OpcUaSession*>(sessionContext));
 }
 
 bool TmsServerObject::checkPermission(const Permission permission, const UA_NodeId* const nodeId, const OpcUaSession* const sessionContext)
