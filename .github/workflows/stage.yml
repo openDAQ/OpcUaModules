@@ -5,53 +5,85 @@ on:
     - cron: '0 2 * * 1'
   workflow_dispatch:
     inputs:
+      ref:
+        description: "The commit to stage, in full (empty: the head of the branch dispatched on)"
+        default: ""
       opendaq-ref:
         description: "openDAQ commit, branch or tag. If empty, uses the opendaq_ref file from the repo."
         default: ""
+      include-jobs:
+        description: 'The jobs to build, a JSON list, e.g. ["macos-26-armv8-ninja-appleclang-21-release"] (empty: all)'
+        default: ""
 
+# one commit staged once at a time
+concurrency:
+  group: stage-${{ inputs.ref || github.sha }}
 
 jobs:
   resolve:
-    name: Resolve the core commit
+    name: Resolve the commits
     runs-on: ubuntu-latest
     outputs:
-      opendaq-ref: ${{ steps.core.outputs.ref }}
-      channel: ${{ steps.channel.outputs.channel }}
+      ref: ${{ steps.stagings.outputs.ref }}
+      opendaq-ref: ${{ steps.stagings.outputs.opendaq-ref }}
       jobs: ${{ steps.stagings.outputs.jobs }}
       staging-pull: ${{ steps.stagings.outputs.staging-pull }}
       opendaq-artifacts: ${{ steps.stagings.outputs.opendaq-artifacts }}
+      staging-push: ${{ steps.stagings.outputs.staging-push }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
-      - uses: openDAQ/openDAQ-CI/.github/actions/resolve-channel@v4
-        id: channel
-
-      # the input, or else opendaq_ref; a branch or a tag is resolved to the commit, which is
-      # what the core staging is found by and what this staging records
-      - name: Resolve the core commit
-        id: core
-        shell: bash
-        env:
-          REF: ${{ inputs.opendaq-ref }}
-        run: |
-          ref="${REF:-$(cat opendaq_ref)}"
-          sha="$ref"
-          if ! [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
-            sha=$(git ls-remote https://github.com/openDAQ/openDAQ "$ref" "$ref^{}" | sort -k2 | tail -1 | cut -f1)
-          fi
-          [ -n "$sha" ] || { echo "::error::$ref names no openDAQ commit"; exit 1; }
-          echo "core: $ref -> $sha"
-          echo "ref=$sha" >> "$GITHUB_OUTPUT"
-
-      # the jobs to build, and the openDAQ staging each of them builds against
+      # the commit staged and the core it is built against; where each lies picks its channel (release/** stable,
+      # main dev) and whether the staging is pushed: only a commit on one of them, against a core on one of them
       - name: Request the openDAQ stagings
         id: stagings
         shell: python3 {0}
         env:
-          CHANNEL: ${{ steps.channel.outputs.channel }}
-          OPENDAQ_REF: ${{ steps.core.outputs.ref }}
+          GH_TOKEN: ${{ github.token }}
+          OPENDAQ_REF: ${{ inputs.opendaq-ref }}
+          INCLUDE_JOBS: ${{ inputs.include-jobs }}
+          OWNER: ${{ github.repository_owner }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          import json, os
+          import json, os, re, subprocess, sys, urllib.parse
+
+          def gh(*args):
+              return subprocess.run(["gh", "api", *args], capture_output=True, text=True, check=True).stdout
+
+          def channel(repository, sha):
+              """Where a commit lies: stable on a release/** branch (first), dev on main, else None."""
+              branches = [b for b in gh(f"repos/{repository}/branches", "--paginate", "-q", ".[].name").split()
+                          if b.startswith("release/")] + ["main"]
+              for branch in branches:
+                  compare = subprocess.run(["gh", "api", f"repos/{repository}/compare/{urllib.parse.quote(branch, safe='')}...{sha}",
+                                            "-q", ".status"], capture_output=True, text=True)
+                  if compare.stdout.strip() in ("identical", "behind"):
+                      return "stable" if branch.startswith("release/") else "dev"
+              return None
+
+          sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+
+          # the input, or else opendaq_ref; a branch or a tag is resolved to the commit, which is what the core
+          # staging is found by and what this staging records
+          core = os.environ["OPENDAQ_REF"] or open("opendaq_ref").read().strip()
+          if not re.fullmatch(r"[0-9a-f]{40}", core):
+              out = subprocess.run(["git", "ls-remote", "https://github.com/openDAQ/openDAQ", core, f"{core}^{{}}"],
+                                   capture_output=True, text=True, check=True).stdout
+              # the peeled tag (X^{}) sorts last, so a tag gives its commit, not the tag object
+              core = sorted(out.splitlines(), key=lambda line: line.split("\t")[1])[-1].split("\t")[0] if out else ""
+          if not core:
+              sys.exit(f"::error::{os.environ['OPENDAQ_REF'] or 'opendaq_ref'} names no openDAQ commit")
+
+          # the core's staging is looked for in its channel, and in dev when the core lies on neither branch (staged by
+          # hand); this staging is pushed only when both lie on one
+          core_channel = channel("openDAQ/openDAQ", core)
+          own_channel = channel(os.environ["REPOSITORY"], sha)
+          push = own_channel is not None and core_channel is not None
+          print(f"{os.environ['REPOSITORY']} {sha}: {own_channel or 'on no main or release/**'}; "
+                f"core {core}: {core_channel or 'on no main or release/**'}; push: {push}")
+          core_channel = core_channel or "dev"
 
           # job -> the openDAQ staging it builds against, by triplet
           opendaq = {
@@ -64,11 +96,16 @@ jobs:
               "macos-26-x86_64-ninja-appleclang-21-release": "x86_64-macos-apple-clang-21-release",
               "macos-26-armv8-ninja-appleclang-21-release":  "armv8-macos-apple-clang-21-release",
           }
+          if os.environ["INCLUDE_JOBS"]:
+              wanted = json.loads(os.environ["INCLUDE_JOBS"])
+              if unknown := set(wanted) - set(opendaq):
+                  sys.exit(f"::error::no such jobs: {sorted(unknown)}")
+              opendaq = {job: triplet for job, triplet in opendaq.items() if job in wanted}
 
           # each staging, of the resolved commit, as an artifact of its own ...
           pull = [{"artifact": f"opendaq-{triplet}", "packages": [{
-                      "path": f"ghcr.io/openDAQ/{os.environ['CHANNEL']}/staging/opendaq",
-                      "annotations": {"org.opencontainers.image.revision": os.environ["OPENDAQ_REF"],
+                      "path": f"ghcr.io/{os.environ['OWNER']}/{core_channel}/staging/opendaq",
+                      "annotations": {"org.opencontainers.image.revision": core,
                                       "com.opendaq.package.triplet": triplet}}]}
                   for triplet in opendaq.values()]
 
@@ -76,10 +113,16 @@ jobs:
           artifacts = [{"match-jobs": [job], "artifacts": [{"name": f"opendaq-{triplet}", "dir": "staging-deps"}]}
                        for job, triplet in opendaq.items()]
 
+          staging_push = [{"path": f"ghcr.io/{os.environ['OWNER']}/{own_channel}/staging/opcua-modules",
+                           "artifacts": ["staging-*/opcua"], "tags": ["latest"]}] if push else []
+
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"ref={sha}\n")
+              f.write(f"opendaq-ref={core}\n")
               f.write(f"jobs={json.dumps(list(opendaq))}\n")
               f.write(f"staging-pull={json.dumps(pull)}\n")
               f.write(f"opendaq-artifacts={json.dumps(artifacts)[1:-1]}\n")   # no brackets: it goes inside packages
+              f.write(f"staging-push={json.dumps(staging_push)}\n")
 
   stage:
     needs: resolve
@@ -87,8 +130,9 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: openDAQ/openDAQ-CI/.github/workflows/stage.yml@v4
+    uses: openDAQ/openDAQ-CI/.github/workflows/stage.yml@bundle/extract-each-artifact-into-its-dir
     with:
+      ref: ${{ needs.resolve.outputs.ref }}
       timeout: '[{"timeout-minutes": 180}]'
       include-jobs: ${{ needs.resolve.outputs.jobs }}
       staging-pull: ${{ needs.resolve.outputs.staging-pull }}
@@ -120,11 +164,4 @@ jobs:
             "stagings": [{"name": "opcua"}]
           }
         ]
-      staging-push: >-
-        [
-          {
-            "path": "ghcr.io/${{ github.repository_owner }}/${{ needs.resolve.outputs.channel }}/staging/opcua-modules",
-            "artifacts": ["staging-*/opcua"],
-            "tags": ["latest"]
-          }
-        ]
+      staging-push: ${{ needs.resolve.outputs.staging-push }}
