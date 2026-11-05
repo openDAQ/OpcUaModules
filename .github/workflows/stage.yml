@@ -125,7 +125,7 @@ jobs:
           artifacts = [{"match-jobs": [job], "artifacts": [{"name": name[job], "dir": "staging-deps"}]} for job in opendaq]
 
           staging_push = [{"path": f"ghcr.io/{os.environ['OWNER']}/{os.environ['CHANNEL']}/staging/opcua-modules",
-                           "artifacts": ["opcua-modules-staging-*/opcua"], "tags": ["latest"]}] if os.environ["PUSH"] == "true" else []
+                           "artifacts": ["opcua-modules-staging-*/opcua"]}] if os.environ["PUSH"] == "true" else []
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"jobs={json.dumps(list(opendaq))}\n")
