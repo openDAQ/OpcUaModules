@@ -11,9 +11,6 @@ on:
       opendaq-ref:
         description: "openDAQ commit, branch or tag. If empty, uses the opendaq_ref file from the repo."
         default: ""
-      include-jobs:
-        description: 'The jobs to build, a JSON list, e.g. ["macos-26-armv8-ninja-appleclang-21-release"] (empty: all)'
-        default: ""
 
 # one commit staged once at a time
 concurrency:
@@ -43,7 +40,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           OPENDAQ_REF: ${{ inputs.opendaq-ref }}
-          INCLUDE_JOBS: ${{ inputs.include-jobs }}
           OWNER: ${{ github.repository_owner }}
           REPOSITORY: ${{ github.repository }}
         run: |
@@ -96,11 +92,6 @@ jobs:
               "macos-26-x86_64-ninja-appleclang-21-release": "x86_64-macos-apple-clang-21-release",
               "macos-26-armv8-ninja-appleclang-21-release":  "armv8-macos-apple-clang-21-release",
           }
-          if os.environ["INCLUDE_JOBS"]:
-              wanted = json.loads(os.environ["INCLUDE_JOBS"])
-              if unknown := set(wanted) - set(opendaq):
-                  sys.exit(f"::error::no such jobs: {sorted(unknown)}")
-              opendaq = {job: triplet for job, triplet in opendaq.items() if job in wanted}
 
           # each staging, of the resolved commit, as an artifact of its own ...
           pull = [{"artifact": f"opendaq-{triplet}", "packages": [{
