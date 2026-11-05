@@ -11,10 +11,23 @@ on:
       opendaq-ref:
         description: "openDAQ commit, branch or tag. If empty, uses the opendaq_ref file from the repo."
         default: ""
-
-# one commit staged once at a time
-concurrency:
-  group: stage-${{ inputs.ref || github.sha }}
+  # from another repository's run (the bundle): staged as an artifact of that run, never pushed
+  workflow_call:
+    inputs:
+      ref:
+        description: "The commit to stage, in full (empty: the commit this workflow is called at)"
+        type: string
+        default: ""
+      opendaq-ref:
+        description: "openDAQ commit, branch or tag. If empty, uses the opendaq_ref file from the repo."
+        type: string
+        default: ""
+      opendaq-artifact:
+        description: >-
+          The openDAQ staging as an artifact of this run instead of from the registry, {job} for the job, e.g.
+          "opendaq-staging-{job}" (empty: pulled from the registry)
+        type: string
+        default: ""
 
 jobs:
   resolve:
@@ -26,22 +39,28 @@ jobs:
       jobs: ${{ steps.stagings.outputs.jobs }}
       staging-pull: ${{ steps.stagings.outputs.staging-pull }}
       opendaq-artifacts: ${{ steps.stagings.outputs.opendaq-artifacts }}
+      repository: ${{ steps.stagings.outputs.repository }}
       staging-push: ${{ steps.stagings.outputs.staging-push }}
     steps:
+      # this repository, also when called from another one
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ inputs.ref || job.workflow_sha }}
 
       # the commit staged and the core it is built against; where each lies picks its channel (release/** stable,
-      # main dev) and whether the staging is pushed: only a commit on one of them, against a core on one of them
+      # main dev) and whether the staging is pushed: only a commit on one of them, against a core on one of them, and
+      # never from another repository's run
       - name: Request the openDAQ stagings
         id: stagings
         shell: python3 {0}
         env:
           GH_TOKEN: ${{ github.token }}
           OPENDAQ_REF: ${{ inputs.opendaq-ref }}
+          OPENDAQ_ARTIFACT: ${{ inputs.opendaq-artifact }}
           OWNER: ${{ github.repository_owner }}
-          REPOSITORY: ${{ github.repository }}
+          REPOSITORY: ${{ job.workflow_repository }}
+          CALLER: ${{ github.repository }}
         run: |
           import json, os, re, subprocess, sys, urllib.parse
 
@@ -76,7 +95,7 @@ jobs:
           # hand); this staging is pushed only when both lie on one
           core_channel = channel("openDAQ/openDAQ", core)
           own_channel = channel(os.environ["REPOSITORY"], sha)
-          push = own_channel is not None and core_channel is not None
+          push = own_channel is not None and core_channel is not None and os.environ["CALLER"] == os.environ["REPOSITORY"]
           print(f"{os.environ['REPOSITORY']} {sha}: {own_channel or 'on no main or release/**'}; "
                 f"core {core}: {core_channel or 'on no main or release/**'}; push: {push}")
           core_channel = core_channel or "dev"
@@ -93,21 +112,27 @@ jobs:
               "macos-26-armv8-ninja-appleclang-21-release":  "armv8-macos-apple-clang-21-release",
           }
 
-          # each staging, of the resolved commit, as an artifact of its own ...
-          pull = [{"artifact": f"opendaq-{triplet}", "packages": [{
-                      "path": f"ghcr.io/{os.environ['OWNER']}/{core_channel}/staging/opendaq",
-                      "annotations": {"org.opencontainers.image.revision": core,
-                                      "com.opendaq.package.triplet": triplet}}]}
-                  for triplet in opendaq.values()]
+          # each openDAQ staging as an artifact of its own, named after this staging, as another layer's stage may
+          # share the run: the given artifact of this run, or else pulled from the registry by the resolved commit ...
+          if os.environ["OPENDAQ_ARTIFACT"]:
+              pull = []
+              name = {job: os.environ["OPENDAQ_ARTIFACT"].replace("{job}", job) for job in opendaq}
+          else:
+              pull = [{"artifact": f"opcua-modules-opendaq-{triplet}", "packages": [{
+                          "path": f"ghcr.io/{os.environ['OWNER']}/{core_channel}/staging/opendaq",
+                          "annotations": {"org.opencontainers.image.revision": core,
+                                          "com.opendaq.package.triplet": triplet}}]}
+                      for triplet in opendaq.values()]
+              name = {job: f"opcua-modules-opendaq-{triplet}" for job, triplet in opendaq.items()}
 
           # ... which its job unpacks into staging-deps
-          artifacts = [{"match-jobs": [job], "artifacts": [{"name": f"opendaq-{triplet}", "dir": "staging-deps"}]}
-                       for job, triplet in opendaq.items()]
+          artifacts = [{"match-jobs": [job], "artifacts": [{"name": name[job], "dir": "staging-deps"}]} for job in opendaq]
 
           staging_push = [{"path": f"ghcr.io/{os.environ['OWNER']}/{own_channel}/staging/opcua-modules",
-                           "artifacts": ["staging-*/opcua"], "tags": ["latest"]}] if push else []
+                           "artifacts": ["opcua-modules-staging-*/opcua"], "tags": ["latest"]}] if push else []
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"repository={os.environ['REPOSITORY']}\n")
               f.write(f"ref={sha}\n")
               f.write(f"opendaq-ref={core}\n")
               f.write(f"jobs={json.dumps(list(opendaq))}\n")
@@ -123,7 +148,9 @@ jobs:
       packages: write
     uses: openDAQ/openDAQ-CI/.github/workflows/stage.yml@bundle/extract-each-artifact-into-its-dir
     with:
+      repository: ${{ needs.resolve.outputs.repository }}
       ref: ${{ needs.resolve.outputs.ref }}
+      upload-pattern: opcua-modules-*
       timeout: '[{"timeout-minutes": 180}]'
       include-jobs: ${{ needs.resolve.outputs.jobs }}
       staging-pull: ${{ needs.resolve.outputs.staging-pull }}
