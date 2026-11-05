@@ -124,8 +124,12 @@ jobs:
           # ... which its job unpacks into staging-deps
           artifacts = [{"match-jobs": [job], "artifacts": [{"name": name[job], "dir": "staging-deps"}]} for job in opendaq]
 
+          # tagged by its identity, the commit and the core's, and each package by the triplet too: idx- and pkg-<sha256>
+          identity = ["org.opencontainers.image.revision", "com.opendaq.dependencies.opendaq.revision"]
           staging_push = [{"path": f"ghcr.io/{os.environ['OWNER']}/{os.environ['CHANNEL']}/staging/opcua-modules",
-                           "artifacts": ["opcua-modules-staging-*/opcua"]}] if os.environ["PUSH"] == "true" else []
+                           "artifacts": ["opcua-modules-staging-*/opcua"],
+                           "idx-identity": identity,
+                           "pkg-identity": identity + ["com.opendaq.package.triplet"]}] if os.environ["PUSH"] == "true" else []
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"jobs={json.dumps(list(opendaq))}\n")
