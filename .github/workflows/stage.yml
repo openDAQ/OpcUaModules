@@ -11,6 +11,10 @@ on:
       opendaq-ref:
         description: "openDAQ commit, branch or tag. If empty, uses the opendaq_ref file from the repo."
         default: ""
+      skip-staging-push:
+        description: "Build only, keep the staging as an artifact of the run"
+        type: boolean
+        default: false
   # from another repository's run (the bundle): staged as an artifact of that run, never pushed
   workflow_call:
     inputs:
@@ -38,9 +42,10 @@ jobs:
       opendaq-ref: ${{ steps.commits.outputs.opendaq-ref }}
       jobs: ${{ steps.stagings.outputs.jobs }}
       staging-pull: ${{ steps.stagings.outputs.staging-pull }}
-      opendaq-artifacts: ${{ steps.stagings.outputs.opendaq-artifacts }}
+      opendaq-packages: ${{ steps.stagings.outputs.opendaq-packages }}
       repository: ${{ job.workflow_repository }}
-      staging-push: ${{ steps.stagings.outputs.staging-push }}
+      channel: ${{ steps.channel.outputs.channel }}
+      skip-staging-push: ${{ inputs.skip-staging-push || job.workflow_ref != github.workflow_ref || (github.event_name == 'schedule' && steps.channel.outputs.released != 'true') }}
     steps:
       # this repository, also when called from another one
       - uses: actions/checkout@v4
@@ -74,7 +79,7 @@ jobs:
               f.write(f"ref={sha}\n")
               f.write(f"opendaq-ref={core}\n")
 
-      # where each lies picks its channel, and whether this staging is published
+      # where each lies picks its channel
       - uses: openDAQ/openDAQ-CI/.github/actions/resolve-channel@bundle/extract-each-artifact-into-its-dir
         id: channel
         with:
@@ -89,8 +94,6 @@ jobs:
           OPENDAQ_REF: ${{ steps.commits.outputs.opendaq-ref }}
           OPENDAQ_ARTIFACT: ${{ inputs.opendaq-artifact }}
           OPENDAQ_CHANNEL: ${{ fromJSON(steps.channel.outputs.depends-channels)['openDAQ/openDAQ'] }}
-          CHANNEL: ${{ steps.channel.outputs.channel }}
-          PUSH: ${{ steps.channel.outputs.push }}
           OWNER: ${{ github.repository_owner }}
         run: |
           import json, os
@@ -122,20 +125,12 @@ jobs:
               name = {job: f"opcua-modules-opendaq-{triplet}" for job, triplet in opendaq.items()}
 
           # ... which its job unpacks into staging-deps
-          artifacts = [{"match-jobs": [job], "artifacts": [{"name": name[job], "dir": "staging-deps"}]} for job in opendaq]
-
-          # tagged by its identity, the commit and the core's, and each package by the triplet too: idx- and pkg-<sha256>
-          identity = ["org.opencontainers.image.revision", "com.opendaq.dependencies.opendaq.revision"]
-          staging_push = [{"path": f"ghcr.io/{os.environ['OWNER']}/{os.environ['CHANNEL']}/staging/opcua-modules",
-                           "artifacts": ["opcua-modules-staging-*/opcua"],
-                           "idx-identity": identity,
-                           "pkg-identity": identity + ["com.opendaq.package.triplet"]}] if os.environ["PUSH"] == "true" else []
+          packages = [{"match-jobs": [job], "artifacts": [{"name": name[job], "dir": "staging-deps"}]} for job in opendaq]
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"jobs={json.dumps(list(opendaq))}\n")
               f.write(f"staging-pull={json.dumps(pull)}\n")
-              f.write(f"opendaq-artifacts={json.dumps(artifacts)[1:-1]}\n")   # no brackets: it goes inside packages
-              f.write(f"staging-push={json.dumps(staging_push)}\n")
+              f.write(f"opendaq-packages={json.dumps(packages)[1:-1]}\n")   # no brackets: it goes inside packages
 
   stage:
     needs: resolve
@@ -151,7 +146,7 @@ jobs:
       timeout: '[{"timeout-minutes": 180}]'
       include-jobs: ${{ needs.resolve.outputs.jobs }}
       staging-pull: ${{ needs.resolve.outputs.staging-pull }}
-      packages: '[ ${{ needs.resolve.outputs.opendaq-artifacts }} ]'
+      packages: '[ ${{ needs.resolve.outputs.opendaq-packages }} ]'
       cmake-presets: >-
         [
           {
@@ -179,4 +174,13 @@ jobs:
             "stagings": [{"name": "opcua"}]
           }
         ]
-      staging-push: ${{ needs.resolve.outputs.staging-push }}
+      skip-staging-push: ${{ needs.resolve.outputs.skip-staging-push == 'true' }}
+      staging-push: >-
+        [
+          {
+            "path": "ghcr.io/${{ github.repository_owner }}/${{ needs.resolve.outputs.channel || 'dev' }}/staging/opcua-modules",
+            "artifacts": ["opcua-modules-staging-*/opcua"],
+            "idx-identity": ["org.opencontainers.image.revision", "com.opendaq.dependencies.opendaq.revision"],
+            "pkg-identity": ["org.opencontainers.image.revision", "com.opendaq.dependencies.opendaq.revision", "com.opendaq.package.triplet"]
+          }
+        ]
