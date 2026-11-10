@@ -242,7 +242,8 @@ jobs:
             "cache-variables":
             {
               "CMAKE_PREFIX_PATH": "${sourceDir}/staging-deps;${sourceDir}/staging-deps/opt/opendaq",
-              "CPACK_OPENDAQ_META_FIELDS": "dependencies/opendaq/revision=${{ needs.resolve.outputs.opendaq-ref }}"
+              "CPACK_OPENDAQ_META_FIELDS": "dependencies/opendaq/revision=${{ needs.resolve.outputs.opendaq-ref }}",
+              "DAQMODULES_OPCUA_RELEASE_WARNINGS_AS_ERRORS": false
             }
           },
           {
