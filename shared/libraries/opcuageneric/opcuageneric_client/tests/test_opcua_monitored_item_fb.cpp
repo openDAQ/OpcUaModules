@@ -496,9 +496,9 @@ INSTANTIATE_TEST_SUITE_P(
     ReadNumericValue,
     GenericOpcuaMonitoredItemPTest,
     ::testing::Values(std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui8"), H{uint8_t{std::numeric_limits<uint8_t>::max()}}},
-                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i8"), H{int8_t{std::numeric_limits<uint8_t>::min()}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i8"), H{int8_t{std::numeric_limits<int8_t>::min()}}},
                       std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui16"), H{uint16_t{std::numeric_limits<uint16_t>::max()}}},
-                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i16"), H{int16_t{std::numeric_limits<uint16_t>::min()}}},
+                      std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i16"), H{int16_t{std::numeric_limits<int16_t>::min()}}},
                       std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui32"), H{uint32_t{std::numeric_limits<uint32_t>::max()}}},
                       std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".i32"), H{int32_t{std::numeric_limits<int32_t>::min()}}},
                       std::pair<OpcUaNodeId, H>{OpcUaNodeId(1, ".ui64"), H{uint64_t{std::numeric_limits<uint64_t>::max()}}},
@@ -551,8 +551,8 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingLastValue
 
     // check the ts is between start and stop points
     ASSERT_TRUE(domainVal.assigned());
-    EXPECT_GE(timeAfter, domainVal.asPtr<INumber>().getValue<uint64_t>(uint64_t(0)));
-    EXPECT_LE(timeBefore, domainVal.asPtr<INumber>().getValue<uint64_t>(uint64_t(0)));
+    EXPECT_GE(timeAfter, domainVal.asPtr<INumber>().getValue<int64_t>(int64_t(0)));
+    EXPECT_LE(timeBefore, domainVal.asPtr<INumber>().getValue<int64_t>(int64_t(0)));
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingLastValue)
@@ -598,7 +598,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingLastValue
 
     // check that the target and read TSes are the same
     ASSERT_TRUE(domainVal.assigned());
-    EXPECT_EQ(time, domainVal.asPtr<INumber>().getValue<uint64_t>(uint64_t(0)));
+    EXPECT_EQ(time, domainVal.asPtr<INumber>().getValue<int64_t>(int64_t(0)));
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingLastValue)
@@ -642,8 +642,8 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingLast
 
     // check the ts is between start and stop points
     ASSERT_TRUE(domainVal.assigned());
-    EXPECT_GE(timeAfter, domainVal.asPtr<INumber>().getValue<uint64_t>(uint64_t(0)));
-    EXPECT_LE(timeBefore, domainVal.asPtr<INumber>().getValue<uint64_t>(uint64_t(0)));
+    EXPECT_GE(timeAfter, domainVal.asPtr<INumber>().getValue<int64_t>(int64_t(0)));
+    EXPECT_LE(timeBefore, domainVal.asPtr<INumber>().getValue<int64_t>(int64_t(0)));
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReader)
@@ -704,8 +704,8 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithServerTimestampUsingTailReade
     ASSERT_EQ(values, value);
 
     // check the ts is between start and stop points
-    EXPECT_GE(timeAfter, domain);
-    EXPECT_LE(timeBefore, domain);
+    EXPECT_GE(timeAfter, static_cast<int64_t>(domain));
+    EXPECT_LE(timeBefore, static_cast<int64_t>(domain));
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingTailReader)
@@ -767,7 +767,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithSourceTimestampUsingTailReade
     ASSERT_EQ(values, value);
 
     // check that the target and read TSes are the same
-    EXPECT_EQ(time, domain);
+    EXPECT_EQ(time, static_cast<int64_t>(domain));
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, ReadProtectedValue)
@@ -848,8 +848,8 @@ TEST_F(GenericOpcuaMonitoredItemTest, ReadValueWithLocalSystemTimestampUsingTail
 
     ASSERT_EQ(values, value);
 
-    EXPECT_GE(timeAfter, domain);
-    EXPECT_LE(timeBefore, domain);
+    EXPECT_GE(timeAfter, static_cast<int64_t>(domain));
+    EXPECT_LE(timeBefore, static_cast<int64_t>(domain));
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, TsModeNoneCreatesSingleSignal)
@@ -1603,7 +1603,7 @@ TEST_F(GenericOpcuaMonitoredItemTest, ChangedSamplingIntervalTakesEffect)
     const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
 
     ASSERT_TRUE(arrived);
-    EXPECT_LT(elapsedMs, packets * slowInterval);
+    EXPECT_LT(elapsedMs, static_cast<int64_t>(packets * slowInterval));
 }
 
 TEST_F(GenericOpcuaMonitoredItemTest, UnchangedSourceTimestampIsNotRepublished)
