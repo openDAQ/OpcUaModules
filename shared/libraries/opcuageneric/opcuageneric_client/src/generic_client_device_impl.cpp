@@ -152,7 +152,8 @@ void OpcuaGenericClientDeviceImpl::reconnectMonitorLoop()
             catch (const OpcUaException& e)
             {
                 if (e.getStatusCode() == UA_STATUSCODE_BADUSERACCESSDENIED ||
-                    e.getStatusCode() == UA_STATUSCODE_BADIDENTITYTOKENINVALID)
+                    e.getStatusCode() == UA_STATUSCODE_BADIDENTITYTOKENINVALID ||
+                    e.getStatusCode() == UA_STATUSCODE_BADIDENTITYTOKENREJECTED)
                 {
                     connectionStatus.setStatus("Unrecoverable");
                     reconnectRunning = false;

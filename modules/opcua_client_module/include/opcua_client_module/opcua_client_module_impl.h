@@ -32,10 +32,21 @@ public:
     DevicePtr onCreateDevice(const StringPtr& connectionString,
                              const ComponentPtr& parent,
                              const PropertyObjectPtr& config) override;
+    DevicePtr onCreateAuthenticatedDevice(const StringPtr& connectionString,
+                                          const ComponentPtr& parent,
+                                          const PropertyObjectPtr& config,
+                                          const LoginParametersPtr& loginParameters) override;
     bool acceptsConnectionParameters(const StringPtr& connectionString, const PropertyObjectPtr& config);
     Bool onCompleteServerCapability(const ServerCapabilityPtr& source, const ServerCapabilityConfigPtr& target) override;
 
 private:
+    DevicePtr createDeviceInternal(const StringPtr& connectionString,
+                                   const ComponentPtr& parent,
+                                   const PropertyObjectPtr& config,
+                                   const LoginParametersPtr& loginParameters);
+    static DictPtr<IString, IString> ParseConfigCredentials(const PropertyObjectPtr& config);
+    static DictPtr<IString, IString> GetLoginCredentials(const LoginParametersPtr& loginParameters);
+
     StringPtr formConnectionString(const StringPtr& connectionString, const PropertyObjectPtr& config, std::string& host, int& port, std::string& hostType);
     static DeviceTypePtr createDeviceType();
     static PropertyObjectPtr createDefaultConfig();

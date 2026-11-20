@@ -11,6 +11,9 @@
 #include <opendaq/address_info_factory.h>
 #include <opendaq/mirrored_device_config_ptr.h>
 #include <opendaq/device_private_ptr.h>
+#include <opendaq/authentication_method_factory.h>
+#include <opendaq/security_exceptions.h>
+#include <discovery_common/daq_discovery_common.h>
 #include <regex>
 
 BEGIN_NAMESPACE_OPENDAQ_OPCUA_CLIENT_MODULE
@@ -58,6 +61,22 @@ DevicePtr OpcUaClientModule::onCreateDevice(const StringPtr& connectionString,
                                             const ComponentPtr& parent,
                                             const PropertyObjectPtr& config)
 {
+    return createDeviceInternal(connectionString, parent, config, nullptr);
+}
+
+DevicePtr OpcUaClientModule::onCreateAuthenticatedDevice(const StringPtr& connectionString,
+                                                         const ComponentPtr& parent,
+                                                         const PropertyObjectPtr& config,
+                                                         const LoginParametersPtr& loginParameters)
+{
+    return createDeviceInternal(connectionString, parent, config, loginParameters);
+}
+
+DevicePtr OpcUaClientModule::createDeviceInternal(const StringPtr& connectionString,
+                                                  const ComponentPtr& parent,
+                                                  const PropertyObjectPtr& config,
+                                                  const LoginParametersPtr& loginParameters)
+{
     if (!connectionString.assigned())
         DAQ_THROW_EXCEPTION(ArgumentNullException);
 
@@ -82,8 +101,16 @@ DevicePtr OpcUaClientModule::onCreateDevice(const StringPtr& connectionString,
 
     auto endpoint = OpcUaEndpoint(formedConnectionString);
 
-    endpoint.setUsername(configPtr.getPropertyValue("Username"));
-    endpoint.setPassword(configPtr.getPropertyValue("Password"));
+    // Login parameters are only assigned on the authenticated path (`createAuthenticatedDevice`).
+    // Without them, the plain `createDevice` is used (e.g. by an older module manager) - backward compatibility
+    // with credentials passed via the "Username"/"Password" config properties.
+    const auto credentials = loginParameters.assigned() ? GetLoginCredentials(loginParameters) : ParseConfigCredentials(configPtr);
+    // no credentials - anonymous connection
+    if (credentials.hasKey("UserName"))
+    {
+        endpoint.setUsername(credentials.get("UserName"));
+        endpoint.setPassword(credentials.get("Password"));
+    }
 
     TmsClient client(context, parent, endpoint);
     auto device = client.connect();
@@ -116,6 +143,48 @@ DevicePtr OpcUaClientModule::onCreateDevice(const StringPtr& connectionString,
 
     device.asPtr<IDevicePrivate>(true).setAsRoot();
     return device;
+}
+
+DictPtr<IString, IString> OpcUaClientModule::ParseConfigCredentials(const PropertyObjectPtr& config)
+{
+    auto credentials = Dict<IString, IString>();
+    if (!config.assigned())
+        return credentials;
+
+    const StringPtr username = config.hasProperty("Username") ? StringPtr(config.getPropertyValue("Username")) : StringPtr("");
+    const StringPtr password = config.hasProperty("Password") ? StringPtr(config.getPropertyValue("Password")) : StringPtr("");
+
+    if (username.getLength() == 0)
+    {
+        // a password without a user name is a misconfiguration, not an anonymous connection request
+        if (password.getLength() > 0)
+            DAQ_THROW_EXCEPTION(GeneralErrorException, "The \"Password\" config property is set, but \"Username\" is empty - a user name is required for a password-based connection");
+
+        // no user name - anonymous connection
+        return credentials;
+    }
+
+    credentials.set("UserName", username);
+    credentials.set("Password", password);
+    return credentials;
+}
+
+DictPtr<IString, IString> OpcUaClientModule::GetLoginCredentials(const LoginParametersPtr& loginParameters)
+{
+    const StringPtr methodId = loginParameters.getAuthenticationMethod().getId();
+    // "Anonymous" method - no credentials, connect anonymously
+    if (methodId == StandardAnonymousId)
+        return Dict<IString, IString>();
+
+    if (methodId == StandardUserNamePasswordId)
+    {
+        const DictPtr<IString, IString> credentials = loginParameters.getCredentials();
+        if (!credentials.assigned() || !credentials.hasKey("UserName") || !credentials.hasKey("Password"))
+            DAQ_THROW_EXCEPTION(CredentialsRequiredException, "Authentication method \"{}\" requires the \"UserName\" and \"Password\" credentials", methodId);
+        return credentials;
+    }
+
+    DAQ_THROW_EXCEPTION(NotSupportedException, "Authentication method \"{}\" is not supported by the OPC UA client", methodId);
 }
 
 PropertyObjectPtr OpcUaClientModule::populateDefaultConfig(const PropertyObjectPtr& config)
@@ -176,6 +245,8 @@ DeviceInfoPtr OpcUaClientModule::populateDiscoveredDevice(const MdnsDiscoveredDe
     cap.setProtocolVersion(discoveredDevice.getPropertyOrDefault("protocolVersion", ""));
     if (discoveredDevice.servicePort > 0)
         cap.setPort(discoveredDevice.servicePort);
+    for (const auto& id : discovery_common::DiscoveryUtils::populateAuthenticationMethods(discoveredDevice.getPropertyOrDefault("authMethods", "")))
+        cap.addAuthenticationMethod(id);
 
     return populateDiscoveredDeviceInfo(DiscoveryClient::populateDiscoveredInfoProperties, discoveredDevice, cap, createDeviceType());
 }
@@ -301,6 +372,8 @@ DeviceTypePtr OpcUaClientModule::createDeviceType()
         .setDescription("Network device connected over OpcUa protocol")
         .setConnectionStringPrefix(DaqOpcUaDevicePrefix)
         .setDefaultConfig(createDefaultConfig())
+        .addAuthenticationMethod(StandardAnonymousAuthenticationMethod())
+        .addAuthenticationMethod(StandardUserNamePasswordAuthenticationMethod())
         .build();
 }
 

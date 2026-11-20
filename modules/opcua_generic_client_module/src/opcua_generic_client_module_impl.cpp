@@ -16,6 +16,9 @@
 #include <opcuageneric_client/property_helper.h>
 
 #include <opendaq/mirrored_device_config_ptr.h>
+#include <opendaq/authentication_method_factory.h>
+#include <opendaq/security_exceptions.h>
+#include <discovery_common/daq_discovery_common.h>
 #include <opcuaclient/browse_request.h>
 #include <opcuaclient/browser/opcuabrowser.h>
 
@@ -76,6 +79,22 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
                                             const ComponentPtr& parent,
                                             const PropertyObjectPtr& config)
 {
+    return createDeviceInternal(connectionString, parent, config, nullptr);
+}
+
+DevicePtr OpcUaGenericClientModule::onCreateAuthenticatedDevice(const StringPtr& connectionString,
+                                                                const ComponentPtr& parent,
+                                                                const PropertyObjectPtr& config,
+                                                                const LoginParametersPtr& loginParameters)
+{
+    return createDeviceInternal(connectionString, parent, config, loginParameters);
+}
+
+DevicePtr OpcUaGenericClientModule::createDeviceInternal(const StringPtr& connectionString,
+                                                         const ComponentPtr& parent,
+                                                         const PropertyObjectPtr& config,
+                                                         const LoginParametersPtr& loginParameters)
+{
     if (!connectionString.assigned())
         DAQ_THROW_EXCEPTION(ArgumentNullException);
 
@@ -96,8 +115,13 @@ DevicePtr OpcUaGenericClientModule::onCreateDevice(const StringPtr& connectionSt
     // on what the server reports (servers often keep default values).
     const std::string userSpecifiedLocalId = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_DEVICE_LOCAL_ID);
 
-    const auto username = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME);
-    const auto password = configPtr.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD);
+    // Login parameters are only assigned on the authenticated path (`createAuthenticatedDevice`).
+    // Without them, the plain `createDevice` is used (e.g. by an older module manager) - backward compatibility
+    // with credentials passed via the "Username"/"Password" config properties.
+    const auto credentials = loginParameters.assigned() ? GetLoginCredentials(loginParameters) : ParseConfigCredentials(configPtr);
+    // no credentials - anonymous connection
+    const std::string username = credentials.hasKey("UserName") ? credentials.get("UserName").toStdString() : "";
+    const std::string password = credentials.hasKey("Password") ? credentials.get("Password").toStdString() : "";
     auto client = initOpcuaClient(opcuaConnStr, username, password);
 
     const auto desc = readApplicationDescription(client);
@@ -273,6 +297,48 @@ OpcUaGenericClientModule::DeviceInfoList OpcUaGenericClientModule::readDeviceInf
     return readDeviceInfoFromRootDevice(client, deviceSetDeviceNodeId);
 }
 
+DictPtr<IString, IString> OpcUaGenericClientModule::ParseConfigCredentials(const PropertyObjectPtr& config)
+{
+    auto credentials = Dict<IString, IString>();
+    if (!config.assigned())
+        return credentials;
+
+    const StringPtr username = config.hasProperty(PROPERTY_NAME_OPCUA_USERNAME) ? StringPtr(config.getPropertyValue(PROPERTY_NAME_OPCUA_USERNAME)) : StringPtr("");
+    const StringPtr password = config.hasProperty(PROPERTY_NAME_OPCUA_PASSWORD) ? StringPtr(config.getPropertyValue(PROPERTY_NAME_OPCUA_PASSWORD)) : StringPtr("");
+
+    if (username.getLength() == 0)
+    {
+        // a password without a user name is a misconfiguration, not an anonymous connection request
+        if (password.getLength() > 0)
+            DAQ_THROW_EXCEPTION(GeneralErrorException, "The \"Password\" config property is set, but \"Username\" is empty - a user name is required for a password-based connection");
+
+        // no user name - anonymous connection
+        return credentials;
+    }
+
+    credentials.set("UserName", username);
+    credentials.set("Password", password);
+    return credentials;
+}
+
+DictPtr<IString, IString> OpcUaGenericClientModule::GetLoginCredentials(const LoginParametersPtr& loginParameters)
+{
+    const StringPtr methodId = loginParameters.getAuthenticationMethod().getId();
+    // "Anonymous" method - no credentials, connect anonymously
+    if (methodId == StandardAnonymousId)
+        return Dict<IString, IString>();
+
+    if (methodId == StandardUserNamePasswordId)
+    {
+        const DictPtr<IString, IString> credentials = loginParameters.getCredentials();
+        if (!credentials.assigned() || !credentials.hasKey("UserName") || !credentials.hasKey("Password"))
+            DAQ_THROW_EXCEPTION(CredentialsRequiredException, "Authentication method \"{}\" requires the \"UserName\" and \"Password\" credentials", methodId);
+        return credentials;
+    }
+
+    DAQ_THROW_EXCEPTION(NotSupportedException, "Authentication method \"{}\" is not supported by the generic OPC UA client", methodId);
+}
+
 PropertyObjectPtr OpcUaGenericClientModule::populateDefaultConfig(const PropertyObjectPtr& config)
 {
     const auto defConfig = createDefaultConfig();
@@ -331,6 +397,8 @@ DeviceInfoPtr OpcUaGenericClientModule::populateDiscoveredDevice(const MdnsDisco
     cap.setProtocolVersion(discoveredDevice.getPropertyOrDefault("protocolVersion", ""));
     if (discoveredDevice.servicePort > 0)
         cap.setPort(discoveredDevice.servicePort);
+    for (const auto& id : discovery_common::DiscoveryUtils::populateAuthenticationMethods(discoveredDevice.getPropertyOrDefault("authMethods", "")))
+        cap.addAuthenticationMethod(id);
 
     auto devInfo = populateDiscoveredDeviceInfo(DiscoveryClient::populateDiscoveredInfoProperties, discoveredDevice, cap, createDeviceType());
     devInfo.asPtr<IDeviceInfoConfig>().setName(discoveredDevice.serviceInstance);
@@ -392,6 +460,7 @@ std::shared_ptr<opcua::OpcUaClient> OpcUaGenericClientModule::initOpcuaClient(co
         {
             case UA_STATUSCODE_BADUSERACCESSDENIED:
             case UA_STATUSCODE_BADIDENTITYTOKENINVALID:
+            case UA_STATUSCODE_BADIDENTITYTOKENREJECTED:
                 DAQ_THROW_EXCEPTION(AuthenticationFailedException, e.what());
             default:
                 DAQ_THROW_EXCEPTION(NotFoundException, e.what());
@@ -414,6 +483,7 @@ opcua::OpcUaClient::ApplicationDescription OpcUaGenericClientModule::readApplica
         {
             case UA_STATUSCODE_BADUSERACCESSDENIED:
             case UA_STATUSCODE_BADIDENTITYTOKENINVALID:
+            case UA_STATUSCODE_BADIDENTITYTOKENREJECTED:
                 DAQ_THROW_EXCEPTION(AuthenticationFailedException, e.what());
             default:
                 DAQ_THROW_EXCEPTION(NotFoundException, e.what());
@@ -730,6 +800,8 @@ DeviceTypePtr OpcUaGenericClientModule::createDeviceType()
         .setDescription("Network device connected over OpcUa protocol")
         .setConnectionStringPrefix(DaqOpcUaGenericDevicePrefix)
         .setDefaultConfig(createDefaultConfig())
+        .addAuthenticationMethod(StandardAnonymousAuthenticationMethod())
+        .addAuthenticationMethod(StandardUserNamePasswordAuthenticationMethod())
         .build();
 }
 

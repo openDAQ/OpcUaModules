@@ -35,6 +35,10 @@ public:
     DevicePtr onCreateDevice(const StringPtr& connectionString,
                              const ComponentPtr& parent,
                              const PropertyObjectPtr& config) override;
+    DevicePtr onCreateAuthenticatedDevice(const StringPtr& connectionString,
+                                          const ComponentPtr& parent,
+                                          const PropertyObjectPtr& config,
+                                          const LoginParametersPtr& loginParameters) override;
     std::string acceptsConnectionParameters(const StringPtr& connectionString);
     Bool onCompleteServerCapability(const ServerCapabilityPtr& source, const ServerCapabilityConfigPtr& target) override;
 
@@ -48,6 +52,14 @@ private:
     };
 
     using DeviceInfoList = std::vector<std::pair<std::string, opcua::OpcUaVariant>>;
+
+    DevicePtr createDeviceInternal(const StringPtr& connectionString,
+                                   const ComponentPtr& parent,
+                                   const PropertyObjectPtr& config,
+                                   const LoginParametersPtr& loginParameters);
+    static DictPtr<IString, IString> ParseConfigCredentials(const PropertyObjectPtr& config);
+    static DictPtr<IString, IString> GetLoginCredentials(const LoginParametersPtr& loginParameters);
+
     static ParsedConnectionInfo formConnectionString(const StringPtr& connectionString);
     static std::shared_ptr<opcua::OpcUaClient> initOpcuaClient(const std::string& url,
                                                                const std::string& username,
