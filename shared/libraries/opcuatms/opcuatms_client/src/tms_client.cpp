@@ -111,6 +111,7 @@ void TmsClient::createAndConectClient()
         {
             case UA_STATUSCODE_BADUSERACCESSDENIED:
             case UA_STATUSCODE_BADIDENTITYTOKENINVALID:
+            case UA_STATUSCODE_BADIDENTITYTOKENREJECTED:
                 DAQ_THROW_EXCEPTION(AuthenticationFailedException, e.what());
             default:
                 DAQ_THROW_EXCEPTION(NotFoundException, e.what());
