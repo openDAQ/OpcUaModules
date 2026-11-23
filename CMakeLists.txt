@@ -90,6 +90,10 @@ add_subdirectory(external)
 add_subdirectory(shared)
 add_subdirectory(modules)
 
+if (OPENDAQ_ENABLE_OPCUA_INTEGRATION_TESTS)
+    add_subdirectory(tests)
+endif()
+
 if (PROJECT_IS_TOP_LEVEL)
     include(cmake/Packing.cmake)
 endif()
