@@ -2,6 +2,7 @@ set(MODULE_NAME opcuatms_integration)
 set(TEST_APP test_${MODULE_NAME})
 
 set(TEST_SOURCES main.cpp
+                 diag_crash_handler.cpp
                  tms_object_integration_test.h
                  tms_object_integration_test.cpp
                  test_tms_signal.cpp
@@ -58,7 +59,7 @@ opendaq_target_pch(${TEST_APP}
 )
 
 # main.cpp defines main() and must stay its own translation unit.
-set_source_files_properties(main.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties(main.cpp diag_crash_handler.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 opendaq_target_unity_tests(${TEST_APP} BATCH_SIZE 4)
 
 add_test(NAME ${TEST_APP}
