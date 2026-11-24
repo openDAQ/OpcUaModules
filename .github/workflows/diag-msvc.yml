@@ -1,0 +1,40 @@
+name: Diag MSVC 14.52 opcuatms crash
+
+on:
+  push:
+    branches: [diag/msvc-14.52-opcuatms-crash]
+
+jobs:
+  diag:
+    runs-on: windows-2025
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -S . -G "Visual Studio 18 2026" -A x64 -T v145 -DDAQMODULES_OPCUA_ENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build --config Debug --target test_opcuatms_integration --parallel
+      - name: Toolset
+        shell: bash
+        run: grep -h -E "CMAKE_CXX_COMPILER_VERSION|MSVC_TOOLSET_VERSION" build/CMakeFiles/*/CMakeCXXCompiler.cmake || true
+      - name: Run function block tests
+        if: always()
+        shell: bash
+        working-directory: build
+        run: |
+          exe=$(find . -name 'test_opcuatms_integration*.exe' | head -1); echo "$exe"; cd "$(dirname "$exe")"
+          ./$(basename "$exe") --gtest_filter='TmsFunctionBlockTest.*' 2>&1 | grep -v -E "info/(client|channel)|warn/(server|userland)" ; echo "exit ${PIPESTATUS[0]}"
+      - name: Run single test
+        if: always()
+        shell: bash
+        working-directory: build
+        run: |
+          exe=$(find . -name 'test_opcuatms_integration*.exe' | head -1); cd "$(dirname "$exe")"
+          ./$(basename "$exe") --gtest_filter='TmsFunctionBlockTest.AttrFunctionBlockType' 2>&1 | grep -v -E "info/(client|channel)|warn/(server|userland)"; echo "exit ${PIPESTATUS[0]}"
+      - name: Run all
+        if: always()
+        shell: bash
+        working-directory: build
+        run: |
+          exe=$(find . -name 'test_opcuatms_integration*.exe' | head -1); cd "$(dirname "$exe")"
+          ./$(basename "$exe") 2>&1 | grep -E "DIAG|FAILED|RUN|^\[  PASSED|exception" | tail -80; echo "exit ${PIPESTATUS[0]}"
