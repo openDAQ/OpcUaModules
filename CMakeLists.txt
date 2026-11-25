@@ -43,6 +43,14 @@ cmake_dependent_option(OPENDAQ_ENABLE_OPCUA_INTEGRATION_TESTS "Enable ${REPO_NAM
 opendaq_common_compile_targets_settings()
 opendaq_setup_compiler_flags(${REPO_OPTION_PREFIX})
 
+# The core's deprecated API (ISyncComponent) warns but does not fail the build; MSVC's /WX has no per-warning
+# exception, so there C4996 is silenced
+if (MSVC)
+    add_compile_options(/wd4996)
+else()
+    add_compile_options(-Wno-error=deprecated-declarations)
+endif()
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10)
     add_compile_options(-Wno-unknown-warning-option)
 endif()
