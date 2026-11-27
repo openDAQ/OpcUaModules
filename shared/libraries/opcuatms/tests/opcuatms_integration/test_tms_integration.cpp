@@ -5,8 +5,8 @@
 #include <opcuatms_client/tms_client.h>
 #include <opcuatms_server/tms_server.h>
 #include <opendaq/search_filter_factory.h>
-#include <chrono>
 #include <thread>
+#include <vector>
 #include <opendaq/mock/advanced_components_setup_utils.h>
 #include <testutils/test_comparators.h>
 #include <coreobjects/permissions_builder_factory.h>
@@ -663,4 +663,53 @@ TEST_F(TmsIntegrationTest, ConnectedClientInfoHasAddressAndHostname)
     ASSERT_TRUE(opcuaClient.assigned()) << "No connected client with protocolName 'OpenDAQOPCUA' found";
     ASSERT_FALSE(opcuaClient.getAddress().getLength() == 0) << "Client address must not be empty";
     ASSERT_FALSE(opcuaClient.getHostName().getLength() == 0) << "Client hostname must not be empty";
+}
+
+TEST_F(TmsIntegrationTest, RapidMultiThreadClientConnectDisconnectLeavesNoClientInfo)
+{
+    InstancePtr device = createDevice();
+
+    TmsServer tmsServer(device);
+    tmsServer.start();
+
+    const std::string opcUrl = OPC_URL;
+    constexpr int threadCount = 10;
+    constexpr int connectsPerThread = 2;
+
+    std::vector<std::thread> threads;
+    threads.reserve(threadCount);
+    for (int t = 0; t < threadCount; ++t)
+    {
+        threads.emplace_back([opcUrl, connectsPerThread]()
+        {
+            const auto moduleManager = ModuleManager("[[none]]");
+            auto logger = Logger();
+            auto context = Context(Scheduler(logger, 1), logger, TypeManager(), moduleManager, nullptr);
+
+            for (int i = 0; i < connectsPerThread; ++i)
+            {
+                try
+                {
+                    TmsClient tmsClient(context, nullptr, opcUrl);
+                    const DevicePtr clientDevice = tmsClient.connect();
+                }
+                catch (...)
+                {
+                    return;
+                }
+            }
+        });
+    }
+    
+    for (auto& thread : threads)
+        thread.join();
+
+    size_t opcuaClientCount = 0;
+    for (const auto& client : device.getInfo().getConnectedClientsInfo())
+    {
+        if (client.getProtocolName() == "OpenDAQOPCUA")
+            ++opcuaClientCount;
+    }
+
+    ASSERT_EQ(opcuaClientCount, 0u) << "Connected OpenDAQOPCUA client info must be empty after all clients disconnected";
 }
